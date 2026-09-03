@@ -1,0 +1,130 @@
+import { useState } from "react";
+import { Icon } from "../lib/icons";
+import { useToast } from "../lib/toast";
+import type { RouteId } from "../lib/routes";
+
+const TABS: Array<{ id: RouteId; label: string }> = [
+  { id: "parse", label: "解析" },
+  { id: "downloads", label: "下载" },
+  { id: "settings", label: "设置" },
+];
+
+export function TopBar({
+  title,
+  route,
+  onNavigate,
+  onToast,
+}: {
+  title: string;
+  route: RouteId;
+  onNavigate: (id: RouteId) => void;
+  onToast: () => void;
+}) {
+  const current = TABS.find((t) => t.id === route);
+  return (
+    <header className="topbar">
+      <div className="topbar-title">{title}</div>
+      <div className="topbar-actions">
+        {current?.id === "downloads" && (
+          <button type="button" className="btn sm" onClick={onToast}>
+            预览提示
+          </button>
+        )}
+        <button type="button" className="icon-btn" onClick={() => onNavigate("settings")} aria-label="设置" title="设置">
+          <Icon name="gear" size={19} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+export function MobileTabBar({ route, onNavigate }: { route: RouteId; onNavigate: (id: RouteId) => void }) {
+  return (
+    <nav className="tabbar" aria-label="主导航">
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          className={`tabbar-item${route === t.id ? " active" : ""}`}
+          onClick={() => onNavigate(t.id)}
+          aria-current={route === t.id ? "page" : undefined}
+        >
+          <Icon name={t.id === "parse" ? "search" : t.id === "downloads" ? "download" : "gear"} size={22} />
+          <span>{t.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+export function Sidebar({
+  route,
+  onNavigate,
+}: {
+  route: RouteId;
+  onNavigate: (id: RouteId) => void;
+}) {
+  const { toast } = useToast();
+  const [aboutOpen, setAboutOpen] = useState(false);
+  return (
+    <>
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-logo">B</div>
+          <div>
+            <div className="brand-name">Bili23 Web</div>
+            <div className="brand-sub">下载工具 · Web 版</div>
+          </div>
+        </div>
+        <nav className="nav">
+          <button type="button" className={`nav-item${route === "parse" ? " active" : ""}`} onClick={() => onNavigate("parse")}>
+            <Icon name="search" size={19} />
+            <span className="nav-label">解析</span>
+          </button>
+          <button type="button" className={`nav-item${route === "downloads" ? " active" : ""}`} onClick={() => onNavigate("downloads")}>
+            <Icon name="download" size={19} />
+            <span className="nav-label">下载</span>
+            <span className="nav-badge hidden">0</span>
+          </button>
+          <div className="nav-spacer" />
+          <button type="button" className="nav-item" onClick={() => { toast("登录将在 P5 接入（扫码 + Cookie）。"); }}>
+            <span className="avatar guest" style={{ width: 26, height: 26, fontSize: 12 }}>登</span>
+            <span className="nav-label">未登录 · 点击登录</span>
+          </button>
+          <button type="button" className={`nav-item${route === "settings" ? " active" : ""}`} onClick={() => onNavigate("settings")}>
+            <Icon name="gear" size={19} />
+            <span className="nav-label">设置</span>
+          </button>
+        </nav>
+      </aside>
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+    </>
+  );
+}
+
+export function AboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <div className="overlay sheet-on-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal sm" role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <div className="modal-title">关于 Bili23 Web</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="modal-body center">
+          <div className="about-logo">B</div>
+          <h3>Bili23 Web</h3>
+          <p className="muted small">桌面版 Bili23-Downloader 的 1:1 Web 复刻</p>
+          <p className="small muted">信息架构 / 交互 1:1 对齐原版 PyQt 客户端，Web 化视觉与响应式增强。<br />P0 工程骨架 · 2026-09</p>
+        </div>
+        <div className="modal-foot">
+          <div className="right">
+            <button type="button" className="btn" onClick={onClose}>关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
