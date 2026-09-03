@@ -31,6 +31,7 @@ export { PopularParser } from "./parser/popular.js";
 export { WatchLaterParser } from "./parser/watch-later.js";
 export { HistoryParser } from "./parser/history.js";
 export { ListParser } from "./parser/list.js";
+export { FestivalParser } from "./parser/festival.js";
 export { AudioParser, AUDIO_API_BASE } from "./parser/audio.js";
 export { LessonParser, LESSON_API_BASE, LESSON_DETAIL_URL } from "./parser/lesson.js";
 export type { Parser, ParseContext, ParseOptions, ParseResult } from "./parser/types.js";

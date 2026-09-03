@@ -616,6 +616,7 @@ export class DownloadManager {
       case "audio":
       case "favlist":
       case "list":
+      case "festival":
         // 这些类型直接接受链接（可多行/逗号分隔）
         return query
           .split(/\r?\n|,|;/)

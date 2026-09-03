@@ -188,10 +188,20 @@ describe("parseUrl 分发入口", () => {
     await expect(parseUrl(ctx, "https://example.com/x")).rejects.toBeInstanceOf(BiliError);
   });
 
-  it("无解析器注册的类型抛 UNSUPPORTED_TYPE（festival 不在 P2 类型铺开范围）", async () => {
-    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
-    await expect(parseUrl(ctx, "https://www.bilibili.com/festival/2024")).rejects.toMatchObject({
-      code: "UNSUPPORTED_TYPE",
-    });
+  it("festival 活动页重定向到投稿视频并继续解析", async () => {
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      if (url.includes("/festival/2024")) {
+        return new Response('<html><script>window.__INITIAL_STATE__ = {"videoInfo":{"bvid":"BV1xx411c7mD"}};</script></html>', { status: 200, headers: { "Content-Type": "text/html" } });
+      }
+      if (url.includes("/x/web-interface/view")) {
+        return json(VIEW_MULTI_P);
+      }
+      return json({ code: -404, message: "not found", data: null });
+    };
+    const ctx: ParseContext = { http: new HttpClient({ fetchImpl: fetchImpl as typeof fetch }) };
+    const result = await parseUrl(ctx, "https://www.bilibili.com/festival/2024");
+    expect(result.type).toBe("video");
+    expect(result.items).toHaveLength(2);
   });
 });

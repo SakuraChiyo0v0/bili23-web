@@ -11,6 +11,7 @@ import { PopularParser } from "./popular.js";
 import { WatchLaterParser } from "./watch-later.js";
 import { HistoryParser } from "./history.js";
 import { ListParser } from "./list.js";
+import { FestivalParser } from "./festival.js";
 import type { Parser, ParseContext, ParseOptions, ParseResult } from "./types.js";
 
 /** b23 短链最多跟随跳转次数 */
@@ -41,6 +42,8 @@ export function getParser(type: ContentType): Parser {
       return new HistoryParser();
     case "list":
       return new ListParser();
+    case "festival":
+      return new FestivalParser();
     default:
       throw new BiliError("UNSUPPORTED_TYPE", `暂不支持的解析类型：${type}`);
   }
@@ -63,8 +66,14 @@ export async function parseUrl(ctx: ParseContext, raw: string, options?: ParseOp
       url = await ctx.http.getRedirect(url);
       continue;
     }
-    return getParser(type).parse(ctx, url, options);
+    const result = await getParser(type).parse(ctx, url, options);
+    // 解析器返回的 redirectUrl（如活动页→视频、视频→番剧）：改用新地址继续解析
+    if (result.redirectUrl) {
+      url = result.redirectUrl;
+      continue;
+    }
+    return result;
   }
 
-  throw new BiliError("INVALID_URL", "短链跳转次数超限");
+  throw new BiliError("INVALID_URL", "跳转次数超限");
 }
