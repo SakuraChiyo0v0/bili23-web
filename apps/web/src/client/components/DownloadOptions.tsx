@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AppConfig, DownloadOptions, ExtrasOptions, MediaOptionSummary } from "../types.js";
+import type { AppConfig, DanmakuStyle, DownloadOptions, ExtrasOptions, MediaOptionSummary, SubtitleStyle } from "../types.js";
 import { Icon } from "./icons.js";
-import { cn, subtitleLanguageLabel, SUBTITLE_LANGUAGES } from "../utils.js";
+import { cn, subtitleLanguageLabel, SUBTITLE_LANGUAGES, DEFAULT_DANMAKU_STYLE, DEFAULT_SUBTITLE_STYLE } from "../utils.js";
+import { StyleEditor } from "./StyleEditor.js";
 
 interface DownloadOptionsProps {
   config: AppConfig;
@@ -44,7 +45,7 @@ function initialExtras(config: AppConfig): ExtrasOptions {
       ...(additional.danmaku ?? {}),
       enabled: additional.danmaku?.enabled ?? false,
       format: additional.danmaku?.format ?? "ass",
-      style: additional.danmaku?.style ?? {},
+      style: { ...DEFAULT_DANMAKU_STYLE, ...(additional.danmaku?.style ?? {}) },
       embed: additional.danmaku?.embed ?? false,
       deleteAfterEmbed: additional.danmaku?.deleteAfterEmbed ?? false,
     },
@@ -55,7 +56,7 @@ function initialExtras(config: AppConfig): ExtrasOptions {
       language: additional.subtitle?.language
         ? { downloadSpecified: additional.subtitle.language.downloadSpecified ?? false, specifiedLanguages: additional.subtitle.language.specifiedLanguages ?? [] }
         : { downloadSpecified: false, specifiedLanguages: [] },
-      style: additional.subtitle?.style ?? {},
+      style: { ...DEFAULT_SUBTITLE_STYLE, ...(additional.subtitle?.style ?? {}) },
       embed: additional.subtitle?.embed ?? false,
       deleteAfterEmbed: additional.subtitle?.deleteAfterEmbed ?? false,
     },
@@ -112,6 +113,8 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
   const [ruleId, setRuleId] = useState<string>(config.fileNaming.rules.find((rule) => rule.default)?.id ?? "");
   const [number, setNumber] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showDanmakuStyle, setShowDanmakuStyle] = useState(false);
+  const [showSubtitleStyle, setShowSubtitleStyle] = useState(false);
 
   useEffect(() => {
     setExtras(initialExtras(config));
@@ -234,6 +237,15 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
                     </Select>
                     <SwitchRow label="内嵌 MKV" checked={extras.danmaku.embed ?? false} onChange={(embed) => patchExtra("danmaku", { embed })} disabled={container !== "mkv"} />
                     {extras.danmaku.embed ? <SwitchRow label="内嵌后删除源文件" checked={extras.danmaku.deleteAfterEmbed ?? false} onChange={(deleteAfter) => patchExtra("danmaku", { deleteAfterEmbed: deleteAfter })} disabled={container !== "mkv"} /> : null}
+                    {extras.danmaku.format === "ass" ? (
+                      <button type="button" className="text-button" onClick={() => setShowDanmakuStyle((v) => !v)}>
+                        <Icon name={showDanmakuStyle ? "close" : "filter"} size={15} />
+                        {showDanmakuStyle ? "收起样式" : "自定义样式"}
+                      </button>
+                    ) : null}
+                    {extras.danmaku.format === "ass" && showDanmakuStyle ? (
+                      <StyleEditor kind="danmaku" style={extras.danmaku.style ?? DEFAULT_DANMAKU_STYLE} onChange={(style) => patchExtra("danmaku", { style: style as DanmakuStyle })} />
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -256,6 +268,15 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
                     </div>
                     <SwitchRow label="内嵌 MKV" checked={extras.subtitle.embed ?? false} onChange={(embed) => patchExtra("subtitle", { embed })} disabled={container !== "mkv"} />
                     {extras.subtitle.embed ? <SwitchRow label="内嵌后删除源文件" checked={extras.subtitle.deleteAfterEmbed ?? false} onChange={(deleteAfter) => patchExtra("subtitle", { deleteAfterEmbed: deleteAfter })} disabled={container !== "mkv"} /> : null}
+                    {extras.subtitle.format === "ass" ? (
+                      <button type="button" className="text-button" onClick={() => setShowSubtitleStyle((v) => !v)}>
+                        <Icon name={showSubtitleStyle ? "close" : "filter"} size={15} />
+                        {showSubtitleStyle ? "收起样式" : "自定义样式"}
+                      </button>
+                    ) : null}
+                    {extras.subtitle.format === "ass" && showSubtitleStyle ? (
+                      <StyleEditor kind="subtitle" style={extras.subtitle.style ?? DEFAULT_SUBTITLE_STYLE} onChange={(style) => patchExtra("subtitle", { style: style as SubtitleStyle })} />
+                    ) : null}
                   </div>
                 ) : null}
               </div>

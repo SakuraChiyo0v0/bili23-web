@@ -1,4 +1,4 @@
-import type { TaskStatus } from "./types.js";
+import type { TaskStatus, DanmakuStyle, SubtitleStyle } from "./types.js";
 
 export function cn(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -71,6 +71,24 @@ export function subtitleLanguageLabel(lan: string): string {
   const hit = SUBTITLE_LANGUAGES.find((entry) => entry.lan.toLowerCase() === lan.toLowerCase());
   return hit?.label ?? lan;
 }
+
+/** 弹幕样式默认值（对齐引擎 DEFAULT_DANMAKU_STYLE） */
+export const DEFAULT_DANMAKU_STYLE: DanmakuStyle = {
+  font: { name: "黑体", size: 36, bold: false, italic: false, underline: false, strike: false },
+  border: { border: 1, shadow: 0 },
+  advanced: { displayArea: 60, opacity: 80, scrollDuration: 10, staticDuration: 5, minimumGap: 100 },
+  resolution: { width: 1280, height: 720 },
+};
+
+/** 字幕样式默认值（对齐引擎 DEFAULT_SUBTITLE_STYLE） */
+export const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
+  font: { name: "黑体", size: 36, bold: false, italic: false, underline: false, strike: false },
+  border: { border: 1, shadow: 0 },
+  color: { primary: "&H00FFFFFF", secondary: "&H000000FF", border: "H00000000", shadow: "H00000000" },
+  margin: { left: 10, right: 10, vertical: 20 },
+  resolution: { width: 1280, height: 720 },
+  alignment: 2,
+};
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   queued: "等待中",

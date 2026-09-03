@@ -131,7 +131,34 @@ export type DanmakuFormat = "xml" | "ass" | "json";
 export type SubtitleFormat = "srt" | "lrc" | "txt" | "ass" | "json";
 export type CoverFormat = "jpg" | "png" | "avif" | "webp";
 export type MetadataFormat = "nfo" | "json";
-export type ExtraStyle = Record<string, unknown>;
+// ---------- 弹幕/字幕样式（语义对齐引擎 DanmakuStyle/SubtitleStyle） ----------
+
+export interface DanmakuFont {
+  name: string;
+  /** 字号（像素） */
+  size: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+}
+
+export interface DanmakuStyle {
+  font: DanmakuFont;
+  border: { border: number; shadow: number };
+  advanced: { displayArea: number; opacity: number; scrollDuration: number; staticDuration: number; minimumGap: number };
+  resolution: { width: number; height: number };
+}
+
+export interface SubtitleStyle {
+  font: DanmakuFont;
+  border: { border: number; shadow: number };
+  color: { primary: string; secondary: string; border: string; shadow: string };
+  margin: { left: number; right: number; vertical: number };
+  resolution: { width: number; height: number };
+  /** ASS Alignment（2=底部居中） */
+  alignment: number;
+}
 
 /** 字幕语言选择（语义对齐引擎 SubtitleLanguageSelection） */
 export interface SubtitleLanguageSelection {
@@ -145,7 +172,7 @@ export interface ExtrasOptions {
   danmaku?: {
     enabled: boolean;
     format: DanmakuFormat;
-    style?: ExtraStyle;
+    style?: DanmakuStyle;
     embed?: boolean;
     deleteAfterEmbed?: boolean;
   };
@@ -153,7 +180,7 @@ export interface ExtrasOptions {
     enabled: boolean;
     format: SubtitleFormat;
     language?: SubtitleLanguageSelection;
-    style?: ExtraStyle;
+    style?: SubtitleStyle;
     embed?: boolean;
     deleteAfterEmbed?: boolean;
   };

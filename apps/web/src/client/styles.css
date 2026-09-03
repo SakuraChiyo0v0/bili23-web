@@ -403,6 +403,19 @@ textarea { margin-top: 15px; resize: vertical; min-height: 92px; line-height: 1.
 .extras-settings { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .extras-settings .extra-card { background: var(--surface-2); }
 .extras-settings select { margin-top: 8px; }
+.style-editor { margin-top: 10px; display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.style-editor-section { display: grid; gap: 8px; }
+.style-editor-title { color: var(--muted); font-size: 12px; font-weight: 650; }
+.style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.style-field { display: grid; gap: 4px; }
+.style-field-label { color: var(--muted); font-size: 11px; }
+.style-field-hint { color: var(--muted-2); font-size: 10px; }
+.style-field input, .style-field select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font-size: 13px; }
+.style-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.style-toggle { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.style-copy { color: var(--muted); font-size: 12px; }
+.style-toggle.is-on { border-color: rgba(0, 174, 236, .3); }
+
 .settings-card-inner { display: grid; gap: 16px; }
 .compact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .rule-list { display: grid; gap: 10px; }
@@ -522,3 +535,4 @@ textarea { margin-top: 15px; resize: vertical; min-height: 92px; line-height: 1.
   .result-meta span:nth-child(2), .result-meta span:last-child { display: none; }
   .extras-settings { grid-template-columns: 1fr; }
 }
+@media (max-width: 640px) { .style-grid { grid-template-columns: 1fr; } .style-toggles { grid-template-columns: 1fr 1fr; } }
