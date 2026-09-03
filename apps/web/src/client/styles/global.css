@@ -320,3 +320,26 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 .cookie-pane{ display:flex; flex-direction:column; gap:10px; }
 .field-label{ font-size:13px; color:var(--ink-2); font-weight:500; }
 .cookie-input{ resize:vertical; font-family:var(--mono); font-size:12.5px; padding:10px 12px; }
+
+@media (max-width:640px){
+  /* 解析树：两列（勾选+标题），折叠次要列 */
+  .tree-header,.tree-row{ grid-template-columns:64px minmax(0,1fr); }
+  .tree-header .tree-cell:nth-child(n+3),
+  .tree-row .tree-cell:nth-child(n+3){ display:none; }
+  .tree-header .tree-cell.col-time,
+  .tree-row .tree-cell.col-time{ display:none; }
+  .url-row{ flex-direction:column; }
+  .url-input-wrap input{ height:44px; }
+  .parse-btn{ width:100%; }
+  .toolbar{ overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
+  .toolbar > *{ flex:none; }
+  /* 下载选项弹窗手机全屏 Sheet */
+  .dl-body{ padding:12px 12px 8px; }
+  .dl-selects{ grid-template-columns:1fr; }
+  .dl-footer{ flex-direction:column; align-items:stretch; }
+  .dl-preview{ justify-content:center; }
+  .dl-footer-actions{ justify-content:flex-end; }
+  .task-card{ flex-wrap:wrap; }
+  .cover{ width:112px; height:63px; }
+  .task-right{ width:100%; }
+}

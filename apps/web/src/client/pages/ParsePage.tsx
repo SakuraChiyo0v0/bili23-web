@@ -18,7 +18,8 @@ export function ParsePage() {
     }
     session.start();
     try {
-      const { results } = await parseUrl({ urls: [input] });
+      const urls = input.split(/\r?\n|,|;/).map((s) => s.trim()).filter(Boolean);
+      const { results } = await parseUrl({ urls });
       if (!results.length) throw new Error("解析结果为空");
       session.success(results);
       toast(`解析完成，共 ${results.reduce((n, r) => n + r.items.length, 0)} 个条目`, "ok");
