@@ -9,6 +9,7 @@ import { TermsPanel } from "./components/TermsPanel";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ParsePage } from "./pages/ParsePage";
 import { TasksPage } from "./pages/TasksPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
   return (
@@ -38,6 +39,7 @@ function Shell() {
   const renderPage = () => {
     if (route.id === "parse") return <ParsePage />;
     if (route.id === "downloads") return <TasksPage />;
+    if (route.id === "settings") return <SettingsPage />;
     return <PlaceholderPage key={route.id} route={route.id} />;
   };
 
