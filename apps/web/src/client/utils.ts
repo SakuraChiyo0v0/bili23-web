@@ -45,6 +45,33 @@ export function formatTime(unixSeconds: number | undefined): string {
   }).format(new Date(unixSeconds * 1000));
 }
 
+/** B 站可用字幕语言预设（lan 码 → 可读名；含 AI 生成语言） */
+export const SUBTITLE_LANGUAGES: ReadonlyArray<{ lan: string; label: string }> = [
+  { lan: "zh", label: "简体中文" },
+  { lan: "zh-hant", label: "繁體中文" },
+  { lan: "en", label: "English" },
+  { lan: "ja", label: "日本語" },
+  { lan: "ko", label: "한국어" },
+  { lan: "es", label: "Español" },
+  { lan: "fr", label: "Français" },
+  { lan: "de", label: "Deutsch" },
+  { lan: "ru", label: "Русский" },
+  { lan: "it", label: "Italiano" },
+  { lan: "pt", label: "Português" },
+  { lan: "vi", label: "Tiếng Việt" },
+  { lan: "th", label: "ไทย" },
+  { lan: "id", label: "Bahasa Indonesia" },
+  { lan: "ai-zh", label: "中文（AI 生成）" },
+  { lan: "ai-en", label: "English (AI)" },
+  { lan: "ai-ja", label: "日本語 (AI)" },
+];
+
+/** 语言码 → 可读名（同码多标签时优先中文/常见；无则原样返回） */
+export function subtitleLanguageLabel(lan: string): string {
+  const hit = SUBTITLE_LANGUAGES.find((entry) => entry.lan.toLowerCase() === lan.toLowerCase());
+  return hit?.label ?? lan;
+}
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   queued: "等待中",
   parsing: "解析中",

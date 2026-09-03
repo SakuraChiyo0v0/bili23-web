@@ -785,8 +785,18 @@ export class DownloadManager {
         naming && (naming.number ?? "") !== ""
           ? naming.number
           : allocator.alloc(numberingType === 1 ? index + 1 : undefined);
+      // 高级默认档位兜底：任务未显式指定画质/编码/音质时，用 advanced.default* 作为默认（对齐桌面默认档位语义）
       const resolved: DownloadOptions = {
         ...options,
+        ...(options.videoQualityId === undefined && cfg.advanced.defaultVideoQualityId !== undefined
+          ? { videoQualityId: cfg.advanced.defaultVideoQualityId }
+          : {}),
+        ...(options.videoCodecId === undefined && cfg.advanced.defaultCodecId !== undefined
+          ? { videoCodecId: cfg.advanced.defaultCodecId }
+          : {}),
+        ...(options.audioQualityId === undefined && cfg.advanced.defaultAudioQualityId !== undefined
+          ? { audioQualityId: cfg.advanced.defaultAudioQualityId }
+          : {}),
         extras: deepMerge(cfg.additional, options.extras),
         naming: { conventionType, rule, number },
       };

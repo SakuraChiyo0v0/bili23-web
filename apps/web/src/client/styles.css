@@ -338,6 +338,14 @@ textarea { margin-top: 15px; resize: vertical; min-height: 92px; line-height: 1.
 .inline-controls select { width: auto; min-width: 110px; padding: 8px 10px; }
 .inline-controls .switch-row { width: auto; min-height: 34px; gap: 6px; }
 .inline-controls .switch-copy small { display: none; }
+.language-picker { display: grid; gap: 6px; width: 100%; margin-top: 2px; }
+.language-picker-title { color: var(--muted); font-size: 12px; }
+.language-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.language-chip { min-height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all .18s; }
+.language-chip:hover { border-color: var(--line-strong); color: var(--ink); transform: translateY(-1px); }
+.language-chip.is-on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--cyan), var(--brand)); }
+.language-picker-hint { color: var(--muted); font-size: 11px; }
+
 .text-button { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; border: 0; color: var(--cyan-deep); background: transparent; cursor: pointer; }
 .advanced-note { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; color: var(--muted); background: var(--surface-2); font-size: 12px; }
 .drawer-footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 10px; padding: 16px 28px; border-top: 1px solid var(--line); background: var(--surface-solid); }

@@ -136,6 +136,39 @@ describe("ConfigStore 设置存储（download/behavior/advanced 组）", () => {
   });
 });
 
+it("附加内容：字幕指定语言/内嵌后删除可持久化，重启读取保留", async () => {
+    const { dir, file, store } = await makeStore(undefined);
+    try {
+      const next = await store.update({
+        additional: {
+          subtitle: {
+            enabled: true,
+            format: "ass",
+            language: { downloadSpecified: true, specifiedLanguages: ["zh", "en", "ai-zh"] },
+            style: { font: { name: "黑体", size: 36, bold: false, italic: false, underline: false, strike: false }, border: { border: 1, shadow: 0 }, color: { primary: "&H00FFFFFF", secondary: "&H000000FF", border: "H00000000", shadow: "H00000000" }, margin: { left: 10, right: 10, vertical: 20 }, resolution: { width: 1280, height: 720 }, alignment: 2 },
+            embed: true,
+            deleteAfterEmbed: true,
+          },
+          danmaku: { enabled: true, format: "ass", embed: true, deleteAfterEmbed: true, style: { font: { name: "黑体", size: 36, bold: false, italic: false, underline: false, strike: false }, border: { border: 1, shadow: 0 }, advanced: { displayArea: 60, opacity: 80, scrollDuration: 10, staticDuration: 5, minimumGap: 100 }, resolution: { width: 1280, height: 720 } } },
+          cover: { enabled: true, format: "jpg", attach: true, deleteAfterAttach: true },
+        },
+      });
+      expect(next.additional.subtitle?.language).toEqual({ downloadSpecified: true, specifiedLanguages: ["zh", "en", "ai-zh"] });
+      expect(next.additional.subtitle?.deleteAfterEmbed).toBe(true);
+
+      const store2 = new ConfigStore(file);
+      await store2.load();
+      const cfg2 = store2.get();
+      const lang = cfg2.additional.subtitle?.language as { specifiedLanguages?: string[] } | undefined;
+      expect(lang?.specifiedLanguages).toEqual(["zh", "en", "ai-zh"]);
+      expect(cfg2.additional.subtitle?.deleteAfterEmbed).toBe(true);
+      expect(cfg2.additional.danmaku?.deleteAfterEmbed).toBe(true);
+      expect(cfg2.additional.cover?.deleteAfterAttach).toBe(true);
+    } finally {
+      await cleanup(dir);
+    }
+  });
+
 describe("validateConfig", () => {
   it("默认配置无错误", () => {
     expect(validateConfig(defaultAppConfig())).toEqual([]);

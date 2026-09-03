@@ -11,7 +11,8 @@ const h = vi.hoisted(() => {
     parseItems: Array<Record<string, unknown>>;
     failFetch: boolean;
     downloads: Array<{ resolve: () => void; reject: (e: unknown) => void }>;
-  } = { parseItems: [], failFetch: false, downloads: [] };
+    streamOpts: Array<Record<string, unknown>>;
+  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [] };
   return { state };
 });
 
@@ -31,14 +32,16 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
       }
       return { mediaType: "mp4", singleFileExt: "mp4" } as never;
     },
-    resolveStreams: () =>
-      ({
+    resolveStreams: (info: Record<string, unknown>, streamOpts: Record<string, unknown>) => {
+      h.state.streamOpts.push(streamOpts);
+      return {
         mediaType: "mp4",
         videoQualityId: 80,
         audioQualityId: 0,
         videoCodecId: 7,
         durl: [{ order: 0, url: "http://127.0.0.1/fake.mp4", backupUrl: [] }],
-      }) as never,
+      } as never;
+    },
     probeStreamUrl: async () => ({ url: "http://127.0.0.1/fake.mp4", fileSize: 100 }),
     downloadFile: async (opts: Record<string, unknown>) => {
       await new Promise<void>((resolve, reject) => {
@@ -470,6 +473,58 @@ describe("DownloadManager 设置语义（目录/命名/重名/重复）", () => 
     } finally {
       mgr.close();
       h.state.downloads.length = 0;
+    }
+  });
+});
+
+describe("DownloadManager 高级默认档位兜底（advanced.default*）", () => {
+  it("任务未显式指定画质/音质/编码时，用 advanced 默认档位传给取流", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      await mgr.updateConfig({
+        advanced: { defaultVideoQualityId: 116, defaultAudioQualityId: 30280, defaultCodecId: 12 },
+        download: { parallel: 4 },
+      });
+      h.state.streamOpts = [];
+      await mgr.createTasks([items[0]!.id], {});
+      const taskId = taskIds(mgr)[0]!;
+      await waitFor(() => statusOf(mgr, taskId)?.status === "downloading");
+      await waitDownloads(1);
+      await waitFor(() => h.state.streamOpts.length >= 1, 3000);
+      const opts = h.state.streamOpts[h.state.streamOpts.length - 1]!;
+      expect(opts.videoQualityId).toBe(116);
+      expect(opts.audioQualityId).toBe(30280);
+      expect(opts.videoCodecId).toBe(12);
+      // 清理：放行当前下载避免遗留
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, taskId)?.status === "completed", 10000);
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+    }
+  });
+
+  it("任务显式指定画质时覆盖 advanced 默认（不回退）", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      await mgr.updateConfig({ advanced: { defaultVideoQualityId: 116 } });
+      h.state.streamOpts = [];
+      await mgr.createTasks([items[0]!.id], { videoQualityId: 16 });
+      const taskId = taskIds(mgr)[0]!;
+      await waitFor(() => statusOf(mgr, taskId)?.status === "downloading");
+      await waitDownloads(1);
+      await waitFor(() => h.state.streamOpts.length >= 1, 3000);
+      const opts = h.state.streamOpts[h.state.streamOpts.length - 1]!;
+      expect(opts.videoQualityId).toBe(16);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, taskId)?.status === "completed", 10000);
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
     }
   });
 });

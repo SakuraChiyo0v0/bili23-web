@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api.js";
 import type { AppConfig, AppConfigPatch, ExtrasOptions, NamingRule } from "../types.js";
 import { Icon } from "../components/icons.js";
-import { cn } from "../utils.js";
+import { cn, subtitleLanguageLabel, SUBTITLE_LANGUAGES } from "../utils.js";
 
 interface SettingsViewProps {
   config: AppConfig;
@@ -50,8 +50,8 @@ function Select({ value, onChange, children }: { value: string | number; onChang
 function ensureExtras(additional: ExtrasOptions | undefined): ExtrasOptions {
   const source = additional ?? {};
   return {
-    danmaku: { ...(source.danmaku ?? {}), enabled: source.danmaku?.enabled ?? false, format: source.danmaku?.format ?? "ass", embed: source.danmaku?.embed ?? false, deleteAfterEmbed: source.danmaku?.deleteAfterEmbed ?? false },
-    subtitle: { ...(source.subtitle ?? {}), enabled: source.subtitle?.enabled ?? false, format: source.subtitle?.format ?? "ass", embed: source.subtitle?.embed ?? false, deleteAfterEmbed: source.subtitle?.deleteAfterEmbed ?? false },
+    danmaku: { ...(source.danmaku ?? {}), enabled: source.danmaku?.enabled ?? false, format: source.danmaku?.format ?? "ass", style: source.danmaku?.style ?? {}, embed: source.danmaku?.embed ?? false, deleteAfterEmbed: source.danmaku?.deleteAfterEmbed ?? false },
+    subtitle: { ...(source.subtitle ?? {}), enabled: source.subtitle?.enabled ?? false, format: source.subtitle?.format ?? "ass", language: source.subtitle?.language ? { downloadSpecified: source.subtitle.language.downloadSpecified ?? false, specifiedLanguages: source.subtitle.language.specifiedLanguages ?? [] } : { downloadSpecified: false, specifiedLanguages: [] }, style: source.subtitle?.style ?? {}, embed: source.subtitle?.embed ?? false, deleteAfterEmbed: source.subtitle?.deleteAfterEmbed ?? false },
     cover: { ...(source.cover ?? {}), enabled: source.cover?.enabled ?? false, format: source.cover?.format ?? "jpg", attach: source.cover?.attach ?? false, deleteAfterAttach: source.cover?.deleteAfterAttach ?? false },
     chapter: { embed: source.chapter?.embed ?? false },
     metadata: { enabled: source.metadata?.enabled ?? false, format: source.metadata?.format ?? "nfo" },
@@ -75,6 +75,17 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
     setLocal((current) => ({ ...current, additional: { ...current.additional, [key]: { ...(current.additional[key] ?? {}), ...patch } as ExtrasOptions[K] } }));
   };
   const patchRule = (id: string, patch: Partial<NamingRule>) => setLocal((current) => ({ ...current, fileNaming: { ...current.fileNaming, rules: current.fileNaming.rules.map((rule) => rule.id === id ? { ...rule, ...patch } : rule) } }));
+  /** 勾选/取消一个全局默认字幕语言 */
+  const toggleSubtitleLanguage = (lan: string) => {
+    const current = local.additional.subtitle?.language ?? { downloadSpecified: false, specifiedLanguages: [] };
+    const has = (current.specifiedLanguages ?? []).includes(lan);
+    const next = has
+      ? (current.specifiedLanguages ?? []).filter((entry) => entry !== lan)
+      : [...(current.specifiedLanguages ?? []), lan];
+    patchExtra("subtitle", { language: { downloadSpecified: next.length > 0, specifiedLanguages: next } });
+  };
+
+  const selectedSubtitleLanguages = local.additional.subtitle?.language?.specifiedLanguages ?? [];
 
   const save = async () => {
     setSaving(true);
@@ -137,9 +148,9 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
 
       <Section number="03" title="附加内容" description="设置每次下载时默认附带的弹幕、字幕、封面、章节和元数据。">
         <div className="extras-settings">
-          <div className="extra-card"><SwitchRow label="下载弹幕" checked={local.additional.danmaku?.enabled ?? false} onChange={(enabled) => patchExtra("danmaku", { enabled })} />{local.additional.danmaku?.enabled ? <Select value={local.additional.danmaku.format} onChange={(value) => patchExtra("danmaku", { format: value as "ass" | "xml" | "json" })}><option value="ass">ASS</option><option value="xml">XML</option><option value="json">JSON</option></Select> : null}</div>
-          <div className="extra-card"><SwitchRow label="下载字幕" checked={local.additional.subtitle?.enabled ?? false} onChange={(enabled) => patchExtra("subtitle", { enabled })} />{local.additional.subtitle?.enabled ? <Select value={local.additional.subtitle.format} onChange={(value) => patchExtra("subtitle", { format: value as "ass" | "srt" | "lrc" | "txt" | "json" })}><option value="ass">ASS</option><option value="srt">SRT</option><option value="lrc">LRC</option><option value="txt">TXT</option><option value="json">JSON</option></Select> : null}</div>
-          <div className="extra-card"><SwitchRow label="下载封面" checked={local.additional.cover?.enabled ?? false} onChange={(enabled) => patchExtra("cover", { enabled })} />{local.additional.cover?.enabled ? <Select value={local.additional.cover.format} onChange={(value) => patchExtra("cover", { format: value as "jpg" | "png" | "webp" | "avif" })}><option value="jpg">JPG</option><option value="png">PNG</option><option value="webp">WEBP</option><option value="avif">AVIF</option></Select> : null}</div>
+          <div className="extra-card"><SwitchRow label="下载弹幕" checked={local.additional.danmaku?.enabled ?? false} onChange={(enabled) => patchExtra("danmaku", { enabled })} />{local.additional.danmaku?.enabled ? <div className="inline-controls"><Select value={local.additional.danmaku.format} onChange={(value) => patchExtra("danmaku", { format: value as "ass" | "xml" | "json" })}><option value="ass">ASS</option><option value="xml">XML</option><option value="json">JSON</option></Select><SwitchRow label="内嵌 MKV" checked={local.additional.danmaku.embed ?? false} onChange={(embed) => patchExtra("danmaku", { embed })} disabled={local.download.defaultContainer !== "mkv"} />{local.additional.danmaku.embed ? <SwitchRow label="内嵌后删除源文件" checked={local.additional.danmaku.deleteAfterEmbed ?? false} onChange={(deleteAfter) => patchExtra("danmaku", { deleteAfterEmbed: deleteAfter })} disabled={local.download.defaultContainer !== "mkv"} /> : null}</div> : null}</div>
+          <div className="extra-card"><SwitchRow label="下载字幕" checked={local.additional.subtitle?.enabled ?? false} onChange={(enabled) => patchExtra("subtitle", { enabled })} />{local.additional.subtitle?.enabled ? <div className="inline-controls"><Select value={local.additional.subtitle.format} onChange={(value) => patchExtra("subtitle", { format: value as "ass" | "srt" | "lrc" | "txt" | "json" })}><option value="ass">ASS</option><option value="srt">SRT</option><option value="lrc">LRC</option><option value="txt">TXT</option><option value="json">JSON</option></Select><div className="language-picker"><span className="language-picker-title">指定语言</span><div className="language-chips">{SUBTITLE_LANGUAGES.map((lang) => { const selected = selectedSubtitleLanguages.includes(lang.lan); return <button key={lang.lan} type="button" className={cn("language-chip", selected && "is-on")} onClick={() => toggleSubtitleLanguage(lang.lan)}>{lang.label}</button>; })}</div><span className="language-picker-hint">{subtitleLanguageLabel(selectedSubtitleLanguages[0] ?? "zh")} 等 {selectedSubtitleLanguages.length} 种</span></div><SwitchRow label="内嵌 MKV" checked={local.additional.subtitle.embed ?? false} onChange={(embed) => patchExtra("subtitle", { embed })} disabled={local.download.defaultContainer !== "mkv"} />{local.additional.subtitle.embed ? <SwitchRow label="内嵌后删除源文件" checked={local.additional.subtitle.deleteAfterEmbed ?? false} onChange={(deleteAfter) => patchExtra("subtitle", { deleteAfterEmbed: deleteAfter })} disabled={local.download.defaultContainer !== "mkv"} /> : null}</div> : null}</div>
+          <div className="extra-card"><SwitchRow label="下载封面" checked={local.additional.cover?.enabled ?? false} onChange={(enabled) => patchExtra("cover", { enabled })} />{local.additional.cover?.enabled ? <div className="inline-controls"><Select value={local.additional.cover.format} onChange={(value) => patchExtra("cover", { format: value as "jpg" | "png" | "webp" | "avif" })}><option value="jpg">JPG</option><option value="png">PNG</option><option value="webp">WEBP</option><option value="avif">AVIF</option></Select><SwitchRow label="附进媒体" checked={local.additional.cover.attach ?? false} onChange={(attach) => patchExtra("cover", { attach })} disabled={local.download.defaultContainer === "mkv"} />{local.additional.cover.attach ? <SwitchRow label="附进后删除源图片" checked={local.additional.cover.deleteAfterAttach ?? false} onChange={(deleteAfter) => patchExtra("cover", { deleteAfterAttach: deleteAfter })} disabled={local.download.defaultContainer === "mkv"} /> : null}</div> : null}</div>
           <div className="extra-card"><SwitchRow label="章节信息" checked={local.additional.chapter?.embed ?? false} onChange={(embed) => patchExtra("chapter", { embed })} /></div>
           <div className="extra-card"><SwitchRow label="元数据" checked={local.additional.metadata?.enabled ?? false} onChange={(enabled) => patchExtra("metadata", { enabled })} />{local.additional.metadata?.enabled ? <Select value={local.additional.metadata.format} onChange={(value) => patchExtra("metadata", { format: value as "nfo" | "json" })}><option value="nfo">NFO</option><option value="json">JSON</option></Select> : null}</div>
         </div>

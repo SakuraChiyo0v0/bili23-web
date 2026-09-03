@@ -133,6 +133,14 @@ export type CoverFormat = "jpg" | "png" | "avif" | "webp";
 export type MetadataFormat = "nfo" | "json";
 export type ExtraStyle = Record<string, unknown>;
 
+/** 字幕语言选择（语义对齐引擎 SubtitleLanguageSelection） */
+export interface SubtitleLanguageSelection {
+  /** 是否只下载指定语言（download_specified） */
+  downloadSpecified: boolean;
+  /** 指定下载的语言码列表（B 站 lan，如 zh/en/ai-zh） */
+  specifiedLanguages: string[];
+}
+
 export interface ExtrasOptions {
   danmaku?: {
     enabled: boolean;
@@ -144,7 +152,7 @@ export interface ExtrasOptions {
   subtitle?: {
     enabled: boolean;
     format: SubtitleFormat;
-    language?: ExtraStyle;
+    language?: SubtitleLanguageSelection;
     style?: ExtraStyle;
     embed?: boolean;
     deleteAfterEmbed?: boolean;

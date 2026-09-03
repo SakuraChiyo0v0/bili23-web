@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AppConfig, DownloadOptions, ExtrasOptions, MediaOptionSummary } from "../types.js";
 import { Icon } from "./icons.js";
-import { cn } from "../utils.js";
+import { cn, subtitleLanguageLabel, SUBTITLE_LANGUAGES } from "../utils.js";
 
 interface DownloadOptionsProps {
   config: AppConfig;
@@ -44,6 +44,7 @@ function initialExtras(config: AppConfig): ExtrasOptions {
       ...(additional.danmaku ?? {}),
       enabled: additional.danmaku?.enabled ?? false,
       format: additional.danmaku?.format ?? "ass",
+      style: additional.danmaku?.style ?? {},
       embed: additional.danmaku?.embed ?? false,
       deleteAfterEmbed: additional.danmaku?.deleteAfterEmbed ?? false,
     },
@@ -51,6 +52,10 @@ function initialExtras(config: AppConfig): ExtrasOptions {
       ...(additional.subtitle ?? {}),
       enabled: additional.subtitle?.enabled ?? false,
       format: additional.subtitle?.format ?? "ass",
+      language: additional.subtitle?.language
+        ? { downloadSpecified: additional.subtitle.language.downloadSpecified ?? false, specifiedLanguages: additional.subtitle.language.specifiedLanguages ?? [] }
+        : { downloadSpecified: false, specifiedLanguages: [] },
+      style: additional.subtitle?.style ?? {},
       embed: additional.subtitle?.embed ?? false,
       deleteAfterEmbed: additional.subtitle?.deleteAfterEmbed ?? false,
     },
@@ -137,6 +142,18 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
     }));
   };
 
+  /** 勾选/取消一个字幕语言：切换指定语言集合与 downloadSpecified 开关 */
+  const toggleSubtitleLanguage = (lan: string) => {
+    const current = extras.subtitle?.language ?? { downloadSpecified: false, specifiedLanguages: [] };
+    const has = (current.specifiedLanguages ?? []).includes(lan);
+    const next = has
+      ? (current.specifiedLanguages ?? []).filter((entry) => entry !== lan)
+      : [...(current.specifiedLanguages ?? []), lan];
+    patchExtra("subtitle", { language: { downloadSpecified: next.length > 0, specifiedLanguages: next } });
+  };
+
+  const selectedSubtitleLanguages = extras.subtitle?.language?.specifiedLanguages ?? [];
+
   const submit = () => {
     const numericQuality = quality === "auto" ? undefined : Number(quality);
     const numericAudio = audio === "auto" ? undefined : Number(audio);
@@ -216,6 +233,7 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
                       {FORMAT_OPTIONS.danmaku?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </Select>
                     <SwitchRow label="内嵌 MKV" checked={extras.danmaku.embed ?? false} onChange={(embed) => patchExtra("danmaku", { embed })} disabled={container !== "mkv"} />
+                    {extras.danmaku.embed ? <SwitchRow label="内嵌后删除源文件" checked={extras.danmaku.deleteAfterEmbed ?? false} onChange={(deleteAfter) => patchExtra("danmaku", { deleteAfterEmbed: deleteAfter })} disabled={container !== "mkv"} /> : null}
                   </div>
                 ) : null}
               </div>
@@ -226,7 +244,18 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
                     <Select value={extras.subtitle.format} onChange={(value) => patchExtra("subtitle", { format: value as "ass" | "srt" | "lrc" | "txt" | "json" })}>
                       {FORMAT_OPTIONS.subtitle?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </Select>
+                    <div className="language-picker">
+                      <span className="language-picker-title">指定语言</span>
+                      <div className="language-chips">
+                        {SUBTITLE_LANGUAGES.map((lang) => {
+                          const selected = selectedSubtitleLanguages.includes(lang.lan);
+                          return <button key={lang.lan} type="button" className={cn("language-chip", selected && "is-on")} onClick={() => toggleSubtitleLanguage(lang.lan)}>{lang.label}</button>;
+                        })}
+                      </div>
+                      <span className="language-picker-hint">{subtitleLanguageLabel(selectedSubtitleLanguages[0] ?? "zh")} 等 {selectedSubtitleLanguages.length} 种</span>
+                    </div>
                     <SwitchRow label="内嵌 MKV" checked={extras.subtitle.embed ?? false} onChange={(embed) => patchExtra("subtitle", { embed })} disabled={container !== "mkv"} />
+                    {extras.subtitle.embed ? <SwitchRow label="内嵌后删除源文件" checked={extras.subtitle.deleteAfterEmbed ?? false} onChange={(deleteAfter) => patchExtra("subtitle", { deleteAfterEmbed: deleteAfter })} disabled={container !== "mkv"} /> : null}
                   </div>
                 ) : null}
               </div>
@@ -238,6 +267,7 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
                       {FORMAT_OPTIONS.cover?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </Select>
                     <SwitchRow label="附进媒体" checked={extras.cover.attach ?? false} onChange={(attach) => patchExtra("cover", { attach })} disabled={container !== "mp4"} />
+                    {extras.cover.attach ? <SwitchRow label="附进后删除源图片" checked={extras.cover.deleteAfterAttach ?? false} onChange={(deleteAfter) => patchExtra("cover", { deleteAfterAttach: deleteAfter })} disabled={container !== "mp4"} /> : null}
                   </div>
                 ) : null}
               </div>
