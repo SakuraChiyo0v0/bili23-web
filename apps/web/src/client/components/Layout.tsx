@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TermsPanel } from "./TermsPanel";
 import { Icon } from "../lib/icons";
 import type { RouteId } from "../lib/routes";
 
@@ -92,6 +93,10 @@ export function Sidebar({
             <span className="nav-label">下载</span>
             <span className="nav-badge hidden">0</span>
           </button>
+          <button type="button" className="nav-item" onClick={() => setAboutOpen(true)}>
+            <Icon name="info" size={19} />
+            <span className="nav-label">关于</span>
+          </button>
           <div className="nav-spacer" />
           {loggedIn ? (
             <button type="button" className="nav-item" onClick={onLogout} title={preview}>
@@ -116,6 +121,7 @@ export function Sidebar({
 }
 
 export function AboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [showTerms, setShowTerms] = useState(false);
   if (!open) return null;
   return (
     <div className="overlay sheet-on-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -133,11 +139,24 @@ export function AboutModal({ open, onClose }: { open: boolean; onClose: () => vo
           <p className="small muted">信息架构 / 交互 1:1 对齐原版 PyQt 客户端，Web 化视觉与响应式增强。<br />P0 工程骨架 · 2026-09</p>
         </div>
         <div className="modal-foot">
+          <button type="button" className="btn ghost" onClick={() => setShowTerms((s) => !s)}>使用协议</button>
           <div className="right">
             <button type="button" className="btn" onClick={onClose}>关闭</button>
           </div>
         </div>
       </div>
+      {showTerms && (
+        <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowTerms(false); }}>
+          <div className="modal md">
+            <div className="modal-head">
+              <div className="modal-title">使用协议</div>
+              <button type="button" className="icon-btn" onClick={() => setShowTerms(false)} aria-label="关闭"><Icon name="x" size={18} /></button>
+            </div>
+            <div className="modal-body"><TermsPanel /></div>
+            <div className="modal-foot"><div className="right"><button type="button" className="btn" onClick={() => setShowTerms(false)}>关闭</button></div></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
