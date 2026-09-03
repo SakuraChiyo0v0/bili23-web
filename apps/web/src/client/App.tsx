@@ -7,6 +7,7 @@ import { Modal } from "./components/Modal";
 import { Sidebar, TopBar, MobileTabBar } from "./components/Layout";
 import { TermsPanel } from "./components/TermsPanel";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { ParsePage } from "./pages/ParsePage";
 
 export function App() {
   return (
@@ -23,10 +24,8 @@ function Shell() {
   const { toast } = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // 定义必须在任何提前 return 之前，否则接受协议后 Hooks 数量变化
   const openSettings = useCallback(() => setSettingsOpen(true), []);
 
-  // 协议接受后才能进入应用主体
   if (!accepted) {
     return (
       <div className="terms-gate">
@@ -34,6 +33,11 @@ function Shell() {
       </div>
     );
   }
+
+  const renderPage = () => {
+    if (route.id === "parse") return <ParsePage />;
+    return <PlaceholderPage key={route.id} route={route.id} />;
+  };
 
   return (
     <div className="app">
@@ -48,9 +52,7 @@ function Shell() {
           }}
           onToast={() => toast("这是全局提示（Toast），后续用于下载结果与操作反馈。")}
         />
-        <main className="content">
-          <PlaceholderPage key={route.id} route={route.id} />
-        </main>
+        <main className="content">{renderPage()}</main>
         <MobileTabBar route={route.id} onNavigate={navigate} />
       </div>
 
@@ -143,7 +145,7 @@ function SettingsDialog({
           </div>
         </div>
         <p className="small muted" style={{ padding: "0 2px" }}>
-          说明：这是 P0 骨架内嵌的“界面外观”示例弹窗，用来先验证主题与动效 token。完整设置页（下载 / 解析 / 附加内容 / 命名 / 高级）在 P4 接入后端配置。
+          说明：这是 P0 骨架内嵌的“界面外观”示例弹窗。完整设置页（下载 / 解析 / 附加内容 / 命名 / 高级）在 P4 接入后端配置。
         </p>
       </div>
       <div className="modal-foot">

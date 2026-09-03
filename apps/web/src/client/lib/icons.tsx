@@ -25,6 +25,8 @@ const PATHS = {
   external: "M14 4h6v6m0-6-10 10M20 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5",
   eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   sun: "M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4M18.4 5.6 17 7m-10 10-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0 8",
+  chevD: "M6 9l6 6 6-6",
+  chevR: "M9 6l6 6-6 6",
 } as const;
 
 export type IconProps = { name: IconName; size?: number };
