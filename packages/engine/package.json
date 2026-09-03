@@ -1,0 +1,26 @@
+{
+  "name": "@bili23-web/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bili23 下载引擎（TS 1:1 重做）：解析/取流/下载/合并/附加内容/命名规则",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

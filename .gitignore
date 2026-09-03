@@ -1,0 +1,26 @@
+# --- Node ---
+node_modules/
+.pnpm-store/
+
+# --- Build output ---
+dist/
+build/
+*.tsbuildinfo
+
+# --- Runtime data ---
+data/
+*.log
+logs/
+
+# --- Env ---
+.env
+.env.local
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Test / coverage ---
+coverage/

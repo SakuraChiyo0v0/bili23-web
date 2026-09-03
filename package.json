@@ -1,0 +1,12 @@
+{
+  "name": "bili23-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bili23-Downloader 的 TypeScript 1:1 Web 重做版：解析/下载/弹幕字幕/命名规则全功能，部署于 NAS",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "pnpm -r typecheck && pnpm -r test && pnpm -r build"
+  }
+}

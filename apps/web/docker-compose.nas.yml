@@ -1,0 +1,18 @@
+# NAS 部署 compose 模板（复制到 NAS 时替换：镜像前缀/端口/.env）
+# 部署目录：/volume1/docker/bili23-web/，数据 bind mount 到 ./data
+services:
+  bili23-web:
+    image: ghcr.io/sakurachiyo0v0/bili23-web:latest
+    container_name: bili23-web
+    restart: unless-stopped
+    ports:
+      - "8788:8787"
+    environment:
+      - TZ=Asia/Hong_Kong
+      - PORT=8787
+      # 下载/日志/数据根目录（容器内），实际落盘到宿主 ./data
+      - DOWNLOAD_DIR=/data/downloads
+    volumes:
+      - ./data:/data
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
