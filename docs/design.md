@@ -19,7 +19,7 @@
 
 ```
 packages/engine  平台无关的下载引擎（纯 Node，可单测，可被任意 UI/CLI 复用）
-apps/web         Hono REST + SSE 后端，React(Vite) 前端；engine 的薄封装
+apps/web         Hono REST + SSE 后端；engine 的薄封装
 ```
 
 后端不依赖浏览器；ffmpeg 由运行时镜像提供（`apk add ffmpeg`）。
@@ -43,9 +43,9 @@ apps/web         Hono REST + SSE 后端，React(Vite) 前端；engine 的薄封�
 | `src/auth/*` | `auth/*` | 扫码/cookie 登录、refresh 续期、登录态存储 |
 | `src/store/*` | `common/database.py` + `download/task/db.py` | 配置、任务、下载历史/去重 |
 
-### Web 端能力（对齐桌面主界面流）
+### 后端 API 能力（供后续前端对接）
 
-解析页（多链接/搜索/筛选）→ 条目勾选 → 下载选项（画质/音质/编码/容器/附加内容/命名/目录）→ 任务队列（进度/暂停/重试/打开位置）→ 历史/重复检测；设置页对应桌面全部设置项。
+解析（多链接/搜索/筛选）→ 媒体选项（画质/音质/编码）→ 下载任务（容器/附加内容/命名/目录）→ 任务队列（进度/暂停/恢复/重试/取消）→ 历史/重复检测；配置 API 对应桌面全部设置项。
 
 ## 三、里程碑与验收（每期独立可上线）
 

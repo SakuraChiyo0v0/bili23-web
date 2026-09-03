@@ -40,7 +40,7 @@ Bili23-Web 是原版 Bili23-Downloader 的 Web 实现，保持同一套产品心
 | 语言 | TypeScript 严格模式 | `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` |
 | 引擎 | 纯 Node、零运行时依赖 | 用内置 fetch/undici；框架无关、可单测 |
 | 后端 | Hono + @hono/node-server | REST + SSE；TS 类型安全 |
-| 前端 | React 19 + Vite；自绘轻量组件（仿 Fluent：左导航+卡片+明暗主题） | 视觉贴近原版；控制体积 |
+| 前端 | 当前不包含 | main 仅保留 REST/SSE 后端；新前端后续独立设计与实现 |
 | 存储 | `config.json` + SQLite（`node:sqlite`） | 数据单文件、备份简单；全部在 bind mount |
 | ffmpeg | 镜像 `apk add ffmpeg` | 合并/转封装/MP3/内嵌封面与章节 |
 | 测试 | vitest | 引擎 TDD；下载器用本地静态服务器集成测试 |
@@ -55,7 +55,7 @@ Bili23-Web 是原版 Bili23-Downloader 的 Web 实现，保持同一套产品心
 ## 3. 系统架构
 
 ```
-浏览器 (React SPA)
+外部客户端（后续前端，当前不包含）
    │  REST /api/*      SSE /api/tasks/:id/events
    ▼
 apps/web  Hono 服务
@@ -229,7 +229,7 @@ packages/engine（无 UI 依赖）
 ## 8. 安全与隐私
 
 - 登录态（cookie/refresh）加密存储；密钥来自环境变量，缺失时仅影响加密（记录告警）。
-- 代理出口（解析/取流/下载中转 URL）不暴露给不可信前端；CORS 仅同源。
+- 代理出口（解析/取流/下载中转 URL）不暴露给不可信客户端；REST/SSE API 仅按部署网络边界访问。
 - 遵循原版使用协议：仅供个人学习研究、非商业；不绕过付费墙；用户自担账号风险。
 
 ## 9. 里程碑与验收（实施顺序）

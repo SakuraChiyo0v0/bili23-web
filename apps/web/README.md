@@ -1,12 +1,12 @@
 # bili23-web（Web 端）
 
-Hono 后端 + React 前端；引擎在 `packages/engine`（workspace 依赖）。
+Hono REST/SSE 后端；引擎在 `packages/engine`（workspace 依赖）。
 
 ## 本地开发
 
 ```bash
 pnpm install
-pnpm dev            # server:8787 + client:5173（/api 代理）
+pnpm --filter @bili23-web/web dev:server   # http://localhost:8787（后端 API）
 ```
 
 ## 生产构建与冒烟
@@ -36,4 +36,4 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
   -f /volume1/docker/bili23-web/docker-compose.nas.yml up -d
 ```
 
-访问：http://<NAS_IP>:8788 （端口与 account-panel 的 8787 错开；只走内网/门户后，勿直接暴露公网）
+API：`http://<NAS_IP>:8788/api/*`（端口与 account-panel 的 8787 错开；只走内网/门户后，勿直接暴露公网）。

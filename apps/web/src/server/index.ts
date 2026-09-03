@@ -1,14 +1,7 @@
 import { Hono } from "hono";
-import { serveStatic } from "@hono/node-server/serve-static";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { DownloadManager } from "./download-manager.js";
 import { registerApi } from "./routes.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-/** 生产模式静态目录：apps/web/dist/client（vite build 产物） */
-const CLIENT_DIR = join(__dirname, "../client");
+import { join } from "node:path";
 
 export interface CreateAppOptions {
   /** 测试注入 manager；缺省按环境变量懒加载默认实例 */
@@ -36,12 +29,6 @@ export function createApp(opts: CreateAppOptions = {}) {
 
   app.get("/api/health", (c) => c.json({ ok: true }));
   registerApi(app, getManager);
-
-  // 生产模式托管前端构建产物；开发模式由 Vite(5173) 代理 /api
-  if (existsSync(join(CLIENT_DIR, "index.html"))) {
-    app.use("/*", serveStatic({ root: CLIENT_DIR }));
-    app.get("*", serveStatic({ path: "./dist/client/index.html" }));
-  }
 
   return app;
 }
