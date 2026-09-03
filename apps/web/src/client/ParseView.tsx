@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CoverFormatDTO,
   DanmakuFormatDTO,
@@ -9,9 +9,10 @@ import type {
   MetadataFormatDTO,
   ParseResultDTO,
   SubtitleFormatDTO,
+  AuthStatusDTO,
 } from "./types.js";
 import { formatDuration } from "./types.js";
-import { useI18n } from "./i18n.js";
+import { useI18n, type I18nKey } from "./i18n.js";
 import { CheckIcon, SearchIcon, DownloadIcon, LogoIcon } from "./icons.js";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -30,12 +31,82 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 interface Props {
   onCreated: () => void;
   onGoDownload: () => void;
+  onGoSettings: () => void;
 }
 
 const BATCH_BUSY = "__batch__";
 
+/** 解析类型入口：对应桌面 ParserType 各类型 */
+type ParseMode =
+  | "video"
+  | "bangumi"
+  | "cheese"
+  | "lesson"
+  | "audio"
+  | "favlist"
+  | "space"
+  | "popular"
+  | "watch_later"
+  | "history";
 
-export function ParseView({ onCreated, onGoDownload }: Props) {
+/** 类别：链接型 / 空间型 / 周刊型 / 登录型 */
+type ModeKind = "link" | "space" | "popular" | "auth";
+
+/** 类型入口配置（label 用 i18n key） */
+const PARSE_TYPES: Array<{ id: ParseMode; labelKey: I18nKey; kind: ModeKind }> = [
+  { id: "video", labelKey: "parse.type.video", kind: "link" },
+  { id: "bangumi", labelKey: "parse.type.bangumi", kind: "link" },
+  { id: "cheese", labelKey: "parse.type.cheese", kind: "link" },
+  { id: "audio", labelKey: "parse.type.audio", kind: "link" },
+  { id: "favlist", labelKey: "parse.type.favlist", kind: "link" },
+  { id: "space", labelKey: "parse.type.space", kind: "space" },
+  { id: "popular", labelKey: "parse.type.popular", kind: "popular" },
+  { id: "watch_later", labelKey: "parse.type.watch_later", kind: "auth" },
+  { id: "history", labelKey: "parse.type.history", kind: "auth" },
+];
+
+function kindOf(mode: ParseMode): ModeKind {
+  return PARSE_TYPES.find((p) => p.id === mode)?.kind ?? "link";
+}
+
+/** 依据类型入口构造 /api/parse 的请求体 */
+function buildParseBody(
+  mode: ParseMode,
+  urlText: string,
+  spaceInput: string,
+  typeKeyword: string,
+  weekText: string,
+): Record<string, unknown> {
+  const kind = kindOf(mode);
+  if (kind === "link") {
+    const urls = urlText
+      .split(/\r?\n|,|;/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return { urls };
+  }
+  if (kind === "space") {
+    return { type: mode, query: spaceInput.trim(), keyword: typeKeyword.trim() };
+  }
+  if (kind === "popular") {
+    const num = Math.floor(Number(weekText));
+    return { type: mode, weekNum: Number.isFinite(num) && num > 0 ? num : 1 };
+  }
+  // auth（watch_later / history）
+  return { type: mode, keyword: typeKeyword.trim() };
+}
+
+/** 当前模式下是否可以发起解析 */
+function canParse(mode: ParseMode, urlText: string, spaceInput: string): boolean {
+  const kind = kindOf(mode);
+  if (kind === "link") return urlText.trim().length > 0;
+  if (kind === "space") return spaceInput.trim().length > 0;
+  // popular / auth 无需额外输入即可解析
+  return true;
+}
+
+
+export function ParseView({ onCreated, onGoDownload, onGoSettings }: Props) {
   const { t } = useI18n();
   const [urlText, setUrlText] = useState("");
   const [parsing, setParsing] = useState(false);
@@ -47,6 +118,22 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
   const [options, setOptions] = useState<Record<string, MediaOptionSummaryDTO>>({});
   const [rowSel, setRowSel] = useState<Record<string, DownloadOptionsDTO>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  // ---------- 类型入口 ----------
+  const [mode, setMode] = useState<ParseMode>("video");
+  const [spaceInput, setSpaceInput] = useState("");
+  const [typeKeyword, setTypeKeyword] = useState("");
+  const [weekText, setWeekText] = useState("1");
+  const [auth, setAuth] = useState<AuthStatusDTO>({ loggedIn: false, preview: "" });
+
+  const kind = kindOf(mode);
+  const needsLogin = kind === "auth";
+
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then((r) => r.json() as Promise<AuthStatusDTO>)
+      .then((s) => setAuth(s))
+      .catch(() => setAuth({ loggedIn: false, preview: "" }));
+  }, []);
 
   const items = useMemo(() => {
     const list: MediaItemDTO[] = [];
@@ -78,11 +165,8 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
     setError("");
     setParsing(true);
     try {
-      const urls = urlText
-        .split(/\r?\n|,|;/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      const { results: parsed } = await postJson<{ results: ParseResultDTO[] }>("/api/parse", { urls });
+      const body = buildParseBody(mode, urlText, spaceInput, typeKeyword, weekText);
+      const { results: parsed } = await postJson<{ results: ParseResultDTO[] }>("/api/parse", body);
       setResults((prev) => [...prev, ...parsed]);
       const all = new Set<string>();
       for (const r of parsed) for (const it of r.items) all.add(it.id);
@@ -96,7 +180,7 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
     } finally {
       setParsing(false);
     }
-  }, [urlText]);
+  }, [mode, urlText, spaceInput, typeKeyword, weekText]);
 
   const loadOptions = useCallback(
     async (item: MediaItemDTO) => {
@@ -217,28 +301,111 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
         </div>
         <h1 className="hero-title">Bili23 Web</h1>
         <p className="hero-sub">{t("parse.subtitle")}</p>
+
+        {/* 类型选择（真入口：切换输入形态并驱动 /api/parse 的 type 参数） */}
+        <div className="type-chips" role="tablist" aria-label={t("parse.typeHint")}>
+          {PARSE_TYPES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="tab"
+              aria-selected={mode === p.id}
+              className={`type-chip${mode === p.id ? " active" : ""}`}
+              onClick={() => setMode(p.id)}
+            >
+              {t(p.labelKey)}
+            </button>
+          ))}
+        </div>
+
         <div className="search-card">
           <div className="search-box">
             <span className="search-icon">
               <SearchIcon />
             </span>
-            <textarea
-              className="search-input"
-              rows={2}
-              placeholder={t("parse.urlPlaceholder")}
-              value={urlText}
-              onChange={(e) => setUrlText(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  if (!parsing && urlText.trim().length > 0) void parse();
-                }
-              }}
-            />
+            {kind === "link" && (
+              <textarea
+                className="search-input"
+                rows={2}
+                placeholder={t("parse.urlPlaceholder")}
+                value={urlText}
+                onChange={(e) => setUrlText(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    if (!parsing && canParse(mode, urlText, spaceInput)) void parse();
+                  }
+                }}
+              />
+            )}
+            {kind === "space" && (
+              <div className="search-input" style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                <input
+                  className="type-field"
+                  placeholder={t("parse.placeholder.space")}
+                  value={spaceInput}
+                  onChange={(e) => setSpaceInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !parsing && canParse(mode, urlText, spaceInput)) void parse();
+                  }}
+                />
+                <input
+                  className="type-field"
+                  placeholder={t("parse.placeholder.keyword")}
+                  value={typeKeyword}
+                  onChange={(e) => setTypeKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !parsing && canParse(mode, urlText, spaceInput)) void parse();
+                  }}
+                />
+              </div>
+            )}
+            {kind === "popular" && (
+              <div className="search-input" style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                <input
+                  className="type-field"
+                  type="number"
+                  min={1}
+                  step={1}
+                  placeholder={t("parse.placeholder.week")}
+                  value={weekText}
+                  onChange={(e) => setWeekText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !parsing) void parse();
+                  }}
+                />
+              </div>
+            )}
+            {kind === "auth" && (
+              <div className="search-input" style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                <input
+                  className="type-field"
+                  placeholder={t("parse.placeholder.keyword")}
+                  value={typeKeyword}
+                  onChange={(e) => setTypeKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !parsing && auth.loggedIn) void parse();
+                  }}
+                />
+                {!auth.loggedIn && (
+                  <span className="auth-note" style={{ display: "block", fontSize: 13, fontWeight: 500 }}>
+                    {t("parse.loginHint")}{" "}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginLeft: 6 }}
+                      onClick={onGoSettings}
+                    >
+                      {t("parse.loginGo")}
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <button
             className="btn btn-primary btn-lg"
-            disabled={parsing || urlText.trim().length === 0}
+            disabled={parsing || !canParse(mode, urlText, spaceInput) || (needsLogin && !auth.loggedIn)}
             onClick={() => void parse()}
           >
             {parsing ? (
@@ -254,7 +421,18 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
             )}
           </button>
         </div>
-                <p className="hero-limit">支持：投稿视频 / 番剧 / 课程 / 音乐 / 收藏夹 / 稍后再看 / 历史记录</p>
+
+        <p className="hero-limit">
+          {kind === "space"
+            ? t("parse.spaceHint")
+            : kind === "popular"
+              ? t("parse.popularHint")
+              : kind === "auth"
+                ? auth.loggedIn
+                  ? t("parse.loginOk")
+                  : `${t("parse.loginHint")} · ${t("parse.loginNeed")}`
+                : t("parse.typeHint")}
+        </p>
       </div>
 
       {error && <div className="error-text">{error}</div>}

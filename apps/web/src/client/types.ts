@@ -121,6 +121,12 @@ export interface DownloadResponseDTO {
   duplicates: Array<{ itemId: string; title: string }>;
 }
 
+export interface AuthStatusDTO {
+  loggedIn: boolean;
+  /** 脱敏后的 SESSDATA 预览 */
+  preview: string;
+}
+
 export interface ApiErrorDTO {
   error: { code: string; message: string; duplicates?: Array<{ itemId: string; title: string }> };
 }

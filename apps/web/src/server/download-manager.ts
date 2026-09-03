@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
-import { mkdir, readdir, rm, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, rename, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import {
   BiliError,
@@ -12,6 +12,8 @@ import {
   calcHashId,
   concatMediaParts,
   ensureAnonymousSession,
+  BILI_API_BASE,
+  classifyUrl,
   downloadFile,
   fetchPlayMediaInfo,
   mergeAudioVideo,
@@ -329,6 +331,25 @@ class ManagedTask {
   }
 }
 
+export interface ParseRequest {
+  /** 链接数组（type 为空时使用） */
+  urls?: string[];
+  /** 类型入口：video/bangumi/cheese/lesson/audio/space/favlist/popular/watch_later/history */
+  type?: string;
+  /** 类型入口的输入：链接 / UID / 用户名 / 收藏夹链接 */
+  query?: string;
+  /** 可选关键词（space/favlist/history/watch_later 支持） */
+  keyword?: string;
+  /** 每周必看期数（popular 用，默认 1） */
+  weekNum?: number;
+}
+
+export interface AuthStatus {
+  loggedIn: boolean;
+  /** 脱敏后的 SESSDATA 预览（如 "abc…1234"），便于 UI 提示已登录 */
+  preview: string;
+}
+
 export class DownloadManager {
   #http: HttpClient;
   #store: TaskStore;
@@ -351,10 +372,14 @@ export class DownloadManager {
   #pending: ManagedTask[] = [];
   /** init 幂等标记 */
   #initPromise?: Promise<void> | undefined;
+  #dataDir: string;
+  /** 当前 SESSDATA（未登录为 undefined）；持久化于 <data>/auth.json */
+  #sessdata: string | undefined;
 
   constructor(opts: { dataDir: string; downloadDir?: string }) {
     this.#http = new HttpClient();
     this.#sessionReady = ensureAnonymousSession(this.ctx);
+    this.#dataDir = opts.dataDir;
     this.#rootDir = opts.downloadDir ?? join(opts.dataDir, "downloads");
     this.#tmpDir = join(this.#rootDir, ".tmp");
     // 同步建目录：TaskStore/ConfigStore 打开 SQLite 前目录必须已存在
@@ -382,7 +407,7 @@ export class DownloadManager {
   /** 重启恢复：读 download_task 遗留任务标为 interrupted（保留 .part 与断点，可手动继续）。幂等。 */
   async init(): Promise<void> {
     if (!this.#initPromise) {
-      this.#initPromise = this.#rehydrate();
+      this.#initPromise = this.#loadAuth().then(() => this.#rehydrate());
     }
     return this.#initPromise;
   }
@@ -409,6 +434,58 @@ export class DownloadManager {
     return next;
   }
 
+  // ---------- 登录（SESSDATA cookie）----------
+
+  async loginAuth(sessdata: string): Promise<AuthStatus> {
+    const s = sessdata.trim();
+    if (!s) throw new BiliError("INVALID_URL", "SESSDATA 不能为空");
+    this.#sessdata = s;
+    this.#http.jar.set("SESSDATA", s);
+    await this.#persistAuth();
+    return { loggedIn: true, preview: this.#previewSessdata(s) };
+  }
+
+  async logoutAuth(): Promise<AuthStatus> {
+    this.#sessdata = undefined;
+    this.#http.jar.delete("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5");
+    try {
+      await rm(join(this.#dataDir, "auth.json"), { force: true });
+    } catch {
+      // 文件已不存在则忽略
+    }
+    return { loggedIn: false, preview: "" };
+  }
+
+  async authStatus(): Promise<AuthStatus> {
+    return {
+      loggedIn: !!this.#sessdata,
+      preview: this.#sessdata ? this.#previewSessdata(this.#sessdata) : "",
+    };
+  }
+
+  #previewSessdata(s: string): string {
+    if (s.length <= 10) return s;
+    return `${s.slice(0, 4)}…${s.slice(-4)}`;
+  }
+
+  async #persistAuth(): Promise<void> {
+    await writeFile(join(this.#dataDir, "auth.json"), JSON.stringify({ sessdata: this.#sessdata ?? "" }, null, 2), "utf8");
+  }
+
+  /** 重启后从 auth.json 还原登录态（幂等；在 init 时调用） */
+  async #loadAuth(): Promise<void> {
+    try {
+      const raw = await readFile(join(this.#dataDir, "auth.json"), "utf8");
+      const parsed = JSON.parse(raw) as { sessdata?: string };
+      if (parsed.sessdata) {
+        this.#sessdata = parsed.sessdata;
+        this.#http.jar.set("SESSDATA", parsed.sessdata);
+      }
+    } catch {
+      // 无 auth.json / 解析失败：保持未登录
+    }
+  }
+
   // ---------- 解析会话 ----------
 
   async parseUrls(urls: string[]): Promise<ParseResult[]> {
@@ -428,6 +505,97 @@ export class DownloadManager {
       results.push(result);
     }
     return results;
+  }
+
+  /**
+   * 统一解析入口：支持两种形态。
+   * - 无 type：按 urls 逐一识别链接（行为与 parseUrls 一致）。
+   * - 有 type：按类型入口构造内部 URL（space/favlist/watch_later/history/popular 等），
+   *   让前端"选类型 + 填输入"的交互成为真功能（对应桌面 ParserType 各类型）。
+   */
+  async parseRequest(req: ParseRequest): Promise<ParseResult[]> {
+    await this.#sessionReady;
+    if (!req.type) {
+      return this.parseUrls(req.urls ?? []);
+    }
+    const urls = await this.#buildUrlsForType(req);
+    if (urls.length === 0) {
+      throw new BiliError("INVALID_URL", "请输入有效的链接或用户名");
+    }
+    return this.parseUrls(urls);
+  }
+
+  /** 根据类型入口构造需要交给 parseUrl 的 URL 列表 */
+  async #buildUrlsForType(req: ParseRequest): Promise<string[]> {
+    const query = (req.query ?? "").trim();
+    const keyword = (req.keyword ?? "").trim();
+    switch (req.type) {
+      case "video":
+      case "bangumi":
+      case "cheese":
+      case "lesson":
+      case "audio":
+      case "favlist":
+        // 这些类型直接接受链接（可多行/逗号分隔）
+        return query
+          .split(/\r?\n|,|;/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+      case "space": {
+        const target = await this.#resolveSpaceTarget(query);
+        const qs = keyword ? `?keyword=${encodeURIComponent(keyword)}` : "";
+        return [`https://space.bilibili.com/${target}${qs}`];
+      }
+      case "popular": {
+        const num = req.weekNum ?? 1;
+        return [`https://www.bilibili.com/v/popular/weekly?num=${num}`];
+      }
+      case "watch_later": {
+        const qs = keyword ? `?key=${encodeURIComponent(keyword)}` : "";
+        return [`bili23://watch_later${qs}`];
+      }
+      case "history": {
+        const qs = keyword ? `?keyword=${encodeURIComponent(keyword)}` : "";
+        return [`bili23://history${qs}`];
+      }
+      default:
+        throw new BiliError("UNSUPPORTED_TYPE", `暂不支持的类型入口：${req.type}`);
+    }
+  }
+
+  /** 解析空间输入：数字 UID / 已是 space 链接 / 用户名（WBI 搜索用户解析 mid） */
+  async #resolveSpaceTarget(query: string): Promise<string> {
+    const q = query.trim();
+    if (!q) throw new BiliError("INVALID_URL", "请输入 UP 主 UID 或用户名");
+    if (/^\d+$/.test(q)) return q;
+    const { type, token } = classifyUrl(q);
+    if (type === "space" && token) return token;
+    const name = q.replace(/^https?:\/\//, "").replace(/^space\.bilibili\.com\//, "");
+    const mid = await this.#midFromUsername(type === "space" ? "" : name);
+    return String(mid);
+  }
+
+  /** 通过 B 站用户搜索接口把用户名解析为 mid（优先精确匹配，否则取首个结果） */
+  async #midFromUsername(name: string): Promise<number> {
+    const keyword = (name || "").trim();
+    if (!keyword) throw new BiliError("INVALID_URL", "请输入 UP 主用户名");
+    const body = await this.#http.getJSON<{
+      code: number;
+      message?: string;
+      data?: { result?: Array<{ mid?: number; uname?: string }> };
+    }>(`${BILI_API_BASE}/x/web-interface/search/type`, {
+      params: { search_type: "bili_user", keyword },
+    });
+    if (body.code !== 0) {
+      throw new BiliError("API_ERROR", body.message ?? "搜索用户失败", { apiCode: body.code });
+    }
+    const users = body.data?.result ?? [];
+    const exact = users.find((u) => u.uname?.trim() === keyword || u.uname?.trim().toLowerCase() === keyword.toLowerCase());
+    const target = exact ?? users[0];
+    if (!target?.mid) {
+      throw new BiliError("INVALID_URL", `未找到名为“${keyword}”的 UP 主，请确认用户名或改用数字 UID`);
+    }
+    return target.mid;
   }
 
   getMedia(itemId: string): MediaItem | undefined {

@@ -15,6 +15,8 @@ import type {
   MediaOptionSummary,
   TaskStatus,
   TaskSummary,
+  ParseRequest,
+  AuthStatus,
 } from "./download-manager.js";
 
 /**
@@ -59,6 +61,11 @@ export interface ApiDeps {
   listFiles(): Promise<FileEntry[]>;
   getConfig?(): Promise<AppConfig>;
   updateConfig?(patch: AppConfigPatch): Promise<AppConfig>;
+  /** 类型化解析请求（type 入口） */
+  parseRequest?(req: ParseRequest): Promise<ParseResult[]>;
+  loginAuth?(sessdata: string): Promise<AuthStatus>;
+  logoutAuth?(): Promise<AuthStatus>;
+  authStatus?(): Promise<AuthStatus>;
 }
 
 export type ApiErrorStatus = 400 | 401 | 404 | 409 | 500 | 502;
@@ -89,7 +96,13 @@ const RETRYABLE_STATUSES = new Set<TaskStatus>(["failed", "cancelled"]);
 export function registerApi(app: Hono, getManager: () => ApiDeps): void {
   app.post("/api/parse", async (c) => {
     try {
-      const body = (await c.req.json()) as { urls?: string[] };
+      const body = (await c.req.json()) as ParseRequest;
+      // 类型入口（space/favlist/watch_later/history/popular 等）：由服务端构造 URL
+      const manager = getManager();
+      if (body.type && manager.parseRequest) {
+        const results = await manager.parseRequest(body);
+        return c.json({ results });
+      }
       const urls = (body.urls ?? []).filter((u) => typeof u === "string" && u.trim().length > 0);
       if (urls.length === 0) {
         return c.json({ error: { code: "INVALID_URL", message: "请至少输入一个链接" } }, 400);
@@ -256,6 +269,34 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
       }
       rs.destroy();
     });
+  });
+
+  // 登录（SESSDATA cookie）：账户向（稍后再看/历史/高画质）需要
+  app.get("/api/auth/status", async (c) => {
+    const manager = getManager();
+    if (!manager.authStatus) return c.json({ loggedIn: false, preview: "" });
+    return c.json(await manager.authStatus());
+  });
+
+  app.post("/api/auth", async (c) => {
+    const manager = getManager();
+    if (!manager.loginAuth) return c.json({ error: { code: "NOT_FOUND", message: "登录接口不可用" } }, 404);
+    try {
+      const body = (await c.req.json()) as { sessdata?: string };
+      if (!body.sessdata?.trim()) {
+        return c.json({ error: { code: "INVALID_AUTH", message: "SESSDATA 不能为空" } }, 400);
+      }
+      return c.json(await manager.loginAuth(body.sessdata));
+    } catch (err) {
+      const { status, body } = errorBody(err);
+      return c.json(body, status);
+    }
+  });
+
+  app.delete("/api/auth", async (c) => {
+    const manager = getManager();
+    if (!manager.logoutAuth) return c.json({ loggedIn: false, preview: "" });
+    return c.json(await manager.logoutAuth());
   });
 
   // 全局设置（P3：附加内容默认 + 文件命名/编号）

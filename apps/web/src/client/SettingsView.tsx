@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type {
   AdvancedConfigDTO,
   AppConfigDTO,
+  AuthStatusDTO,
   BehaviorConfigDTO,
   ChapterOptionsDTO,
   CoverFormatDTO,
@@ -26,10 +27,10 @@ interface VarToken {
   hintKey: string;
 }
 
-type GroupName = "behavior" | "download" | "additional" | "naming" | "advanced";
+type GroupName = "behavior" | "download" | "additional" | "naming" | "advanced" | "account";
 type Notice = { group: GroupName; kind: "ok" | "err"; text: string };
 
-const SECTIONS: GroupName[] = ["behavior", "download", "additional", "naming", "advanced"];
+const SECTIONS: GroupName[] = ["behavior", "download", "additional", "naming", "advanced", "account"];
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -94,6 +95,9 @@ export function SettingsView() {
   const [cdnText, setCdnText] = useState("");
   const [ffmpegText, setFfmpegText] = useState("");
   const [proxyText, setProxyText] = useState("");
+  // 账户（登录 Cookie）
+  const [sessdataText, setSessdataText] = useState("");
+  const [auth, setAuth] = useState<AuthStatusDTO>({ loggedIn: false, preview: "" });
 
   const syncTextStates = useCallback((config: AppConfigDTO): void => {
     setStartText(String(config.fileNaming?.startingNumber ?? 1));
@@ -125,6 +129,20 @@ export function SettingsView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadAuth = useCallback(async (): Promise<void> => {
+    try {
+      const res = await fetch("/api/auth/status");
+      const s = (await res.json()) as AuthStatusDTO;
+      setAuth({ loggedIn: !!s.loggedIn, preview: s.preview ?? "" });
+    } catch {
+      setAuth({ loggedIn: false, preview: "" });
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAuth();
+  }, [loadAuth]);
 
   // ---------- 局部补丁 ----------
 
@@ -237,6 +255,8 @@ export function SettingsView() {
           return server.fileNaming !== undefined ? { ...prev, fileNaming: server.fileNaming } : prev;
         case "advanced":
           return server.advanced !== undefined ? { ...prev, advanced: server.advanced } : prev;
+        case "account":
+          return prev;
       }
     });
   }, []);
@@ -369,6 +389,44 @@ export function SettingsView() {
     }
   }, [cfg, cdnText, vqText, aqText, codecText, ffmpegText, proxyText, finishSave]);
 
+  const saveLogin = useCallback(async (): Promise<void> => {
+    setSaving("account");
+    setNotice(null);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessdata: sessdataText.trim() }),
+      });
+      const json = (await res.json()) as AuthStatusDTO & { error?: { message?: string } };
+      if (!res.ok || (json as { error?: unknown }).error) {
+        throw new Error(json.error?.message ?? `HTTP ${res.status}`);
+      }
+      setAuth({ loggedIn: true, preview: json.preview });
+      setSessdataText("");
+      setNotice({ group: "account", kind: "ok", text: t("settings.account.loggedIn") });
+    } catch (e) {
+      setNotice({ group: "account", kind: "err", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSaving(null);
+    }
+  }, [sessdataText, t]);
+
+  const logoutLogin = useCallback(async (): Promise<void> => {
+    setSaving("account");
+    setNotice(null);
+    try {
+      const res = await fetch("/api/auth", { method: "DELETE" });
+      const json = (await res.json()) as AuthStatusDTO;
+      setAuth({ loggedIn: !!json.loggedIn, preview: json.preview ?? "" });
+      setNotice({ group: "account", kind: "ok", text: t("settings.account.notLoggedIn") });
+    } catch (e) {
+      setNotice({ group: "account", kind: "err", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setSaving(null);
+    }
+  }, [t]);
+
   if (loadErr && !cfg) {
     return (
       <div>
@@ -414,6 +472,7 @@ export function SettingsView() {
     additional: "settings.additional.title",
     naming: "settings.naming.title",
     advanced: "settings.advanced.title",
+    account: "settings.account.title",
   };
 
   return (
@@ -972,6 +1031,46 @@ export function SettingsView() {
             <button disabled={saving !== null} onClick={() => void saveAdvanced()}>
               {saving === "advanced" ? t("common.saving") : t("common.save")}
             </button>
+          </div>
+        </section>
+      )}
+
+      {section === "account" && (
+        <section className="settings-group">
+          <h3 style={{ marginTop: 0 }}>{t("settings.account.title")}</h3>
+          <p style={{ color: "var(--text-2)", fontSize: 13 }}>{t("settings.account.hint")}</p>
+          {noticeFor("account") && <NoticeLine notice={noticeFor("account")} />}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "10px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span className={`tag${auth.loggedIn ? " brand" : ""}`}>
+                {auth.loggedIn ? t("settings.account.loggedIn") : t("settings.account.notLoggedIn")}
+              </span>
+              {auth.loggedIn && auth.preview && (
+                <span style={{ color: "var(--text-2)", fontSize: 12 }}>
+                  {t("settings.account.preview", { preview: auth.preview })}
+                </span>
+              )}
+            </div>
+            <label>
+              {t("settings.account.sessdata")}
+              <input
+                type="password"
+                value={sessdataText}
+                placeholder={t("settings.account.sessdataPlaceholder")}
+                onChange={(e) => setSessdataText(e.target.value)}
+                style={{ display: "block", marginTop: 4, width: "100%", boxSizing: "border-box" }}
+              />
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button disabled={saving !== null || sessdataText.trim().length === 0} onClick={() => void saveLogin()}>
+              {saving === "account" ? t("common.saving") : t("settings.account.login")}
+            </button>
+            {auth.loggedIn && (
+              <button className="btn-danger" disabled={saving !== null} onClick={() => void logoutLogin()}>
+                {t("settings.account.logout")}
+              </button>
+            )}
           </div>
         </section>
       )}

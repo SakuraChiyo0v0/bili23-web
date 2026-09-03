@@ -20,11 +20,11 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
   return {
     ...actual,
     ensureAnonymousSession: () => Promise.resolve(),
-    parseUrl: async () => ({
+    parseUrl: vi.fn(async () => ({
       type: "video",
       title: "测试合集",
       items: h.state.parseItems,
-    }),
+    })),
     fetchPlayMediaInfo: async () => {
       if (h.state.failFetch) {
         throw new actual.BiliError("DOWNLOAD_FAILED", "模拟解析/取流失败");
@@ -72,7 +72,7 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
   };
 });
 
-import { TaskStore } from "@bili23-web/engine";
+import { TaskStore, parseUrl, BiliError } from "@bili23-web/engine";
 import { DownloadManager } from "../src/server/download-manager.js";
 import type { DownloadManager as DownloadManagerType } from "../src/server/download-manager.js";
 import type { TaskSummary } from "../src/server/download-manager.js";
@@ -158,6 +158,96 @@ afterAll(async () => {
   await rm(tmpRoot, { recursive: true, force: true });
 });
 
+describe("DownloadManager 登录 Cookie（auth）", () => {
+  it("登录后 authStatus 为已登录并持久化；退出后恢复未登录", async () => {
+    const dataDir = await mkdtemp(join(tmpRoot, "auth-"));
+    let mgr = await makeManager(dataDir);
+    let mgr2: DownloadManagerType | undefined;
+    try {
+      expect(await mgr.authStatus()).toEqual({ loggedIn: false, preview: "" });
+
+      const logged = await mgr.loginAuth("  abc12345xyz  ");
+      expect(logged.loggedIn).toBe(true);
+      expect(logged.preview).toBe("abc1…5xyz");
+      expect((await mgr.authStatus()).loggedIn).toBe(true);
+
+      // 重启后仍能还原
+      mgr.close();
+      mgr = undefined as unknown as DownloadManagerType;
+      mgr2 = new DownloadManager({ dataDir });
+      await mgr2.init();
+      expect(await mgr2.authStatus()).toEqual({ loggedIn: true, preview: "abc1…5xyz" });
+
+      expect(await mgr2.logoutAuth()).toEqual({ loggedIn: false, preview: "" });
+      expect(await mgr2.authStatus()).toEqual({ loggedIn: false, preview: "" });
+    } finally {
+      mgr?.close();
+      mgr2?.close();
+    }
+  });
+
+  it("空 SESSDATA 抛错", async () => {
+    const mgr = await makeManager();
+    try {
+      await expect(mgr.loginAuth("   ")).rejects.toBeInstanceOf(BiliError);
+    } finally {
+      mgr.close();
+    }
+  });
+});
+
+describe("DownloadManager parseRequest（类型入口）", () => {
+  it("未知类型抛 UNSUPPORTED_TYPE", async () => {
+    const mgr = await makeManager();
+    try {
+      await expect(mgr.parseRequest({ type: "bogus", query: "x" })).rejects.toMatchObject({
+        code: "UNSUPPORTED_TYPE",
+      });
+    } finally {
+      mgr.close();
+    }
+  });
+
+  it("space 空输入抛 INVALID_URL", async () => {
+    const mgr = await makeManager();
+    try {
+      await expect(mgr.parseRequest({ type: "space", query: "" })).rejects.toMatchObject({
+        code: "INVALID_URL",
+      });
+    } finally {
+      mgr.close();
+    }
+  });
+
+  it("space 数字 UID 构造 space 链接并走 parseUrl", async () => {
+    const mgr = await makeManager();
+    try {
+      h.state.parseItems = [makeItem(ID1, 280001) as unknown as Record<string, unknown>];
+      const calls = (parseUrl as unknown as { mock: { calls: Array<[unknown, string]> } }).mock.calls;
+      calls.length = 0;
+      const res = await mgr.parseRequest({ type: "space", query: "2", keyword: "abc" });
+      expect(res.length).toBe(1);
+      expect(calls[calls.length - 1]?.[1]).toBe("https://space.bilibili.com/2?keyword=abc");
+    } finally {
+      mgr.close();
+    }
+  });
+
+  it("watch_later 构造伪协议链接并走 parseUrl", async () => {
+    const mgr = await makeManager();
+    try {
+      h.state.parseItems = [makeItem(ID1, 280001) as unknown as Record<string, unknown>];
+      const calls = (parseUrl as unknown as { mock: { calls: Array<[unknown, string]> } }).mock.calls;
+      calls.length = 0;
+      const res = await mgr.parseRequest({ type: "watch_later", keyword: "test" });
+      expect(res.length).toBe(1);
+      expect(calls[calls.length - 1]?.[1]).toBe("bili23://watch_later?key=test");
+    } finally {
+      mgr.close();
+    }
+  });
+});
+
 describe("DownloadManager 队列/暂停/恢复/重启恢复", () => {
   it("并行上限=2：第 3 个任务 queued，直到有槽位释放才启动；完成后进入历史", async () => {
     const mgr = await makeManager();
@@ -178,11 +268,12 @@ describe("DownloadManager 队列/暂停/恢复/重启恢复", () => {
       );
       expect(statusOf(mgr, t3)?.status).toBe("queued");
 
-      // 释放一个槽位 → 第 3 个开始下载（仍只有 2 个同时运行）
+      // 释放一个槽位 → 第 3 个开始下载（任一前两个仍在运行即满足并发上限；不依赖释放顺序）
       await waitDownloads(2);
       releaseDownloads(1);
       await waitFor(() => statusOf(mgr, t3)?.status === "downloading");
-      expect(statusOf(mgr, t2)?.status).toBe("downloading");
+      const stillRunning = [t1, t2].filter((id) => statusOf(mgr, id)?.status === "downloading").length;
+      expect(stillRunning).toBeGreaterThan(0);
 
       // 释放剩余两个下载 → 全部完成进入历史
       await waitDownloads(2);

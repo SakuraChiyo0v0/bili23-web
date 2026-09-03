@@ -945,3 +945,68 @@ html[data-theme='dark'] .skeleton::after { background: linear-gradient(90deg, tr
 
 /* 下载页空状态 CTA */
 .empty-cta { margin-top: 6px; }
+
+
+/* =========================================================================
+   解析类型入口（type-chips）
+   ========================================================================= */
+.type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 6px auto 20px;
+  max-width: 720px;
+  width: 100%;
+}
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform var(--dur) var(--ease-spring), border-color var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.type-chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+}
+.type-chip:active { transform: scale(0.94); }
+.type-chip.active {
+  background: var(--grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 16px rgba(47, 123, 255, 0.3);
+}
+.type-chip.active:hover { color: #fff; transform: translateY(-1px); }
+
+/* 类型入口内联字段（搜索卡内的输入框） */
+.type-field {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 14.5px;
+  font-family: inherit;
+  color: var(--text);
+  padding: 4px 0;
+  line-height: 1.6;
+}
+.type-field::placeholder { color: var(--text-3); }
+.type-field:focus { outline: none; }
+
+/* 登录提示 */
+.auth-note { color: var(--text-2); }
+
+@media (max-width: 560px) {
+  .type-chips { gap: 6px; }
+  .type-chip { padding: 7px 11px; font-size: 12px; }
+}
