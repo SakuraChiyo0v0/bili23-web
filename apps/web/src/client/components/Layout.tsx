@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Icon } from "../lib/icons";
-import { useToast } from "../lib/toast";
 import type { RouteId } from "../lib/routes";
 
 const TABS: Array<{ id: RouteId; label: string }> = [
@@ -60,11 +59,18 @@ export function MobileTabBar({ route, onNavigate }: { route: RouteId; onNavigate
 export function Sidebar({
   route,
   onNavigate,
+  onLogin,
+  loggedIn,
+  preview,
+  onLogout,
 }: {
   route: RouteId;
   onNavigate: (id: RouteId) => void;
+  onLogin: () => void;
+  loggedIn: boolean;
+  preview: string;
+  onLogout: () => void;
 }) {
-  const { toast } = useToast();
   const [aboutOpen, setAboutOpen] = useState(false);
   return (
     <>
@@ -87,10 +93,17 @@ export function Sidebar({
             <span className="nav-badge hidden">0</span>
           </button>
           <div className="nav-spacer" />
-          <button type="button" className="nav-item" onClick={() => { toast("登录将在 P5 接入（扫码 + Cookie）。"); }}>
-            <span className="avatar guest" style={{ width: 26, height: 26, fontSize: 12 }}>登</span>
-            <span className="nav-label">未登录 · 点击登录</span>
-          </button>
+          {loggedIn ? (
+            <button type="button" className="nav-item" onClick={onLogout} title={preview}>
+              <span className="avatar" style={{ width: 26, height: 26, fontSize: 12 }}>用</span>
+              <span className="nav-label">已登录 · {preview || "账户"}</span>
+            </button>
+          ) : (
+            <button type="button" className="nav-item" onClick={onLogin}>
+              <span className="avatar guest" style={{ width: 26, height: 26, fontSize: 12 }}>登</span>
+              <span className="nav-label">未登录 · 点击登录</span>
+            </button>
+          )}
           <button type="button" className={`nav-item${route === "settings" ? " active" : ""}`} onClick={() => onNavigate("settings")}>
             <Icon name="gear" size={19} />
             <span className="nav-label">设置</span>

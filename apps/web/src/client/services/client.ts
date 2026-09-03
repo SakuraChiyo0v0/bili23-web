@@ -100,3 +100,10 @@ export function fileRawUrl(relPath: string): string {
 export function updateConfig(patch: Partial<AppConfig>): Promise<{ config: AppConfig }> {
   return request("/config", { method: "PUT", body: JSON.stringify({ config: patch }) });
 }
+export interface AuthStatus { loggedIn: boolean; preview: string }
+export interface QrLoginSession { qrUrl: string; qrcodeKey: string; status: number }
+export function authStatus(): Promise<AuthStatus> { return request("/auth/status"); }
+export function loginCookie(sessdata: string): Promise<AuthStatus> { return request("/auth", { method: "POST", body: JSON.stringify({ sessdata }) }); }
+export function logoutAuth(): Promise<AuthStatus> { return request("/auth", { method: "DELETE" }); }
+export function qrLoginStart(): Promise<QrLoginSession> { return request("/auth/qr", { method: "POST" }); }
+export function qrLoginPoll(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }> { return request("/auth/qr/poll", { method: "POST", body: JSON.stringify({ qrcodeKey }) }); }

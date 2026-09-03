@@ -1,10 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useUiSettings } from "./lib/useUiSettings";
 import { useTermsGate } from "./lib/useTermsGate";
 import { useHashRoute, type RouteId } from "./lib/routes";
 import { useToast, ToastProvider } from "./lib/toast";
 import { Modal } from "./components/Modal";
 import { Sidebar, TopBar, MobileTabBar } from "./components/Layout";
+import { LoginDialog } from "./components/LoginDialog";
+import { useAuthStore } from "./store/useAuthStore";
 import { TermsPanel } from "./components/TermsPanel";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ParsePage } from "./pages/ParsePage";
@@ -25,6 +27,9 @@ function Shell() {
   const [ui, updateUi] = useUiSettings();
   const { toast } = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const auth = useAuthStore();
+  useEffect(() => { void auth.refresh(); /*eslint-disable-next-line*/ }, []);
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
 
@@ -45,7 +50,7 @@ function Shell() {
 
   return (
     <div className="app">
-      <Sidebar route={route.id} onNavigate={navigate} />
+      <Sidebar route={route.id} onNavigate={navigate} onLogin={() => setLoginOpen(true)} loggedIn={auth.loggedIn} preview={auth.preview} onLogout={async () => { const { logoutAuth } = await import("./services/client"); await logoutAuth(); await auth.refresh(); toast("已退出登录"); }} />
       <div className="main">
         <TopBar
           title={route.title}
@@ -60,6 +65,7 @@ function Shell() {
         <MobileTabBar route={route.id} onNavigate={navigate} />
       </div>
 
+      <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
