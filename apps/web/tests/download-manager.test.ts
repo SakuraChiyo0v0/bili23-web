@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { stat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MediaItem } from "@bili23-web/engine";
@@ -403,6 +403,73 @@ describe("DownloadManager 重启恢复（预置 download_task 行）", () => {
       expect(mgr.listHistory().length).toBe(0);
     } finally {
       mgr.close();
+    }
+  });
+});
+
+describe("DownloadManager 设置语义（目录/命名/重名/重复）", () => {
+  it("自定义下载目录会成为新任务的落盘根目录", async () => {
+    const mgr = await makeManager();
+    const customRoot = join(tmpRoot, "custom-root-" + Date.now());
+    try {
+      const items = await seedThree(mgr);
+      await mgr.updateConfig({ download: { dir: customRoot } });
+      expect(mgr.downloadRootDir()).toBe(customRoot);
+
+      await mgr.createTasks([items[0]!.id], {});
+      const taskId = taskIds(mgr)[0]!;
+      await waitFor(() => statusOf(mgr, taskId)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, taskId)?.status === "completed", 10000);
+
+      const output = statusOf(mgr, taskId)?.outputPath;
+      expect(output).toBeDefined();
+      expect(output!.startsWith(customRoot)).toBe(true);
+      expect(await stat(output!)).toBeTruthy();
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+    }
+  });
+
+  it("任务创建固化本次命名规则，并遵守覆盖与强制重复策略", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      const config = await mgr.getConfig();
+      await mgr.updateConfig({
+        download: { duplicatePolicy: "force", renamePolicy: "overwrite" },
+        fileNaming: {
+          ...config.fileNaming,
+          rules: [
+            ...config.fileNaming.rules,
+            { id: "custom-normal", name: "自定义", type: 11, rule: "custom/{leaf_title}", default: false },
+          ],
+        },
+      });
+
+      const naming = { conventionType: 11, rule: "custom/{leaf_title}", number: 9 };
+      const first = await mgr.createTasks([items[0]!.id], { naming });
+      const firstId = first.tasks[0]!.id;
+      await waitFor(() => statusOf(mgr, firstId)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, firstId)?.status === "completed", 10000);
+      const firstPath = statusOf(mgr, firstId)?.outputPath;
+      expect(firstPath).toContain("custom");
+
+      const second = await mgr.createTasks([items[0]!.id], { naming });
+      expect(second.duplicates).toEqual([]);
+      const secondId = second.tasks[0]!.id;
+      await waitFor(() => statusOf(mgr, secondId)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, secondId)?.status === "completed", 10000);
+      expect(statusOf(mgr, secondId)?.outputPath).toBe(firstPath);
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
     }
   });
 });

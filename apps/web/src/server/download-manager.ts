@@ -384,6 +384,10 @@ export class DownloadManager {
   #cdnHosts: string[] = [];
   /** 自定义 ffmpeg 可执行文件路径（advanced.ffmpegPath） */
   #ffmpegPath: string | undefined = undefined;
+  /** 产物重名策略（config.download.renamePolicy）：auto=自动加后缀 overwrite=覆盖 */
+  #renamePolicy: "auto" | "overwrite" = "auto";
+  /** 重复下载策略（config.download.duplicatePolicy）：prompt=询问 skip=跳过 force=强制 */
+  #duplicatePolicy: "prompt" | "skip" | "force" = "prompt";
 
   constructor(opts: { dataDir: string; downloadDir?: string }) {
     this.#http = new HttpClient();
@@ -430,14 +434,9 @@ export class DownloadManager {
 
   async updateConfig(patch: AppConfigPatch): Promise<AppConfig> {
     await this.#configReady;
-    const prev = this.#configStore.get();
     const next = await this.#configStore.update(patch);
-    // 全局限速即时生效：speedLimitKbps 变化时更新共享门
-    if (next.download.speedLimitKbps !== prev.download.speedLimitKbps) {
-      this.#gate.setBps(next.download.speedLimitKbps * 1024);
-    }
-    this.#maxParallel = next.download.parallel;
-    this.#maxThreads = next.download.threads;
+    // 统一刷新运行时：并发/限速/代理/CDN/ffmpeg + 重名/重复策略 + 下载目录（目录变更即时切换）
+    this.#applyRuntimeConfig(next);
     // 并行上限变化后立即按新值推进队列（调大时 queued 任务马上补位，调小则保持现状）
     this.#scheduleNext();
     return next;
@@ -744,11 +743,17 @@ export class DownloadManager {
   ): Promise<{ tasks: TaskSummary[]; duplicates: Array<{ itemId: string; title: string }> }> {
     const items: Array<{ item: MediaItem; hash: string }> = [];
     const duplicates: Array<{ itemId: string; title: string }> = [];
+    // 重复策略在最终判定前读取（prompt=询问 skip=跳过 force=强制下载）
+    const cfg0 = await this.#configReady.then(() => this.#configStore.get());
+    const dupPolicy = cfg0.download.duplicatePolicy;
     for (const itemId of itemIds) {
       const item = this.#items.get(itemId);
       if (!item) throw new BiliError("INVALID_URL", "条目不存在：" + itemId);
       const hash = this.#hashOf(item);
-      if (!force && this.#store.checkDuplicate(hash)) {
+      const isDup = this.#store.checkDuplicate(hash);
+      // skip=跳过；prompt=询问（未强制时跳过并提示）；force 参数 = 用户显式覆盖任何策略
+      const skipDup = isDup && !force && (dupPolicy === "skip" || dupPolicy === "prompt");
+      if (skipDup) {
         duplicates.push({ itemId, title: item.title });
         continue;
       }
@@ -768,11 +773,18 @@ export class DownloadManager {
     for (const [index, entry] of items.entries()) {
       const { item, hash } = entry;
       const conventionType = resolveConventionType(item);
+      // 用户本次勾选的命名规则优先固化；未传命名时才按全局规则解析
+      const naming = options.naming;
       const rule =
-        this.#findRule(cfg.fileNaming.rules, conventionType)?.rule ??
-        this.#findRule(DEFAULT_NAMING_RULES, conventionType)?.rule ??
-        "{leaf_title}";
-      const number = allocator.alloc(numberingType === 1 ? index + 1 : undefined);
+        naming && naming.rule.length > 0
+          ? naming.rule
+          : this.#findRule(cfg.fileNaming.rules, conventionType)?.rule ??
+            this.#findRule(DEFAULT_NAMING_RULES, conventionType)?.rule ??
+            "{leaf_title}";
+      const number =
+        naming && (naming.number ?? "") !== ""
+          ? naming.number
+          : allocator.alloc(numberingType === 1 ? index + 1 : undefined);
       const resolved: DownloadOptions = {
         ...options,
         extras: deepMerge(cfg.additional, options.extras),
@@ -979,6 +991,19 @@ export class DownloadManager {
     this.#gate.setBps(cfg.download.speedLimitKbps * 1024);
     this.#maxParallel = cfg.download.parallel;
     this.#maxThreads = cfg.download.threads;
+    // 重名/重复策略（新任务开始 / 配置变更时生效）
+    this.#renamePolicy = cfg.download.renamePolicy;
+    this.#duplicatePolicy = cfg.download.duplicatePolicy;
+    // 下载目录：非空则用配置值，否则回落默认 <data>/downloads；变更时即时切换根目录与临时目录
+    const dlDir = cfg.download.dir && cfg.download.dir.trim().length > 0
+      ? cfg.download.dir
+      : join(this.#dataDir, "downloads");
+    if (dlDir !== this.#rootDir) {
+      this.#rootDir = dlDir;
+      this.#tmpDir = join(this.#rootDir, ".tmp");
+      mkdirSync(this.#rootDir, { recursive: true });
+      mkdirSync(this.#tmpDir, { recursive: true });
+    }
     // advanced：代理、CDN、ffmpeg 路径即时生效
     this.#http.setProxy(cfg.advanced.proxy);
     this.#cdnHosts = cfg.advanced.cdnHosts;
@@ -1312,7 +1337,13 @@ export class DownloadManager {
     ext: string,
   ): Promise<string> {
     await mkdir(dir, { recursive: true });
-    const unique = await this.#uniquePath(join(dir, `${stem}.${ext}`));
+    const target = join(dir, `${stem}.${ext}`);
+    if (this.#renamePolicy === "overwrite") {
+      // 覆盖策略：直接落盘为同名目标（对齐桌面“覆盖同名文件”）
+      await rename(tempOut, target);
+      return target;
+    }
+    const unique = await this.#uniquePath(target);
     await rename(tempOut, unique);
     return unique;
   }
