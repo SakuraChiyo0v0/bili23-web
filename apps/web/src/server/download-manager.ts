@@ -534,6 +534,27 @@ export class DownloadManager {
     };
   }
 
+  /** 登录用户收藏夹列表（1:1 收藏夹面板；需登录，未登录抛 LOGIN_REQUIRED） */
+  async listFavFolders(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number }> }> {
+    await this.#sessionReady;
+    if (!this.#sessdata) {
+      throw new BiliError("LOGIN_REQUIRED", "请先登录");
+    }
+    const nav = await this.#http.getJSON<{ code: number; data?: { mid?: number } }>(BILI_API_BASE + "/x/web-interface/nav");
+    const mid = nav.data?.mid;
+    if (nav.code !== 0 || !mid) {
+      throw new BiliError("LOGIN_REQUIRED", "登录态无效，请重新登录");
+    }
+    const res = await this.#http.getJSON<{
+      code: number; data?: { list?: Array<{ id: number; title: string; media_count?: number }> };
+    }>(BILI_API_BASE + "/x/v3/fav/folder/created/list-all", { params: { up_mid: String(mid) } });
+    if (res.code !== 0) {
+      throw new BiliError("LOGIN_REQUIRED", res.code === -101 ? "登录态无效" : "获取收藏夹失败");
+    }
+    const folders = (res.data?.list ?? []).map((f) => ({ id: f.id, title: f.title, mediaCount: f.media_count ?? 0 }));
+    return { mid, folders };
+  }
+
   #previewSessdata(s: string): string {
     if (s.length <= 10) return s;
     return `${s.slice(0, 4)}…${s.slice(-4)}`;

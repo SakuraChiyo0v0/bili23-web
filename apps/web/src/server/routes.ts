@@ -72,6 +72,7 @@ export interface ApiDeps {
   qrLoginPoll?(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }>;
   logoutAuth?(): Promise<AuthStatus>;
   authStatus?(): Promise<AuthStatus>;
+  listFavFolders?(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number }> }>;
 }
 
 export type ApiErrorStatus = 400 | 401 | 404 | 409 | 500 | 502;
@@ -306,6 +307,17 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
     if (!manager.authStatus) return c.json({ loggedIn: false, preview: "" });
     return c.json(await manager.authStatus());
   });
+  app.get("/api/favorites", async (c) => {
+    const manager = getManager();
+    if (!manager.listFavFolders) return c.json({ error: { code: "NOT_FOUND", message: "收藏夹接口不可用" } }, 404);
+    try {
+      return c.json(await manager.listFavFolders());
+    } catch (err) {
+      const { status, body } = errorBody(err);
+      return c.json(body, status);
+    }
+  });
+
 
   app.post("/api/auth", async (c) => {
     const manager = getManager();

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TermsPanel } from "./TermsPanel";
+import { FavoritesFlyout } from "./FavoritesFlyout";
 import { Icon } from "../lib/icons";
 import type { RouteId } from "../lib/routes";
 
@@ -73,6 +74,7 @@ export function Sidebar({
   onLogout: () => void;
 }) {
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [favOpen, setFavOpen] = useState(false);
   return (
     <>
       <aside className="sidebar">
@@ -92,6 +94,10 @@ export function Sidebar({
             <Icon name="download" size={19} />
             <span className="nav-label">下载</span>
             <span className="nav-badge hidden">0</span>
+          </button>
+          <button type="button" className="nav-item" onClick={() => setFavOpen(true)}>
+            <Icon name="star" size={19} />
+            <span className="nav-label">收藏夹</span>
           </button>
           <button type="button" className="nav-item" onClick={() => setAboutOpen(true)}>
             <Icon name="info" size={19} />
@@ -115,6 +121,7 @@ export function Sidebar({
           </button>
         </nav>
       </aside>
+      <FavoritesFlyout open={favOpen} onClose={() => setFavOpen(false)} onOpenFolder={() => { onNavigate("parse"); setFavOpen(false); }} />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </>
   );

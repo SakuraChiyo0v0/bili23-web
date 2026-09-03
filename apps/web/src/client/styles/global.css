@@ -401,3 +401,12 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 .tree-search .ico{ color:var(--muted); }
 .tree-search .text-input{ flex:1; border:none; background:transparent; height:34px; }
 .tree-search .text-input:focus{ box-shadow:none; }
+
+/* ===== Favorites flyout ===== */
+.fav-flyout{ max-width:640px; }
+.fav-body{ padding:14px 18px 8px; }
+.fav-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+.fav-item{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); transition:border var(--dur),box-shadow var(--dur); text-align:left; }
+.fav-item:hover{ border-color:var(--accent); box-shadow:var(--shadow-sm); }
+.fav-name{ font-weight:600; font-size:13.5px; color:var(--ink); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:100%; }
+.fav-sub{ font-size:12px; color:var(--muted); }
