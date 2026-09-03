@@ -1,8 +1,9 @@
 import {
-  cancelTask, pauseTask, resumeTask, retryTask, deleteTask,
+  cancelTask, pauseTask, resumeTask, retryTask, deleteTask, taskLog,
 } from "../services/client";
 import { useTasksStore, TASK_STATUS_META } from "../store/useTasksStore";
 import type { TaskSummary } from "../services/types";
+import { useState } from "react";
 import { Icon } from "../lib/icons";
 
 export function TaskActions({
@@ -14,6 +15,8 @@ export function TaskActions({
   onRemove: (id: string) => void;
   onToast: (msg: string, tone?: "ok" | "err" | "warn" | "info") => void;
 }) {
+  const [logOpen, setLogOpen] = useState(false);
+  const [logLines, setLogLines] = useState<string[]>([]);
   const meta = TASK_STATUS_META[task.status];
 
   // 主按钮动作定义，映射到各操作
@@ -55,6 +58,8 @@ export function TaskActions({
     }
   };
 
+  const openLog = async () => { setLogOpen(true); try { const { lines } = await taskLog(task.id); setLogLines(lines); } catch { setLogLines([]); } };
+
   const iconName = meta.action === "pause" ? "pause" : meta.action === "resume" ? "play" : meta.action === "retry" ? "play" : meta.action === "open" ? "external" : "x";
 
   return (
@@ -63,11 +68,21 @@ export function TaskActions({
         <Icon name={iconName} size={15} />
         {meta.action === "pause" ? "暂停" : meta.action === "resume" ? "继续" : meta.action === "retry" ? "重试" : meta.action === "open" ? "打开" : "删除"}
       </button>
+      <button type="button" className="btn sm ghost" onClick={openLog}>日志</button>
       {meta.action === "pause" && (
         <button type="button" className="btn sm ghost" onClick={() => secondary("cancel")}>取消</button>
       )}
       {meta.action === "open" && (
         <button type="button" className="btn sm ghost" onClick={() => secondary("delete")}>删除</button>
+      )}
+      {logOpen && (
+        <div className="overlay sheet-on-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) setLogOpen(false); }}>
+          <div className="modal md">
+            <div className="modal-head"><div className="modal-title">任务日志</div><button type="button" className="icon-btn" onClick={() => setLogOpen(false)} aria-label="关闭"><svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
+            <div className="modal-body log-body"><pre>{logLines.length ? logLines.join("\n") : "暂无日志"}</pre></div>
+            <div className="modal-foot"><div className="right"><button type="button" className="btn" onClick={() => setLogOpen(false)}>关闭</button></div></div>
+          </div>
+        </div>
       )}
     </div>
   );

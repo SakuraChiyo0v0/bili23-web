@@ -391,3 +391,6 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 .dup-item{ display:flex; align-items:center; gap:8px; font-size:13px; padding:6px 8px; border-radius:8px; background:var(--surface-2); }
 .dup-dot{ width:6px; height:6px; border-radius:50%; background:var(--warning); flex:none; }
 .dup-item.muted{ color:var(--muted); }
+
+/* ===== Log viewer ===== */
+.log-body pre{ font-family:var(--mono); font-size:12px; line-height:1.7; white-space:pre-wrap; max-height:50vh; overflow:auto; color:var(--ink-2); margin:0; }
