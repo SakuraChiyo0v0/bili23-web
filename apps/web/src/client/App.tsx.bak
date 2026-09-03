@@ -16,12 +16,6 @@ const NAV_ITEMS: Array<{ id: View; label: string; icon: IconName }> = [
   { id: "settings", label: "设置", icon: "settings" },
 ];
 
-const SIDEBAR_ITEMS: Array<{ id: View; label: string; icon: IconName; caption: string }> = [
-  { id: "parse", label: "解析", icon: "search", caption: "链接 / 分类解析" },
-  { id: "tasks", label: "下载", icon: "download", caption: "任务 / 历史 / 文件" },
-  { id: "settings", label: "设置", icon: "settings", caption: "下载与偏好" },
-];
-
 export default function App() {
   const [view, setView] = useState<View>(() => {
     const hash = window.location.hash.replace("#", "");
@@ -73,6 +67,14 @@ export default function App() {
             <span className="brand-mark"><Icon name="sparkles" size={17} /></span>
             <span><strong>Bili23</strong><small>Web Downloader</small></span>
           </button>
+          <nav className="desktop-nav" aria-label="主导航">
+            {NAV_ITEMS.map((item) => (
+              <button key={item.id} type="button" className={cn("nav-item", view === item.id && "is-active")} onClick={() => navigate(item.id)}>
+                <Icon name={item.icon} size={17} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
           <div className="topbar-status">
             <button className={cn("login-chip", auth?.loggedIn && "is-online")} type="button" onClick={() => auth?.loggedIn ? void api.logout().then((next) => setAuth(next)).catch(() => undefined) : setShowLogin(true)}>
               <span className={cn("health-dot", auth?.loggedIn ? "is-online" : "")} />
@@ -83,25 +85,6 @@ export default function App() {
         </div>
       </header>
 
-      <div className="app-layout">
-        <aside className="app-sidebar">
-          <div className="sidebar-brand">
-            <span className="brand-mark"><Icon name="sparkles" size={17} /></span>
-            <span><strong>Bili23</strong><small>NAS Video Downloader</small></span>
-          </div>
-          <nav className="sidebar-nav" aria-label="主导航">
-            {SIDEBAR_ITEMS.map((item) => (
-              <button key={item.id} type="button" className={cn("sidebar-item", view === item.id && "is-active")} onClick={() => navigate(item.id)}>
-                <span className="sidebar-icon"><Icon name={item.icon} size={18} /></span>
-                <span className="sidebar-copy"><strong>{item.label}</strong><small>{item.caption}</small></span>
-              </button>
-            ))}
-          </nav>
-          <div className="sidebar-footer">
-            <span className="sidebar-hint">部署于 NAS · 局域网/公网访问</span>
-          </div>
-        </aside>
-        <div className="app-main">
       <main className="main-content">
         {!config ? (
           <div className="app-loading"><span className="loading-orbit" /><strong>正在连接 Bili23 服务</strong><span>首次加载会读取 NAS 上的配置和任务状态。</span></div>
@@ -113,8 +96,6 @@ export default function App() {
           <SettingsView config={config} onConfigChange={setConfig} onToast={showToast} />
         )}
       </main>
-        </div>
-      </div>
 
       <nav className="mobile-nav" aria-label="移动端主导航">
         {NAV_ITEMS.map((item) => (

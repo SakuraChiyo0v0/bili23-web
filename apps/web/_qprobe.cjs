@@ -1,0 +1,1 @@
+const QRCode = require("C:/LocalSpace/Projects/My-Proj/NAS-PROJECTS/bili23-web/node_modules/.pnpm/qrcode@1.5.4/node_modules/qrcode/lib/browser.js"); QRCode.toDataURL(process.argv[1], { width: 220, margin: 2 }).then(u => console.log("ENC_OK len="+u.length)).catch(e => { console.error("ENC_ERR: "+e.message); process.exit(1); });

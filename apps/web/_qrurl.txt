@@ -1,0 +1,1 @@
+QRURL=https://account.bilibili.com/h5/account-h5/auth/scan-web?navhide=1&callback=close&qrcode_key=621517b31d91d90b695127d56e885bfa&from=main-fe-header

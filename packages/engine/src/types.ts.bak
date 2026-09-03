@@ -1,0 +1,52 @@
+/** 单个可下载条目的取流/落盘形态（P2：bangumi/cheese/lesson/audio 为各自直链或 PGC 取流） */
+export type ItemKind = "video" | "bangumi" | "cheese" | "lesson" | "audio";
+
+/** 单个可下载条目（对应桌面版"解析列表"中一个可勾选项：一个分P/一集/一首歌） */
+export interface MediaItem {
+  /** 稳定标识，形如 video:BVxxx:p1 / bangumi:BVxxx:ep399341 */
+  id: string;
+  /** 内容大类（叶子类型即取流 flavor；space/favlist 等容器类型体现在 ParseResult.type） */
+  type: ItemKind;
+  /** 稿件 aid；音频/商城课等直链条目可为空 */
+  aid?: number;
+  /** 稿件 bvid；音频/商城课可为空 */
+  bvid?: string;
+  /** 分P cid；音频/商城课可为空 */
+  cid?: number;
+  /** PGC/PUGV（番剧/课程）分集 ep_id */
+  epId?: number;
+  /** 音频条目 au 编号（音乐服务 song id 别名，用于还原链接） */
+  auId?: number;
+  /** 音频条目 sid（audio music-service 下载用） */
+  sid?: number;
+  /** 商城课程编号（lesson） */
+  courseId?: number;
+  lessonId?: number;
+  itemId?: number;
+  sectionId?: number;
+  /** 互动视频标记（互动视频下载行为等同投稿视频，仅标记差异） */
+  interactive?: boolean;
+  /** 分P 序号（1 起） */
+  page: number;
+  /** 分P 标题 */
+  title: string;
+  /** 视频主标题（合集/分P 时为总标题） */
+  groupTitle: string;
+  /** 时长（秒） */
+  duration: number;
+  /** 角标文案，如 "充电专属"；无则空串 */
+  badge: string;
+  /** 封面 URL */
+  cover: string;
+  /** 发布时间（Unix 秒） */
+  pubtime: number;
+  owner: {
+    mid: number;
+    name: string;
+    face: string;
+  };
+  desc: string;
+  /** 可重新打开/复制的地址 */
+  url: string;
+}
+

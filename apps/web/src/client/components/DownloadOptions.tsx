@@ -117,6 +117,7 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
   const [ruleId, setRuleId] = useState<string>(config.fileNaming.rules.find((rule) => rule.default)?.id ?? "");
   const [number, setNumber] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [activeStep, setActiveStep] = useState<"media" | "extras" | "download">("media");
   const [showDanmakuStyle, setShowDanmakuStyle] = useState(false);
   const [showSubtitleStyle, setShowSubtitleStyle] = useState(false);
 
@@ -203,7 +204,12 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
         </header>
 
         <div className="drawer-content">
-          <section className="drawer-section">
+          <nav className="drawer-steps" aria-label="下载设置步骤">
+            <button type="button" className={cn("drawer-step", activeStep === "media" && "is-active")} onClick={() => setActiveStep("media")}><span className="step-num">1</span><span><strong>媒体设置</strong><small>画质 / 音质 / 容器</small></span></button>
+            <button type="button" className={cn("drawer-step", activeStep === "extras" && "is-active")} onClick={() => setActiveStep("extras")}><span className="step-num">2</span><span><strong>附加文件</strong><small>弹幕 / 字幕 / 封面</small></span></button>
+            <button type="button" className={cn("drawer-step", activeStep === "download" && "is-active")} onClick={() => setActiveStep("download")}><span className="step-num">3</span><span><strong>下载设置</strong><small>命名 / 编号</small></span></button>
+          </nav>
+          <section className={cn("drawer-section is-step", activeStep !== "media" && "is-hidden")}>
             <div className="section-heading"><span className="section-index">01</span><div><h3>媒体设置</h3><p>按当前条目可用的流自动选择，也可以手动指定。</p></div></div>
             <div className="form-grid">
               <Field label="视频画质">
@@ -240,7 +246,7 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
             </div>
           </section>
 
-          <section className="drawer-section">
+          <section className={cn("drawer-section is-step", activeStep !== "extras" && "is-hidden")}>
             <div className="section-heading"><span className="section-index">02</span><div><h3>附加文件</h3><p>选择需要随媒体一起保存的辅助内容。</p></div></div>
             <div className="extras-grid">
               <div className="extra-card">
@@ -323,7 +329,7 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
             </div>
           </section>
 
-          <section className="drawer-section">
+          <section className={cn("drawer-section is-step", activeStep !== "download" && "is-hidden")}>
             <div className="section-heading"><span className="section-index">03</span><div><h3>下载设置</h3><p>控制文件落盘位置、命名和编号方式。</p></div></div>
             <div className="form-grid">
               <Field label="命名规则" hint="当前类型可使用对应的默认规则">

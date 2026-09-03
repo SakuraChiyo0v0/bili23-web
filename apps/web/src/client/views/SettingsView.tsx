@@ -27,11 +27,13 @@ const RULE_TYPE_LABELS: Record<number, string> = {
   90: "音乐",
 };
 
-function Section({ number, title, description, children }: { number: string; title: string; description: string; children: ReactNode }) {
+function Section({ number, title, description, children, open, onToggle }: { number: string; title: string; description: string; children: ReactNode; open: boolean; onToggle: () => void }) {
   return (
-    <section className="settings-section">
-      <div className="section-heading"><span className="section-index">{number}</span><div><h3>{title}</h3><p>{description}</p></div></div>
-      <div className="settings-card">{children}</div>
+    <section className={cn("settings-section", open && "is-open")}>
+      <button type="button" className="section-heading settings-accordion-head" onClick={onToggle} aria-expanded={open}>
+        <span className="section-index">{number}</span><div><h3>{title}</h3><p>{description}</p></div><Icon name={open ? "close" : "filter"} size={16} className="section-chevron" />
+      </button>
+      <div className={cn("settings-card", open && "settings-card-open")}>{open ? children : null}</div>
     </section>
   );
 }
@@ -63,6 +65,7 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
   const [local, setLocal] = useState<AppConfig>(() => ({ ...config, additional: ensureExtras(config.additional) }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [openSection, setOpenSection] = useState<string>("01");
   const [showDanmakuStyle, setShowDanmakuStyle] = useState(false);
   const [showSubtitleStyle, setShowSubtitleStyle] = useState(false);
 
@@ -127,7 +130,7 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
 
       {error ? <div className="inline-error"><Icon name="info" size={16} /> {error}</div> : null}
 
-      <Section number="01" title="下载行为" description="控制默认落盘目录、并发、限速和重复内容策略。">
+      <Section number="01" title="下载行为" description="控制默认落盘目录、并发、限速和重复内容策略。" open={openSection === "01"} onToggle={() => setOpenSection(openSection === "01" ? "" : "01")}>
         <div className="settings-grid">
           <Field label="下载目录" hint="留空使用服务端默认下载目录" wide><input value={local.download.dir} onChange={(event) => patchDownload({ dir: event.target.value })} placeholder="/volume1/docker/bili23-web/data/downloads" /></Field>
           <Field label="并行任务数"><input inputMode="numeric" value={local.download.parallel} onChange={(event) => patchDownload({ parallel: Math.max(1, Math.min(16, Number(event.target.value) || 1)) })} /></Field>
@@ -139,7 +142,7 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
         </div>
       </Section>
 
-      <Section number="02" title="界面与默认值" description="设置主题、语言以及默认画质、音质和编码。">
+      <Section number="02" title="界面与默认值" description="设置主题、语言以及默认画质、音质和编码。" open={openSection === "02"} onToggle={() => setOpenSection(openSection === "02" ? "" : "02")}>
         <div className="settings-grid">
           <Field label="主题"><Select value={local.behavior.theme} onChange={(value) => patchBehavior({ theme: value as "light" | "dark" | "system" })}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select></Field>
           <Field label="语言"><Select value={local.behavior.language} onChange={(value) => patchBehavior({ language: value as "zh-CN" | "zh-TW" | "en" | "system" })}><option value="system">跟随系统</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option></Select></Field>
@@ -149,7 +152,7 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
         </div>
       </Section>
 
-      <Section number="03" title="附加内容" description="设置每次下载时默认附带的弹幕、字幕、封面、章节和元数据。">
+      <Section number="03" title="附加内容" description="设置每次下载时默认附带的弹幕、字幕、封面、章节和元数据。" open={openSection === "03"} onToggle={() => setOpenSection(openSection === "03" ? "" : "03")}>
         <div className="extras-settings">
           <div className="extra-card">
             <SwitchRow label="下载弹幕" checked={local.additional.danmaku?.enabled ?? false} onChange={(enabled) => patchExtra("danmaku", { enabled })} />
@@ -182,7 +185,7 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
         </div>
       </Section>
 
-      <Section number="04" title="命名与编号" description="按内容类型管理文件名模板；模板中的变量会在任务创建时展开。">
+      <Section number="04" title="命名与编号" description="按内容类型管理文件名模板；模板中的变量会在任务创建时展开。" open={openSection === "04"} onToggle={() => setOpenSection(openSection === "04" ? "" : "04")}>
         <div className="settings-card-inner">
           <div className="settings-grid compact-grid">
             <Field label="编号方式"><Select value={local.fileNaming.numberingType} onChange={(value) => setLocal((current) => ({ ...current, fileNaming: { ...current.fileNaming, numberingType: Number(value) } }))}><option value="0">使用起始编号</option><option value="1">使用本次解析顺序</option><option value="2">连续编号</option></Select></Field>
@@ -204,7 +207,7 @@ export function SettingsView({ config, onConfigChange, onToast }: SettingsViewPr
         </div>
       </Section>
 
-      <Section number="05" title="高级网络" description="CDN 节点、ffmpeg 路径和代理配置；修改后会应用到新任务。">
+      <Section number="05" title="高级网络" description="CDN 节点、ffmpeg 路径和代理配置；修改后会应用到新任务。" open={openSection === "05"} onToggle={() => setOpenSection(openSection === "05" ? "" : "05")}>
         <div className="settings-grid">
           <Field label="CDN 节点" hint="每行一个主机名，留空自动选择" wide><textarea rows={3} value={local.advanced.cdnHosts.join("\n")} onChange={(event) => setLocal((current) => ({ ...current, advanced: { ...current.advanced, cdnHosts: event.target.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) } }))} placeholder="upos-sz-mirror.bilivideo.com" /></Field>
           <Field label="ffmpeg 路径" hint="留空使用系统 PATH"><input value={local.advanced.ffmpegPath ?? ""} onChange={(event) => patchAdvancedString("ffmpegPath", event.target.value)} placeholder="/usr/bin/ffmpeg" /></Field>

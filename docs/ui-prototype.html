@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bili23 · 把 B 站内容稳稳存进你的 NAS</title>
+<meta name="description" content="Bili23-Downloader 的 TypeScript Web 重制版，自托管在 NAS 上的 B 站下载工具。" />
+<style>
+/* ============================================================
+   Design tokens
+   ============================================================ */
+:root{
+  --bg:#f5f6f8;
+  --bg-tint:#eceef2;
+  --surface:#ffffff;
+  --ink:#0f1117;
+  --ink-2:#333845;
+  --muted:#6b7280;
+  --muted-2:#9aa1ad;
+  --line:rgba(15,17,23,.09);
+  --line-strong:rgba(15,17,23,.16);
+  --brand:#fb7299;
+  --brand-deep:#e8578a;
+  --cyan:#00aeec;
+  --orange:#ff6a3d;
+  --dark:#12141c;
+  --dark-2:#191c26;
+  --dark-3:#22263260;
+  --ok:#3ecf8e;
+  --warn:#ffb020;
+  --radius:18px;
+  --radius-sm:12px;
+  --shadow-sm:0 1px 2px rgba(15,17,23,.05),0 4px 12px -6px rgba(15,17,23,.12);
+  --shadow-md:0 18px 40px -22px rgba(15,17,23,.35);
+  --shadow-lg:0 48px 90px -30px rgba(15,17,23,.42);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"Cascadia Code","JetBrains Mono",Consolas,monospace;
+  --maxw:1180px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--ink);
+  line-height:1.6;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+::selection{background:rgba(251,114,153,.28)}
+
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+/* ============================================================
+   Ambient background (soft light wash + faint grid, no blobs)
+   ============================================================ */
+.ambient{
+  position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(900px 520px at 8% -8%, rgba(251,114,153,.13), transparent 62%),
+    radial-gradient(820px 520px at 96% 4%, rgba(0,174,236,.12), transparent 60%),
+    linear-gradient(180deg,#fbfcfd 0%,var(--bg) 42%,var(--bg) 100%);
+}
+.ambient::after{
+  content:"";position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(15,17,23,.028) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(15,17,23,.028) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:linear-gradient(180deg,rgba(0,0,0,.7),transparent 55%);
+}
+
+/* ============================================================
+   Nav
+   ============================================================ */
+.nav{
+  position:sticky;top:0;z-index:50;
+  transition:background .3s ease,box-shadow .3s ease,border-color .3s ease;
+  border-bottom:1px solid transparent;
+}
+.nav.scrolled{
+  background:rgba(251,252,253,.82);
+  backdrop-filter:saturate(180%) blur(14px);
+  -webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-bottom-color:var(--line);
+}
+.nav-in{display:flex;align-items:center;gap:28px;height:68px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:750;font-size:17px;letter-spacing:-.01em}
+.brand-mark{
+  width:30px;height:30px;border-radius:9px;
+  background:linear-gradient(135deg,var(--brand) 0%,#ff9a7a 48%,var(--cyan) 100%);
+  display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800;
+  box-shadow:0 6px 16px -6px rgba(251,114,153,.7);
+}
+.nav-links{display:flex;gap:26px;margin-left:12px}
+.nav-links a{font-size:14.5px;color:var(--ink-2);position:relative;padding:4px 0;transition:color .2s}
+.nav-links a::after{
+  content:"";position:absolute;left:0;right:100%;bottom:0;height:1.5px;
+  background:var(--ink);transition:right .28s cubic-bezier(.4,0,.2,1);
+}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a:hover::after{right:0}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.ghost-btn{
+  font-size:14px;color:var(--ink-2);padding:8px 14px;border-radius:10px;
+  border:1px solid var(--line);transition:all .2s;
+}
+.ghost-btn:hover{border-color:var(--line-strong);background:#fff}
+.nav-toggle{display:none;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);align-items:center;justify-content:center}
+.nav-toggle span,.nav-toggle span::before,.nav-toggle span::after{
+  display:block;width:16px;height:1.6px;background:var(--ink);position:relative;transition:all .25s;
+}
+.nav-toggle span::before,.nav-toggle span::after{content:"";position:absolute;left:0}
+.nav-toggle span::before{top:-5px}
+.nav-toggle span::after{top:5px}
+.nav-toggle.open span{background:transparent}
+.nav-toggle.open span::before{transform:translateY(5px) rotate(45deg)}
+.nav-toggle.open span::after{transform:translateY(-5px) rotate(-45deg)}
+.mobile-menu{display:none}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:46px;padding:0 20px;border-radius:12px;font-size:15px;font-weight:600;
+  transition:transform .18s cubic-bezier(.4,0,.2,1),box-shadow .25s,background .2s;
+  white-space:nowrap;
+}
+.btn:active{transform:scale(.975)}
+.btn-primary{
+  background:var(--ink);color:#fff;
+  box-shadow:0 10px 24px -12px rgba(15,17,23,.6);
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 16px 30px -14px rgba(15,17,23,.62)}
+.btn-brand{
+  background:linear-gradient(135deg,var(--brand),#ff8a6b);color:#fff;
+  box-shadow:0 12px 26px -12px rgba(251,114,153,.8);
+}
+.btn-brand:hover{transform:translateY(-1px);box-shadow:0 18px 34px -14px rgba(251,114,153,.8)}
+.btn .arrow{transition:transform .25s}
+.btn:hover .arrow{transform:translateX(3px)}
+
+/* ============================================================
+   Hero
+   ============================================================ */
+.hero{padding:76px 0 60px;position:relative}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1.12fr);gap:56px;align-items:center}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;font-size:12.5px;font-weight:650;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);
+  padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.7);
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px rgba(251,114,153,.16)}
+.hero h1{
+  margin:22px 0 18px;font-size:clamp(2.35rem,5vw,3.9rem);line-height:1.06;
+  font-weight:760;letter-spacing:-.028em;
+}
+.hero h1 .grad{
+  background:linear-gradient(100deg,var(--brand) 0%,var(--orange) 45%,var(--cyan) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero p.lede{font-size:17px;color:var(--muted);max-width:34em;line-height:1.75}
+.hero-form{display:flex;gap:10px;margin:28px 0 16px;max-width:520px}
+.hero-input{
+  flex:1;height:50px;padding:0 16px;border-radius:13px;border:1px solid var(--line-strong);
+  background:#fff;font-size:15px;font-family:inherit;color:var(--ink);
+  box-shadow:var(--shadow-sm);transition:border-color .2s,box-shadow .2s;
+}
+.hero-input::placeholder{color:var(--muted-2)}
+.hero-input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(251,114,153,.14)}
+.trust{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--muted)}
+.trust span{display:inline-flex;align-items:center;gap:6px}
+.trust svg{color:var(--ok)}
+
+/* ============================================================
+   Product window (shared chrome)
+   ============================================================ */
+.window{
+  background:var(--dark);border-radius:20px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.09);
+  box-shadow:var(--shadow-lg);
+  color:#e8eaf0;
+}
+.window.float{animation:floaty 7s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.win-bar{
+  display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;
+  background:rgba(255,255,255,.045);border-bottom:1px solid rgba(255,255,255,.07);
+}
+.win-dot{width:10px;height:10px;border-radius:50%}
+.win-dot.r{background:#ff5f57}.win-dot.y{background:#febc2e}.win-dot.g{background:#28c840}
+.win-title{margin-left:8px;font-size:12.5px;color:rgba(232,234,240,.62);letter-spacing:.01em}
+.win-actions{margin-left:auto;display:flex;gap:10px;color:rgba(232,234,240,.4)}
+.win-body{padding:18px}
+
+/* small hero window */
+.hero-win .win-body{padding:16px}
+.hero-win .mini-tabs{display:flex;gap:6px;margin-bottom:14px}
+.mini-tab{
+  font-size:12px;padding:5px 11px;border-radius:8px;color:rgba(232,234,240,.55);
+  background:rgba(255,255,255,.05);transition:all .2s;
+}
+.mini-tab.active{background:rgba(251,114,153,.16);color:#ffb3c8}
+.mini-row{
+  display:flex;align-items:center;gap:11px;padding:10px;border-radius:12px;
+  background:rgba(255,255,255,.035);margin-bottom:8px;border:1px solid rgba(255,255,255,.05);
+  animation:rowIn .5s both;
+}
+.mini-row:nth-child(2){animation-delay:.08s}
+.mini-row:nth-child(3){animation-delay:.16s}
+@keyframes rowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.mini-thumb{
+  width:52px;height:34px;border-radius:7px;flex:none;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#2b3040,#3a2c3e);
+}
+.mini-thumb img{width:100%;height:100%;object-fit:cover}
+.mini-thumb .dur{
+  position:absolute;right:3px;bottom:3px;font-size:9px;padding:1px 4px;border-radius:4px;
+  background:rgba(0,0,0,.72);color:#fff;font-family:var(--mono);
+}
+.mini-meta{min-width:0;flex:1}
+.mini-meta .t{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-meta .s{font-size:11px;color:rgba(232,234,240,.45);margin-top:2px}
+.mini-chip{
+  font-size:10px;padding:2px 7px;border-radius:6px;flex:none;
+  background:rgba(0,174,236,.15);color:#6fd3f7;font-weight:600;
+}
+.mini-chip.pink{background:rgba(251,114,153,.16);color:#ffb3c8}
+.mini-progress{height:3px;border-radius:2px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:7px}
+.mini-progress i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--brand),#ff9a7a);width:0;transition:width 1.4s cubic-bezier(.2,.7,.3,1)}
+.hero-win .foot{
+  display:flex;justify-content:space-between;align-items:center;margin-top:14px;
+  font-size:11.5px;color:rgba(232,234,240,.5);
+}
+.hero-win .foot b{color:#8fe3b6;font-weight:600}
+
+/* ============================================================
+   Stats
+   ============================================================ */
+.stats{padding:34px 0 10px}
+.stats-in{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+}
+.stat{background:rgba(255,255,255,.72);padding:26px 22px;text-align:center}
+.stat .n{font-size:clamp(1.7rem,3vw,2.4rem);font-weight:750;letter-spacing:-.03em;line-height:1.1}
+.stat .n em{font-style:normal;color:var(--brand)}
+.stat .l{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+/* ============================================================
+   Sections
+   ============================================================ */
+section{position:relative}
+.sec{padding:88px 0}
+.sec-head{max-width:640px;margin-bottom:44px}
+.sec-tag{
+  font-size:12.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--brand);
+}
+.sec-head h2{font-size:clamp(1.8rem,3.6vw,2.6rem);letter-spacing:-.025em;line-height:1.16;margin:12px 0 14px;font-weight:740}
+.sec-head p{color:var(--muted);font-size:16px}
+
+/* features */
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.feat{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px 24px 28px;transition:transform .3s cubic-bezier(.4,0,.2,1),box-shadow .3s,border-color .3s;
+}
+.feat:hover{transform:translateY(-4px);box-shadow:var(--shadow-md);border-color:rgba(251,114,153,.35)}
+.feat-ico{
+  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;margin-bottom:16px;
+  background:linear-gradient(140deg,rgba(251,114,153,.14),rgba(0,174,236,.12));color:var(--brand-deep);
+}
+.feat h3{font-size:16.5px;font-weight:680;letter-spacing:-.01em;margin-bottom:8px}
+.feat p{font-size:14px;color:var(--muted);line-height:1.7}
+
+/* workflow */
+.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;position:relative}
+.flow::before{
+  content:"";position:absolute;top:26px;left:12%;right:12%;height:1px;
+  background:repeating-linear-gradient(90deg,var(--line-strong) 0 6px,transparent 6px 12px);
+}
+.step{position:relative;text-align:center;padding:0 8px}
+.step-n{
+  width:52px;height:52px;border-radius:50%;margin:0 auto 18px;display:grid;place-items:center;
+  background:#fff;border:1px solid var(--line-strong);font-weight:750;font-size:16px;
+  box-shadow:var(--shadow-sm);position:relative;z-index:1;transition:all .3s;
+}
+.step:hover .step-n{border-color:var(--brand);color:var(--brand-deep);transform:translateY(-2px)}
+.step h3{font-size:16px;font-weight:680;margin-bottom:8px}
+.step p{font-size:14px;color:var(--muted);line-height:1.7;max-width:26em;margin:0 auto}
+
+/* ============================================================
+   Big product showcase
+   ============================================================ */
+.showcase{padding:40px 0 96px}
+.showcase-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px;flex-wrap:wrap}
+.showcase h2{font-size:clamp(1.8rem,3.4vw,2.5rem);letter-spacing:-.025em;font-weight:740;line-height:1.15}
+.showcase p{color:var(--muted);font-size:15.5px;margin-top:10px;max-width:40em}
+.stage{position:relative}
+.stage .glow{
+  position:absolute;inset:-6% -3% -12%;z-index:-1;
+  background:radial-gradient(60% 60% at 20% 0%,rgba(251,114,153,.18),transparent 70%),
+             radial-gradient(60% 60% at 90% 100%,rgba(0,174,236,.16),transparent 70%);
+  filter:blur(8px);
+}
+.app-tabs{display:flex;gap:6px;padding:14px 18px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.app-tab{
+  font-size:13px;padding:8px 14px;border-radius:9px 9px 0 0;color:rgba(232,234,240,.5);
+  position:relative;transition:color .2s;
+}
+.app-tab.active{color:#fff}
+.app-tab.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;background:var(--brand);border-radius:2px}
+.app-body{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;padding:18px}
+.panel{
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);
+  border-radius:14px;padding:16px;
+}
+.panel-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.panel-title h4{font-size:13px;font-weight:650;letter-spacing:.02em;color:rgba(232,234,240,.85)}
+.panel-title .more{font-size:11.5px;color:rgba(232,234,240,.4)}
+.item{
+  display:flex;gap:12px;padding:11px;border-radius:11px;transition:background .2s;position:relative;
+}
+.item+.item{margin-top:4px}
+.item:hover{background:rgba(255,255,255,.05)}
+.item .\boxed{
+  width:16px;height:16px;border-radius:5px;border:1.5px solid rgba(255,255,255,.24);flex:none;margin-top:2px;
+  display:grid;place-items:center;transition:all .2s;
+}
+.item.checked .\boxed{background:var(--brand);border-color:var(--brand)}
+.item.checked .box svg{opacity:1}
+.item .box svg{opacity:0;color:#fff;transition:opacity .2s}
+.item .thumb{
+  width:76px;height:48px;border-radius:8px;overflow:hidden;flex:none;position:relative;
+  background:linear-gradient(135deg,#2a2f3d,#3b2c3f);
+}
+.item .thumb img{width:100%;height:100%;object-fit:cover}
+.item .thumb .dur{
+  position:absolute;right:4px;bottom:4px;font-size:9.5px;padding:1px 4px;border-radius:4px;
+  background:rgba(0,0,0,.75);font-family:var(--mono);
+}
+.item-info{min-width:0;flex:1}
+.item-info .t{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-info .m{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{font-size:10.5px;padding:2px 7px;border-radius:6px;font-weight:600}
+.tag.q{background:rgba(0,174,236,.14);color:#6fd3f7}
+.tag.p{background:rgba(251,114,153,.15);color:#ffb3c8}
+.tag.g{background:rgba(62,207,142,.14);color:#8fe3b6}
+.tag.o{background:rgba(255,176,32,.14);color:#ffcf7a}
+.item .dur-txt{font-size:11px;color:rgba(232,234,240,.4);margin-top:5px;font-family:var(--mono)}
+.opt{margin-bottom:16px}
+.opt-label{font-size:11.5px;color:rgba(232,234,240,.45);margin-bottom:8px;letter-spacing:.02em}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{
+  font-size:12px;padding:8px 4px;border-radius:9px;background:rgba(255,255,255,.05);
+  color:rgba(232,234,240,.62);border:1px solid transparent;transition:all .2s;
+}
+.seg button.active{background:rgba(251,114,153,.14);border-color:rgba(251,114,153,.45);color:#ffb3c8}
+.seg button:hover{background:rgba(255,255,255,.09)}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;font-size:12.5px;color:rgba(232,234,240,.72)}
+.switch{width:36px;height:20px;border-radius:999px;background:rgba(255,255,255,.12);position:relative;transition:background .25s;flex:none}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch.on{background:var(--brand)}
+.switch.on::after{transform:translateX(16px)}
+.dl-btn{width:100%;height:42px;border-radius:11px;font-size:13.5px;font-weight:650;background:linear-gradient(135deg,var(--brand),#ff8a6b);color:#fff;box-shadow:0 12px 26px -14px rgba(251,114,153,.9);transition:transform .2s,box-shadow .25s}
+.dl-btn:hover{transform:translateY(-1px)}
+
+/* queue */
+.queue{margin-top:16px}
+.q-item{padding:12px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055)}
+.q-item+.q-item{margin-top:8px}
+.q-top{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.q-top .t{font-size:12.5px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-status{font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:650;flex:none}
+.q-status.run{background:rgba(0,174,236,.15);color:#6fd3f7}
+.q-status.done{background:rgba(62,207,142,.15);color:#8fe3b6}
+.q-status.wait{background:rgba(255,255,255,.08);color:rgba(232,234,240,.5)}
+.q-bar{height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.q-bar i{display:block;height:100%;border-radius:3px;width:0;transition:width 1.6s cubic-bezier(.2,.7,.3,1)}
+.q-bar i.pink{background:linear-gradient(90deg,var(--brand),#ff9a7a)}
+.q-bar i.cyan{background:linear-gradient(90deg,var(--cyan),#7ad9ff)}
+.q-bar i.green{background:linear-gradient(90deg,#2fb97a,#5fe0a5)}
+.q-meta{display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:rgba(232,234,240,.42);font-family:var(--mono)}
+
+/* ============================================================
+   CTA + footer
+   ============================================================ */
+.cta{padding:0 0 90px}
+.cta-card{
+  background:var(--dark);border-radius:24px;padding:56px 48px;color:#fff;position:relative;overflow:hidden;
+  box-shadow:var(--shadow-lg);
+}
+.cta-card::before{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(70% 110% at 0% 0%,rgba(251,114,153,.22),transparent 60%),
+             radial-gradient(60% 110% at 100% 100%,rgba(0,174,236,.2),transparent 60%);
+}
+.cta-in{position:relative;display:flex;align-items:center;justify-content:space-between;gap:36px;flex-wrap:wrap}
+.cta h2{font-size:clamp(1.6rem,3vw,2.2rem);letter-spacing:-.02em;line-height:1.2;font-weight:730}
+.cta p{color:rgba(255,255,255,.62);margin-top:10px;font-size:15px;max-width:36em}
+.cmd{
+  display:flex;align-items:center;gap:12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);
+  border-radius:13px;padding:12px 14px;font-family:var(--mono);font-size:13.5px;color:#d8f3e4;min-width:300px;
+}
+.cmd .prompt{color:var(--brand)}
+.cmd button{margin-left:auto;color:rgba(255,255,255,.5);font-size:11.5px;padding:4px 8px;border-radius:6px;transition:all .2s}
+.cmd button:hover{background:rgba(255,255,255,.1);color:#fff}
+footer{border-top:1px solid var(--line);padding:30px 0 46px;color:var(--muted);font-size:13px}
+.foot-in{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+.foot-links{display:flex;gap:20px}
+.foot-links a:hover{color:var(--ink)}
+
+/* ============================================================
+   Reveal animation
+   ============================================================ */
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .7s cubic-bezier(.2,.7,.3,1),transform .7s cubic-bezier(.2,.7,.3,1)}
+.reveal.in{opacity:1;transform:none}
+.reveal[data-d="1"]{transition-delay:.08s}
+.reveal[data-d="2"]{transition-delay:.16s}
+.reveal[data-d="3"]{transition-delay:.24s}
+.reveal[data-d="4"]{transition-delay:.32s}
+.reveal[data-d="5"]{transition-delay:.4s}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition-duration:.01ms!important}
+  .reveal{opacity:1;transform:none}
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width:1020px){
+  .hero-grid{grid-template-columns:1fr;gap:44px}
+  .hero{padding-top:52px}
+  .app-body{grid-template-columns:1fr}
+  .stats-in{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:820px){
+  .nav-links,.nav-right .ghost-btn{display:none}
+  .nav-toggle{display:flex}
+  .mobile-menu{
+    display:none;flex-direction:column;gap:2px;padding:8px 24px 18px;
+    background:rgba(251,252,253,.96);border-bottom:1px solid var(--line);
+  }
+  .mobile-menu.open{display:flex}
+  .mobile-menu a{padding:11px 0;font-size:15px;border-bottom:1px solid var(--line)}
+  .mobile-menu .btn{margin-top:12px}
+  .feat-grid{grid-template-columns:repeat(2,1fr)}
+  .flow{grid-template-columns:1fr;gap:28px}
+  .flow::before{display:none}
+  .cta-card{padding:40px 26px}
+  .cta-in{flex-direction:column;align-items:flex-start}
+  .cmd{width:100%;min-width:0}
+}
+@media (max-width:560px){
+  .wrap{padding:0 18px}
+  .hero{padding:40px 0 40px}
+  .hero h1{font-size:2.05rem}
+  .hero-form{flex-direction:column}
+  .hero-form .btn{width:100%}
+  .sec{padding:64px 0}
+  .feat-grid{grid-template-columns:1fr}
+  .stats-in{grid-template-columns:1fr 1fr}
+  .stat{padding:20px 14px}
+  .win-body{padding:14px}
+  .app-body{padding:14px;gap:12px}
+  .item .thumb{width:64px;height:42px}
+}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<!-- ============================ NAV ============================ -->
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <span class="brand-mark">B</span>
+      <span>Bili23</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">核心能力</a>
+      <a href="#workflow">工作流程</a>
+      <a href="#showcase">界面预览</a>
+      <a href="#deploy">部署</a>
+    </nav>
+    <div class="nav-right">
+      <a class="ghost-btn" href="#deploy">查看文档</a>
+      <button class="nav-toggle" id="navToggle" aria-label="菜单"><span></span></button>
+    </div>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#features">核心能力</a>
+    <a href="#workflow">工作流程</a>
+    <a href="#showcase">界面预览</a>
+    <a href="#deploy">部署</a>
+    <a class="btn btn-primary" href="#deploy">开始使用</a>
+  </div>
+</header>
+
+<!-- ============================ HERO ============================ -->
+<main id="top">
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow reveal in"><span class="dot"></span>TypeScript 重制 · 自托管</span>
+      <h1 class="reveal in" data-d="1">把 B 站内容<br><span class="grad">稳稳存进你的 NAS</span></h1>
+      <p class="lede reveal in" data-d="2">
+        Bili23 Web 把桌面版下载器搬进浏览器：粘贴链接、选画质、批量下载，
+        弹幕字幕封面章节一并带走，全部跑在你自己的 NAS 上。
+      </p>
+      <div class="hero-form reveal in" data-d="3">
+        <input class="hero-input" type="text" placeholder="粘贴视频 / 番剧 / 收藏夹 / UP 主链接…" aria-label="解析链接" />
+        <button class="btn btn-brand" type="button">开始解析 <span class="arrow">→</span></button>
+      </div>
+      <div class="trust reveal in" data-d="4">
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>无需云端中转</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>断点续传</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Docker 一键部署</span>
+      </div>
+    </div>
+
+    <!-- 首屏产品窗口 -->
+    <div class="hero-win-window reveal in" data-d="2">
+      <div class="window hero-win float" id="heroWin">
+        <div class="win-bar">
+          <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
+          <span class="win-title">Bili23 · 下载中心</span>
+          <span class="win-actions">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </span>
+        </div>
+        <div class="win-body">
+          <div class="mini-tabs">
+            <span class="mini-tab active">下载队列</span>
+            <span class="mini-tab">解析结果</span>
+            <span class="mini-tab">历史</span>
+          </div>
+
+          <div class="mini-row">
+            <div class="mini-thumb"><img src="https://i1.hdslb.com/bfs/archive/5242750857121e05146d5d5b13a47a2a6dd36e98.jpg" alt="" loading="lazy"><span class="dur">03:33</span></div>
+            <div class="mini-meta">
+              <div class="t">【官方 MV】Never Gonna Give You Up</div>
+              <div class="s">索尼音乐中国 · 1080P · MP4</div>
+              <div class="mini-progress"><i style="width:72%"></i></div>
+            </div>
+            <span class="mini-chip pink">72%</span>
+          </div>
+
+          <div class="mini-row">
+            <div class="mini-thumb" style="background:linear-gradient(135deg,#1d3a4d,#2c2540)"><span class="dur">12:04</span></div>
+            <div class="mini-meta">
+              <div class="t">【4K】城市夜景延时摄影合集</div>
+              <div class="s">视觉档案馆 · 2160P · MKV</div>
+              <div class="mini-progress"><i style="width:34%"></i></div>
+            </div>
+            <span class="mini-chip">34%</span>
+          </div>
+
+          <div class="mini-row">
+            <div class="mini-thumb" style="background:linear-gradient(135deg,#3a2f1d,#25323a)"><span class="dur">08:47</span></div>
+            <div class="mini-meta">
+              <div class="t">每周必看 · 第 250 期</div>
+              <div class="s">哔哩哔哩投稿 · 排队中</div>
+              <div class="mini-progress"><i style="width:0%"></i></div>
+            </div>
+            <span class="mini-chip" style="background:rgba(255,255,255,.07);color:rgba(232,234,240,.5)">等待</span>
+          </div>
+
+          <div class="foot">
+            <span>并发 2 / 线程 4 · 不限速</span>
+            <span><b>8.4 MB/s</b> · 剩余 02:14</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ STATS ============================ -->
+<section class="stats">
+  <div class="wrap">
+    <div class="stats-in reveal">
+      <div class="stat"><div class="n"><span data-count="13">0</span></div><div class="l">种内容类型</div></div>
+      <div class="stat"><div class="n"><span data-count="100">0</span><em>%</em></div><div class="l">TypeScript 实现</div></div>
+      <div class="stat"><div class="n"><span data-count="0">0</span></div><div class="l">云端依赖</div></div>
+      <div class="stat"><div class="n"><span data-count="1">0</span><em> 条</em></div><div class="l">命令部署</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ FEATURES ============================ -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-tag">Core capabilities</div>
+      <h2>桌面版能做到的，这里都能做到</h2>
+      <p>不是功能阉割的网页壳，而是把解析、取流、下载、合并、命名整条链路完整移植到 TypeScript。</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat reveal" data-d="1">
+        <div class="feat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+        <h3>全类型解析</h3>
+        <p>投稿视频、番剧、课程、音频、收藏夹、合集系列、每周必看、稍后再看、历史、互动视频，共 13 种类型全覆盖。</p>
+      </div>
+      <div class="feat reveal" data-d="2">
+        <div class="feat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <h3>画质音质自选</h3>
+        <p>4K / 1080P / HDR、HEVC / AV1 编码、Hi-Res / 杜比音质，自动按优先级挑选，也可逐项锁定。</p>
+      </div>
+      <div class="feat reveal" data-d="3">
+        <div class="feat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H4z"/><path d="M4 20h16"/><path d="M8 8h8M8 12h5"/></svg></div>
+        <h3>附加内容全家桶</h3>
+        <p>弹幕转 ASS、多语言字幕、封面、章节、NFO 元数据，一键随视频落盘，媒体库直接识别。</p>
+      </div>
+      <div class="feat reveal" data-d="1">
+        <div class="feat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h10"/></svg></div>
+        <h3>灵活命名规则</h3>
+        <p>UP 主、标题、画质、发布时间、分P 序号……任意变量拼装目录与文件名，Emby / Jellyfin 零配置入库。</p>
+      </div>
+      <div class="feat reveal" data-d="2">
+        <div class="feat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M12 16v6M4.9 4.9l4.2 4.2M14.9 14.9l4.2 4.2M2 12h6M16 12h6M4.9 19.1l4.2-4.2M14.9 9.1l4.2-4.2"/></svg></div>
+        <h3>队列与断点续传</h3>
+        <p>分片并发下载、全局限速、暂停续传、失败重试，重启服务后任务自动恢复，批量下载不丢进度。</p>
+      </div>
+      <div class="feat reveal" data-d="3">
+        <div class="feat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></div>
+        <h3>NAS 原生部署</h3>
+        <p>Docker 镜像内置 ffmpeg，一条命令拉起；数据持久化到本地目录，watchtower 自动更新。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ WORKFLOW ============================ -->
+<section class="sec" id="workflow" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head reveal" style="margin-left:auto;margin-right:auto;text-align:center">
+      <div class="sec-tag">Workflow</div>
+      <h2>三步，从链接到成品</h2>
+      <p>没有繁琐配置，粘贴即解析，选好即下载。</p>
+    </div>
+    <div class="flow">
+      <div class="step reveal" data-d="1">
+        <div class="step-n">01</div>
+        <h3>粘贴链接</h3>
+        <p>支持视频、番剧、收藏夹、UP 主空间、合集、活动页，b23 短链自动展开。</p>
+      </div>
+      <div class="step reveal" data-d="2">
+        <div class="step-n">02</div>
+        <h3>选择内容</h3>
+        <p>勾选分P、挑选画质音质编码，按需附加弹幕字幕封面章节，命名规则即时预览。</p>
+      </div>
+      <div class="step reveal" data-d="3">
+        <div class="step-n">03</div>
+        <h3>落盘 NAS</h3>
+        <p>后台队列下载、ffmpeg 合并，按规则归档到指定目录，手机电脑随时查看进度。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ SHOWCASE ============================ -->
+<section class="showcase" id="showcase">
+  <div class="wrap">
+    <div class="showcase-head reveal">
+      <div>
+        <h2>下载中心，一屏掌控</h2>
+        <p>解析结果、画质选择、附加内容、下载队列全部在同一个工作台里完成，不用来回跳转。</p>
+      </div>
+      <a class="btn btn-primary" href="#deploy">了解部署 <span class="arrow">→</span></a>
+    </div>
+
+    <div class="stage reveal" data-d="1">
+      <div class="glow"></div>
+      <div class="window" id="appWindow">
+        <div class="win-bar">
+          <span class="win-dot r"></span><span class="win-dot y"></span><span class="win-dot g"></span>
+          <span class="win-title">Bili23 Web · localhost:8788</span>
+          <span class="win-actions">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg>
+          </span>
+        </div>
+
+        <div class="app-tabs">
+          <button class="app-tab active">解析结果</button>
+          <button class="app-tab">下载队列 <span style="color:var(--brand)">3</span></button>
+          <button class="app-tab">历史记录</button>
+          <button class="app-tab">设置</button>
+        </div>
+
+        <div class="app-body">
+          <!-- 左：解析结果列表 -->
+          <div class="panel">
+            <div class="panel-title">
+              <h4>解析结果 · 合集「城市影像档案」</h4>
+              <span class="more">已选 3 / 12 项</span>
+            </div>
+
+            <div class="item checked">
+              <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <div class="thumb"><img src="https://i1.hdslb.com/bfs/archive/5242750857121e05146d5d5b13a47a2a6dd36e98.jpg" alt="" loading="lazy"><span class="dur">03:33</span></div>
+              <div class="item-info">
+                <div class="t">【官方 MV】Never Gonna Give You Up - Rick Astley</div>
+                <div class="m"><span class="tag q">1080P</span><span class="tag g">HEVC</span><span class="tag o">192K</span></div>
+                <div class="dur-txt">BV1GJ411x7h7 · 索尼音乐中国</div>
+              </div>
+            </div>
+
+            <div class="item checked">
+              <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <div class="thumb" style="background:linear-gradient(135deg,#1d3a4d,#2c2540)"><span class="dur">12:04</span></div>
+              <div class="item-info">
+                <div class="t">【4K HDR】东京雨夜街景延时摄影</div>
+                <div class="m"><span class="tag q">2160P</span><span class="tag p">HDR</span><span class="tag g">AV1</span></div>
+                <div class="dur-txt">BV1kP4y1x7Qm · 视觉档案馆</div>
+              </div>
+            </div>
+
+            <div class="item checked">
+              <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <div class="thumb" style="background:linear-gradient(135deg,#3a2f1d,#25323a)"><span class="dur">08:47</span></div>
+              <div class="item-info">
+                <div class="t">无人机航拍 · 海岸线日出</div>
+                <div class="m"><span class="tag q">1080P60</span><span class="tag g">AVC</span><span class="tag o">Hi-Res</span></div>
+                <div class="dur-txt">BV1cT4y1w7Lk · 航拍日记</div>
+              </div>
+            </div>
+
+            <div class="item">
+              <span class="box"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <div class="thumb" style="background:linear-gradient(135deg,#2d1d3a,#1d2a3a)"><span class="dur">05:21</span></div>
+              <div class="item-info">
+                <div class="t">互动视频 · 你的选择决定结局</div>
+                <div class="m"><span class="tag q">1080P</span><span class="tag p">互动</span></div>
+                <div class="dur-txt">BV1vM4y1T7cN · 分支 6 个节点</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右：选项面板 -->
+          <div class="panel">
+            <div class="panel-title"><h4>下载选项</h4><span class="more">重置</span></div>
+
+            <div class="opt">
+              <div class="opt-label">视频画质</div>
+              <div class="seg">
+                <button>720P</button>
+                <button class="active">1080P</button>
+                <button>4K</button>
+              </div>
+            </div>
+
+            <div class="opt">
+              <div class="opt-label">视频编码</div>
+              <div class="seg">
+                <button class="active">AVC</button>
+                <button>HEVC</button>
+                <button>AV1</button>
+              </div>
+            </div>
+
+            <div class="opt">
+              <div class="opt-label">附加内容</div>
+              <div class="switch-row"><span>弹幕（ASS）</span><span class="switch on"></span></div>
+              <div class="switch-row"><span>字幕（多语言）</span><span class="switch on"></span></div>
+              <div class="switch-row"><span>封面图片</span><span class="switch"></span></div>
+              <div class="switch-row"><span>章节信息</span><span class="switch"></span></div>
+            </div>
+
+            <button class="dl-btn" type="button">下载 3 个视频 · 约 1.8 GB</button>
+
+            <!-- 队列 -->
+            <div class="queue">
+              <div class="panel-title" style="margin-bottom:10px"><h4>下载队列</h4><span class="more">全部暂停</span></div>
+
+              <div class="q-item">
+                <div class="q-top"><span class="t">Never Gonna Give You Up</span><span class="q-status run">下载中</span></div>
+                <div class="q-bar"><i class="pink" style="width:72%"></i></div>
+                <div class="q-meta"><span>8.4 MB/s</span><span>剩余 00:38</span></div>
+              </div>
+
+              <div class="q-item">
+                <div class="q-top"><span class="t">东京雨夜街景延时摄影</span><span class="q-status run">下载中</span></div>
+                <div class="q-bar"><i class="cyan" style="width:34%"></i></div>
+                <div class="q-meta"><span>6.1 MB/s</span><span>剩余 02:14</span></div>
+              </div>
+
+              <div class="q-item">
+                <div class="q-top"><span class="t">无人机航拍 · 海岸线日出</span><span class="q-status done">已完成</span></div>
+                <div class="q-bar"><i class="green" style="width:100%"></i></div>
+                <div class="q-meta"><span>412 MB</span><span>/volume1/media/bili23/</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ CTA ============================ -->
+<section class="cta" id="deploy">
+  <div class="wrap">
+    <div class="cta-card reveal">
+      <div class="cta-in">
+        <div>
+          <h2>一条命令，跑在你的 NAS 上</h2>
+          <p>Docker 镜像内置 ffmpeg 与全部依赖，数据持久化到本地目录，升级不丢任务。</p>
+        </div>
+        <div class="cmd">
+          <span class="prompt">$</span>
+          <span id="cmdText">docker compose up -d</span>
+          <button type="button" id="copyBtn">复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ FOOTER ============================ -->
+<footer>
+  <div class="wrap foot-in">
+    <div class="brand" style="font-size:15px">
+      <span class="brand-mark" style="width:26px;height:26px;font-size:11px">B</span>
+      <span>Bili23 Web</span>
+    </div>
+    <div class="foot-links">
+      <a href="#features">核心能力</a>
+      <a href="#showcase">界面预览</a>
+      <a href="#deploy">部署文档</a>
+    </div>
+    <div>基于 Bili23-Downloader 的 TypeScript 重制 · UI 原型 v1</div>
+  </div>
+</footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 滚动渐入 ---------- */
+  var reveals = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    reveals.forEach(function(el){ io.observe(el); });
+  } else {
+    reveals.forEach(function(el){ el.classList.add("in"); });
+  }
+
+  /* ---------- 导航滚动阴影 ---------- */
+  var nav = document.getElementById("nav");
+  var onScroll = function(){
+    if (window.scrollY > 8) nav.classList.add("scrolled");
+    else nav.classList.remove("scrolled");
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- 移动端菜单 ---------- */
+  var toggle = document.getElementById("navToggle");
+  var menu = document.getElementById("mobileMenu");
+  if (toggle) {
+    toggle.addEventListener("click", function(){
+      toggle.classList.toggle("open");
+      menu.classList.toggle("open");
+    });
+    menu.querySelectorAll("a").forEach(function(a){
+      a.addEventListener("click", function(){
+        toggle.classList.remove("open");
+        menu.classList.remove("open");
+      });
+    });
+  }
+
+  /* ---------- 数字滚动 ---------- */
+  var counters = document.querySelectorAll("[data-count]");
+  var animateCount = function(el){
+    var target = parseInt(el.getAttribute("data-count"), 10) || 0;
+    if (target === 0) { el.textContent = "0"; return; }
+    var dur = 1200, start = performance.now();
+    var tick = function(now){
+      var p = Math.min((now - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased).toString();
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+  if ("IntersectionObserver" in window) {
+    var cio = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { animateCount(e.target); cio.unobserve(e.target); }
+      });
+    }, { threshold: 0.5 });
+    counters.forEach(function(el){ cio.observe(el); });
+  } else {
+    counters.forEach(animateCount);
+  }
+
+  /* ---------- 分段选择器 ---------- */
+  document.querySelectorAll(".seg").forEach(function(seg){
+    seg.querySelectorAll("button").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        seg.querySelectorAll("button").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+      });
+    });
+  });
+
+  /* ---------- 开关 ---------- */
+  document.querySelectorAll(".switch").forEach(function(sw){
+    sw.addEventListener("click", function(){ sw.classList.toggle("on"); });
+  });
+
+  /* ---------- 解析结果勾选 ---------- */
+  document.querySelectorAll(".item").forEach(function(item){
+    item.addEventListener("click", function(e){
+      if (e.target.closest(".box") || !e.target.closest(".item")) return;
+      item.classList.toggle("checked");
+      var total = document.querySelectorAll(".app-body .item").length;
+      var checked = document.querySelectorAll(".app-body .item.checked").length;
+      var more = document.querySelector(".panel-title .more");
+      if (more) more.textContent = "已选 " + checked + " / " + total + " 项";
+    });
+  });
+
+  /* ---------- 首屏进度条循环动画 ---------- */
+  var heroBars = document.querySelectorAll(".hero-win .mini-progress i");
+  var heroTargets = [72, 34, 0];
+  var heroIdx = 0;
+  setInterval(function(){
+    heroIdx = (heroIdx + 1) % 3;
+    heroBars.forEach(function(bar, i){
+      var base = heroTargets[i];
+      var jitter = base > 0 ? Math.min(100, base + (Math.random() * 8 - 2)) : 0;
+      bar.style.width = jitter.toFixed(0) + "%";
+    });
+  }, 2600);
+
+  /* ---------- 窗口悬浮微倾（桌面端） ---------- */
+  var appWin = document.getElementById("appWindow");
+  if (appWin && window.matchMedia("(min-width: 1021px)").matches) {
+    var stage = appWin.closest(".stage");
+    stage.addEventListener("mousemove", function(e){
+      var r = stage.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - 0.5;
+      var y = (e.clientY - r.top) / r.height - 0.5;
+      appWin.style.transform = "perspective(1400px) rotateY(" + (x * 2.2).toFixed(2) + "deg) rotateX(" + (-y * 1.6).toFixed(2) + "deg)";
+    });
+    stage.addEventListener("mouseleave", function(){
+      appWin.style.transform = "";
+    });
+  }
+
+  /* ---------- 复制命令 ---------- */
+  var copyBtn = document.getElementById("copyBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function(){
+      var text = document.getElementById("cmdText").textContent;
+      var done = function(){
+        copyBtn.textContent = "已复制";
+        setTimeout(function(){ copyBtn.textContent = "复制"; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch(err){}
+        document.body.removeChild(ta); done();
+      }
+    });
+  }
+
+  /* ---------- 下载按钮反馈 ---------- */
+  var dlBtn = document.querySelector(".dl-btn");
+  if (dlBtn) {
+    dlBtn.addEventListener("click", function(){
+      var orig = dlBtn.textContent;
+      dlBtn.textContent = "已加入队列 ✓";
+      dlBtn.style.background = "linear-gradient(135deg,#2fb97a,#5fe0a5)";
+      setTimeout(function(){
+        dlBtn.textContent = orig;
+        dlBtn.style.background = "";
+      }, 1800);
+    });
+  }
+})();
+</script>
+</body>
+</html>
+
+<!-- ============================ CTA ============================ -->
+<section class="cta" id="deploy">
+  <div class="wrap">
+    <div class="cta-card reveal">
+      <div class="cta-in">
+        <div>
+          <h2>一条命令，跑在你的 NAS 上</h2>
+          <p>Docker 镜像内置 ffmpeg 与全部依赖，数据持久化到本地目录，升级不丢任务。</p>
+        </div>
+        <div class="cmd">
+          <span class="prompt">$</span>
+          <span id="cmdText">docker compose up -d</span>
+          <button type="button" id="copyBtn">复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ FOOTER ============================ -->
+<footer>
+  <div class="wrap foot-in">
+    <div class="brand" style="font-size:15px">
+      <span class="brand-mark" style="width:26px;height:26px;font-size:11px">B</span>
+      <span>Bili23 Web</span>
+    </div>
+    <div class="foot-links">
+      <a href="#features">核心能力</a>
+      <a href="#showcase">界面预览</a>
+      <a href="#deploy">部署文档</a>
+    </div>
+    <div>基于 Bili23-Downloader 的 TypeScript 重制 · UI 原型 v1</div>
+  </div>
+</footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 滚动渐入 ---------- */
+  var reveals = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    reveals.forEach(function(el){ io.observe(el); });
+  } else {
+    reveals.forEach(function(el){ el.classList.add("in"); });
+  }
+
+  /* ---------- 导航滚动阴影 ---------- */
+  var nav = document.getElementById("nav");
+  var onScroll = function(){
+    if (window.scrollY > 8) nav.classList.add("scrolled");
+    else nav.classList.remove("scrolled");
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- 移动端菜单 ---------- */
+  var toggle = document.getElementById("navToggle");
+  var menu = document.getElementById("mobileMenu");
+  if (toggle) {
+    toggle.addEventListener("click", function(){
+      toggle.classList.toggle("open");
+      menu.classList.toggle("open");
+    });
+    menu.querySelectorAll("a").forEach(function(a){
+      a.addEventListener("click", function(){
+        toggle.classList.remove("open");
+        menu.classList.remove("open");
+      });
+    });
+  }
+
+  /* ---------- 数字滚动 ---------- */
+  var counters = document.querySelectorAll("[data-count]");
+  var animateCount = function(el){
+    var target = parseInt(el.getAttribute("data-count"), 10) || 0;
+    if (target === 0) { el.textContent = "0"; return; }
+    var dur = 1200, start = performance.now();
+    var tick = function(now){
+      var p = Math.min((now - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased).toString();
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+  if ("IntersectionObserver" in window) {
+    var cio = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { animateCount(e.target); cio.unobserve(e.target); }
+      });
+    }, { threshold: 0.5 });
+    counters.forEach(function(el){ cio.observe(el); });
+  } else {
+    counters.forEach(animateCount);
+  }
+
+  /* ---------- 分段选择器 ---------- */
+  document.querySelectorAll(".seg").forEach(function(seg){
+    seg.querySelectorAll("button").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        seg.querySelectorAll("button").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+      });
+    });
+  });
+
+  /* ---------- 开关 ---------- */
+  document.querySelectorAll(".switch").forEach(function(sw){
+    sw.addEventListener("click", function(){ sw.classList.toggle("on"); });
+  });
+
+  /* ---------- 解析结果勾选 ---------- */
+  document.querySelectorAll(".app-body .item").forEach(function(item){
+    item.addEventListener("click", function(e){
+      if (e.target.closest(".box")) return;
+      item.classList.toggle("checked");
+      var total = document.querySelectorAll(".app-body .item").length;
+      var checked = document.querySelectorAll(".app-body .item.checked").length;
+      var more = document.querySelector(".app-body .panel .panel-title .more");
+      if (more) more.textContent = "已选 " + checked + " / " + total + " 项";
+    });
+  });
+
+  /* ---------- 首屏进度条循环动画 ---------- */
+  var heroBars = document.querySelectorAll(".hero-win .mini-progress i");
+  var heroTargets = [72, 34, 0];
+  setInterval(function(){
+    heroBars.forEach(function(bar, i){
+      var base = heroTargets[i];
+      var jitter = base > 0 ? Math.min(100, base + (Math.random() * 8 - 2)) : 0;
+      bar.style.width = jitter.toFixed(0) + "%";
+    });
+  }, 2600);
+
+  /* ---------- 窗口悬浮微倾（桌面端） ---------- */
+  var appWin = document.getElementById("appWindow");
+  if (appWin && window.matchMedia("(min-width: 1021px)").matches) {
+    var stage = appWin.closest(".stage");
+    stage.addEventListener("mousemove", function(e){
+      var r = stage.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - 0.5;
+      var y = (e.clientY - r.top) / r.height - 0.5;
+      appWin.style.transform = "perspective(1400px) rotateY(" + (x * 2.2).toFixed(2) + "deg) rotateX(" + (-y * 1.6).toFixed(2) + "deg)";
+    });
+    stage.addEventListener("mouseleave", function(){
+      appWin.style.transform = "";
+    });
+  }
+
+  /* ---------- 复制命令 ---------- */
+  var copyBtn = document.getElementById("copyBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function(){
+      var text = document.getElementById("cmdText").textContent;
+      var done = function(){
+        copyBtn.textContent = "已复制";
+        setTimeout(function(){ copyBtn.textContent = "复制"; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch(err){}
+        document.body.removeChild(ta); done();
+      }
+    });
+  }
+
+  /* ---------- 下载按钮反馈 ---------- */
+  var dlBtn = document.querySelector(".dl-btn");
+  if (dlBtn) {
+    dlBtn.addEventListener("click", function(){
+      var orig = dlBtn.textContent;
+      dlBtn.textContent = "已加入队列 ✓";
+      dlBtn.style.background = "linear-gradient(135deg,#2fb97a,#5fe0a5)";
+      setTimeout(function(){
+        dlBtn.textContent = orig;
+        dlBtn.style.background = "";
+      }, 1800);
+    });
+  }
+})();
+</script>
+</body>
+</html>

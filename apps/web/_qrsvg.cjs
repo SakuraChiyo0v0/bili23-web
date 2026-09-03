@@ -1,0 +1,1 @@
+const QR=require('C:/LocalSpace/Projects/My-Proj/NAS-PROJECTS/bili23-web/node_modules/.pnpm/qrcode@1.5.4/node_modules/qrcode/lib/browser.js'); QR.toString(process.argv[1],{type:'svg',width:220,margin:2}).then(s=>{require('fs').writeFileSync('apps/web/_qr.svg',s);console.log('SVG_OK len='+s.length)}).catch(e=>{console.error('ERR '+e.message);process.exit(1)});

@@ -1,0 +1,1 @@
+import QRCode from 'qrcode'; const url = 'https://account.bilibili.com/h5/account-h5/auth/scan-web?navhide=1&callback=close&qrcode_key=621517b31d91d90b695127d56e885bfa&from=main-fe-header'; const c = document.createElement('canvas'); c.width=220;c.height=220; document.body.appendChild(c); QRCode.toCanvas(c, url, {width:220, margin:2}).then(()=>{document.title='RENDERED_OK';});

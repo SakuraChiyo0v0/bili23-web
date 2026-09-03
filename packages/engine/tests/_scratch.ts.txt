@@ -1,0 +1,30 @@
+import { HttpClient } from "../src/api/http.js";
+import { parseUrl } from "../src/parser/index.js";
+
+const http = new HttpClient();
+
+async function searchAnime(keyword: string): Promise<{ season_id: number; title: string } | undefined> {
+  const url = `https://api.bilibili.com/x/web-interface/search/type?search_type=media_bangumi&keyword=${encodeURIComponent(keyword)}`;
+  const body = (await http.getJSON<any>(url)) as any;
+  const list = body?.data?.result ?? [];
+  if (list.length === 0) return undefined;
+  const first = list[0];
+  return { season_id: first.season_id as number, title: (first.title ?? "").replace(/<[^>]+>/g, "") };
+}
+
+async function main() {
+  for (const kw of ["雾山五行", "时光代理人", "罗小黑战记", "刺客伍六七"]) {
+    try {
+      const hit = await searchAnime(kw);
+      console.log(`search[${kw}] =>`, JSON.stringify(hit));
+      if (!hit) continue;
+      const res = await parseUrl({ http }, `https://www.bilibili.com/bangumi/play/ss${hit.season_id}`);
+      console.log(`parse ss${hit.season_id} type=${res.type} title=${res.title} items=${res.items.length}`);
+      console.log("first item:", JSON.stringify(res.items[0], null, 0)?.slice(0, 600));
+      return;
+    } catch (e) {
+      console.log(`  parse[${kw}] failed:`, (e as Error).message);
+    }
+  }
+}
+main().catch((e) => { console.error("FATAL", e); process.exit(1); });
