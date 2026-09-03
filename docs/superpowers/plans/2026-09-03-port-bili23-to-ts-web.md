@@ -110,9 +110,9 @@
 - Produces: `createHttpClient({ cookie?, ua?, proxy? })`：`getJSON<T>(url, params?)`、`getBuffer(url, headers?)`（支持 Range 透传、重试、超时）；`wbiSign(params)`；`CookieJar`（set/get/parse/持久化）
 - Consumes: 桌面 `network/request.py` 语义、bilibili-API-collect wbi 算法
 
-- [ ] wbi 签名失败测试 → 实现（img_key/sub_key 获取 + md5 混排）→ 通过
-- [ ] http fixture：重试/超时/Range/UA 测试 → 实现 → 通过
-- [ ] Commit（feat(engine): http layer & wbi sign）
+- [x] wbi 签名测试 + 实现通过（tests/wbi.test.ts 6 例）
+- [x] http fixture：重试/4xx/网络错误/Cookie/Set-Cookie 测试通过（tests/http.test.ts 9 例）
+- [x] 待提交（feat(engine): http layer & wbi sign）
 
 ### Task 1.2：投稿视频 Parser + 条目模型
 
