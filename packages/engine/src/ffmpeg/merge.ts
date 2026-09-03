@@ -36,12 +36,19 @@ export interface MergeOptions {
   chapterPath?: string;
   /** 待嵌入 ASS 字幕轨（仅容器为 mkv 时生效；字幕轨排在弹幕轨前并默认显示第一条字幕） */
   subtitleTracks?: SubtitleTrackSpec[];
+  /** 自定义 ffmpeg 可执行文件路径（默认 "ffmpeg"） */
+  ffmpegPath?: string;
 }
 
 export interface MergeResult {
   outputPath: string;
   code: number;
   stderr: string;
+}
+
+function withFfmpegPath(argv: string[], ffmpegPath?: string): string[] {
+  if (!ffmpegPath) return argv;
+  return [ffmpegPath, ...argv.slice(1)];
 }
 
 function toRunOptions(opts: MergeOptions): FfmpegRunOptions {
@@ -118,7 +125,7 @@ export async function mergeAudioVideo(
   const argv = hasExtras(opts)
     ? buildMergeAudioVideoEx(videoPath, audioPath, outputPath, collectExtras(opts))
     : buildMergeAudioVideo(videoPath, audioPath, outputPath);
-  const result = await runFfmpeg(argv, toRunOptions(opts));
+  const result = await runFfmpeg(withFfmpegPath(argv, opts.ffmpegPath), toRunOptions(opts));
   throwOnFailure(result.code, result.stderr, "音视频合并");
   return { outputPath, code: result.code, stderr: result.stderr };
 }
@@ -129,7 +136,7 @@ export async function remuxMedia(
   outputPath: string,
   opts: MergeOptions = {},
 ): Promise<MergeResult> {
-  const result = await runFfmpeg(buildRemux(inputPath, outputPath), toRunOptions(opts));
+  const result = await runFfmpeg(withFfmpegPath(buildRemux(inputPath, outputPath), opts.ffmpegPath), toRunOptions(opts));
   throwOnFailure(result.code, result.stderr, "转封装");
   return { outputPath, code: result.code, stderr: result.stderr };
 }
@@ -143,7 +150,7 @@ export async function concatMediaParts(
   const argv = hasExtras(opts)
     ? buildConcatPartsEx(listPath, outputPath, collectExtras(opts))
     : buildConcatParts(listPath, outputPath);
-  const result = await runFfmpeg(argv, toRunOptions(opts));
+  const result = await runFfmpeg(withFfmpegPath(argv, opts.ffmpegPath), toRunOptions(opts));
   throwOnFailure(result.code, result.stderr, "分片合并");
   return { outputPath, code: result.code, stderr: result.stderr };
 }

@@ -33,6 +33,7 @@ import type {
   ResolvedStreams,
   StreamOptions,
   VideoMediaInfo,
+  ParseHistoryEntry,
 } from "@bili23-web/engine";
 import {
   DEFAULT_EXTRAS_OPTIONS,
@@ -342,6 +343,10 @@ export interface ParseRequest {
   keyword?: string;
   /** 每周必看期数（popular 用，默认 1） */
   weekNum?: number;
+  /** 起始页（space/favlist/history/watch_later/list 等分页类型，默认 1） */
+  pn?: number;
+  /** 翻页数（分页类型，默认 1） */
+  pages?: number;
 }
 
 export interface AuthStatus {
@@ -375,6 +380,10 @@ export class DownloadManager {
   #dataDir: string;
   /** 当前 SESSDATA（未登录为 undefined）；持久化于 <data>/auth.json */
   #sessdata: string | undefined;
+  /** CDN 节点（advanced.cdnHosts），取流时作为候选地址前缀 */
+  #cdnHosts: string[] = [];
+  /** 自定义 ffmpeg 可执行文件路径（advanced.ffmpegPath） */
+  #ffmpegPath: string | undefined = undefined;
 
   constructor(opts: { dataDir: string; downloadDir?: string }) {
     this.#http = new HttpClient();
@@ -502,6 +511,12 @@ export class DownloadManager {
           this.#items.set(item.id, item);
         }
       }
+      this.#store.addParseHistory({
+        url,
+        title: result.title ?? "",
+        type: result.type,
+        itemCount: result.items.length,
+      });
       results.push(result);
     }
     return results;
@@ -522,7 +537,71 @@ export class DownloadManager {
     if (urls.length === 0) {
       throw new BiliError("INVALID_URL", "请输入有效的链接或用户名");
     }
+
+    // 分页类型（space/favlist/history/watch_later/list）：按 pn 起始、pages 翻页聚合
+    if (this.#isPaginatedType(req.type)) {
+      const startPn = req.pn !== undefined && req.pn > 0 ? Math.floor(req.pn) : 1;
+      const pages = req.pages !== undefined && req.pages > 0 ? Math.max(1, Math.floor(req.pages)) : 1;
+      const results: ParseResult[] = [];
+      for (const url of urls) {
+        const merged = await this.#parsePagedUrl(url, startPn, pages);
+        if (merged) results.push(merged);
+      }
+      return results;
+    }
+
     return this.parseUrls(urls);
+  }
+
+  // ---------- 解析历史 ----------
+
+  listParseHistory(): ParseHistoryEntry[] {
+    return this.#store.listParseHistory();
+  }
+
+  deleteParseHistory(id: number): boolean {
+    return this.#store.removeParseHistory(id);
+  }
+
+  /** 是否支持翻页的类型入口 */
+  #isPaginatedType(type: string): boolean {
+    return ["space", "favlist", "history", "watch_later", "list"].includes(type);
+  }
+
+  /** 逐页解析并聚合为一个 ParseResult（含去重注册到内存条目表） */
+  async #parsePagedUrl(
+    url: string,
+    startPn: number,
+    pages: number,
+  ): Promise<ParseResult | undefined> {
+    let first: ParseResult | undefined;
+    const items: MediaItem[] = [];
+    let pagination: ParseResult["pagination"];
+    for (let page = startPn; page < startPn + pages; page += 1) {
+      const result = await parseUrl(this.ctx, url, { pn: page });
+      for (const item of result.items) {
+        if (!this.#items.has(item.id)) this.#items.set(item.id, item);
+        items.push(item);
+      }
+      if (!first) first = result;
+      if (result.pagination) pagination = result.pagination;
+      // 已到达最后一页则提前结束（避免请求不存在的页）
+      if (result.pagination && page >= result.pagination.totalPages) break;
+    }
+    if (!first) return undefined;
+    this.#store.addParseHistory({
+      url,
+      title: first.title ?? "",
+      type: first.type,
+      itemCount: items.length,
+    });
+    return {
+      type: first.type,
+      items,
+      ...(first.title !== undefined ? { title: first.title } : {}),
+      ...(first.redirectUrl !== undefined ? { redirectUrl: first.redirectUrl } : {}),
+      ...(pagination !== undefined ? { pagination } : {}),
+    };
   }
 
   /** 根据类型入口构造需要交给 parseUrl 的 URL 列表 */
@@ -536,6 +615,7 @@ export class DownloadManager {
       case "lesson":
       case "audio":
       case "favlist":
+      case "list":
         // 这些类型直接接受链接（可多行/逗号分隔）
         return query
           .split(/\r?\n|,|;/)
@@ -893,11 +973,15 @@ export class DownloadManager {
     if (idx >= 0) this.#pending.splice(idx, 1);
   }
 
-  /** 用最新配置刷新运行时并发/限速（创建任务与配置变更时调用） */
+  /** 用最新配置刷新运行时并发/限速/代理/CDN/ffmpeg（创建任务与配置变更时调用） */
   #applyRuntimeConfig(cfg: AppConfig): void {
     this.#gate.setBps(cfg.download.speedLimitKbps * 1024);
     this.#maxParallel = cfg.download.parallel;
     this.#maxThreads = cfg.download.threads;
+    // advanced：代理、CDN、ffmpeg 路径即时生效
+    this.#http.setProxy(cfg.advanced.proxy);
+    this.#cdnHosts = cfg.advanced.cdnHosts;
+    this.#ffmpegPath = cfg.advanced.ffmpegPath;
   }
 
   /** 重启恢复实现（见 init）：download_task 遗留任务一律置 interrupted，保留断点可手动继续 */
@@ -1087,6 +1171,36 @@ export class DownloadManager {
     }
   }
 
+  /** 取流候选地址：优先用用户 CDN 主机重写，原始 B 站调度链接兜底（去重） */
+  #candidateUrls(candidates: string[]): string[] {
+    const base = candidates.filter((u) => typeof u === "string" && u.length > 0);
+    if (this.#cdnHosts.length === 0 || base.length === 0) {
+      return [...new Set(base)];
+    }
+    const out: string[] = [];
+    for (const url of base) {
+      for (const host of this.#cdnHosts) {
+        const rewritten = this.#rewriteHost(url, host);
+        if (rewritten && !out.includes(rewritten)) out.push(rewritten);
+      }
+    }
+    for (const url of base) if (!out.includes(url)) out.push(url);
+    return out;
+  }
+
+  /** 把 URL 的 host 替换为给定 CDN 主机（host 可带协议/路径，只取 host 部分）；非法返回 undefined */
+  #rewriteHost(url: string, host: string): string | undefined {
+    try {
+      const u = new URL(url);
+      const rawHost = host.includes("://") ? new URL(host).host : host;
+      if (!rawHost) return undefined;
+      u.host = rawHost;
+      return u.toString();
+    } catch {
+      return undefined;
+    }
+  }
+
   #buildPlan(
     task: ManagedTask,
     info: VideoMediaInfo,
@@ -1096,7 +1210,7 @@ export class DownloadManager {
     if (resolved.mediaType === "dash" && resolved.videoRef) {
       const videoFile: PlannedFile = {
         key: "video",
-        urls: [resolved.videoRef.baseUrl, ...resolved.videoRef.backupUrl],
+        urls: this.#candidateUrls([resolved.videoRef.baseUrl, ...resolved.videoRef.backupUrl]),
         fileName: `video_${task.id}.m4s`,
       };
       files.push(videoFile);
@@ -1104,7 +1218,7 @@ export class DownloadManager {
       if (resolved.audioRef) {
         files.push({
           key: "audio",
-          urls: [resolved.audioRef.baseUrl, ...resolved.audioRef.backupUrl],
+          urls: this.#candidateUrls([resolved.audioRef.baseUrl, ...resolved.audioRef.backupUrl]),
           fileName: `audio_${task.id}.m4s`,
         });
         mergePlan.audioKey = "audio";
@@ -1119,7 +1233,7 @@ export class DownloadManager {
       mergePlan.partKeys.push(key);
       files.push({
         key,
-        urls: [part.url, ...part.backupUrl],
+        urls: this.#candidateUrls([part.url, ...part.backupUrl]),
         fileName: `video_${task.id}_${part.order}.mp4`,
       });
     }
@@ -1161,10 +1275,15 @@ export class DownloadManager {
           container,
           signal: task.signal,
           cwd: taskDir,
+          ...(this.#ffmpegPath !== undefined ? { ffmpegPath: this.#ffmpegPath } : {}),
           ...embed,
         });
       } else {
-        await remuxMedia(videoPath, tempOut, { container, signal: task.signal });
+        await remuxMedia(videoPath, tempOut, {
+          container,
+          signal: task.signal,
+          ...(this.#ffmpegPath !== undefined ? { ffmpegPath: this.#ffmpegPath } : {}),
+        });
       }
       return;
     }
@@ -1179,6 +1298,7 @@ export class DownloadManager {
       container,
       signal: task.signal,
       cwd: taskDir,
+      ...(this.#ffmpegPath !== undefined ? { ffmpegPath: this.#ffmpegPath } : {}),
       ...embed,
     });
   }

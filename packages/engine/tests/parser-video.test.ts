@@ -5,6 +5,10 @@ import { parseUrl } from "../src/parser/index.js";
 import { BiliError } from "../src/errors.js";
 import type { ParseContext } from "../src/parser/types.js";
 
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
 /** 用本地 fixture 替代真实网络：fetchImpl 返回给定 JSON */
 function httpWithJson(body: unknown, opts: { url?: string } = {}): HttpClient {
   const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
@@ -84,15 +88,38 @@ describe("VideoParser", () => {
     expect(result.items[0]).toMatchObject({ page: 1, cid: 280001, title: "测试视频标题" });
   });
 
-  it("互动视频（rights.is_stein_gate=1）标记 interactive 且取流形态不变", async () => {
-    const body = {
-      code: 0,
-      data: { ...VIEW_MULTI_P.data, rights: { is_stein_gate: 1 }, pages: undefined },
+  it("互动视频（rights.is_stein_gate=1）按 BFS 展开为分支节点叶子", async () => {
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      if (url.includes("/x/web-interface/nav")) {
+        return json({ code: 0, data: { wbi_img: { img_url: "https://i0.hdslb.com/bfs/wbi/abc.png", sub_url: "https://i0.hdslb.com/bfs/wbi/def.png" } } });
+      }
+      if (url.includes("/x/player/wbi/v2")) {
+        return json({ code: 0, data: { interaction: { graph_version: "1" } } });
+      }
+      if (url.includes("/x/stein/edgeinfo_v2")) {
+        const edgeId = new URL(url).searchParams.get("edge_id");
+        if (edgeId === "0") {
+          return json({ code: 0, data: { title: "根节点", edges: { questions: [{ type: 1, choices: [{ id: 1, option: "A", cid: 100 }, { id: 2, option: "B", cid: 200 }] }] } } });
+        }
+        if (edgeId === "1") return json({ code: 0, data: { title: "分支A", edges: { questions: [] } } });
+        if (edgeId === "2") return json({ code: 0, data: { title: "分支B", edges: { questions: [] } } });
+        return json({ code: -404, message: "node not found", data: null });
+      }
+      if (url.includes("/x/web-interface/view")) {
+        return json({ code: 0, data: { ...VIEW_MULTI_P.data, rights: { is_stein_gate: 1 }, pages: undefined } });
+      }
+      return json({ code: -404, message: "not found", data: null });
     };
-    const ctx: ParseContext = { http: httpWithJson(body) };
+    const ctx: ParseContext = { http: new HttpClient({ fetchImpl: fetchImpl as typeof fetch }) };
     const result = await new VideoParser().parse(ctx, "BV1xx411c7mD");
-    expect(result.items[0]?.interactive).toBe(true);
-    expect(result.items[0]?.type).toBe("video");
+    expect(result.items).toHaveLength(3);
+    const ids = result.items.map((i) => i.id);
+    expect(ids).toContain("video:BV1xx411c7mD:iv:280001");
+    expect(ids).toContain("video:BV1xx411c7mD:iv:100");
+    expect(ids).toContain("video:BV1xx411c7mD:iv:200");
+    expect(result.items.every((i) => i.interactive === true)).toBe(true);
+    expect(result.items.every((i) => i.type === "video")).toBe(true);
   });
 
   it("普通视频不带 interactive 标记", async () => {

@@ -28,6 +28,8 @@ export function resolveConventionType(item: MediaItem): ConventionTypeId {
       return ConventionType.WATCH_LATER;
     case "popular":
       return ConventionType.WEEKLY;
+    case "list":
+      return ConventionType.COLLECTION;
     default:
       break;
   }

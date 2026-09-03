@@ -2,7 +2,7 @@
 export type ItemKind = "video" | "bangumi" | "cheese" | "lesson" | "audio";
 
 /** 叶子条目的来源容器（P3 命名分类用；桌面用 Attribute 位标记同一语义） */
-export type ContainerType = "space" | "favlist" | "popular" | "watch_later" | "history";
+export type ContainerType = "space" | "favlist" | "popular" | "watch_later" | "history" | "list";
 
 /** 单个可下载条目（对应桌面版"解析列表"中一个可勾选项：一个分P/一集/一首歌） */
 export interface MediaItem {

@@ -1,6 +1,7 @@
 import { BiliError } from "../errors.js";
 import { classifyUrl } from "../url.js";
 import type { MediaItem } from "../types.js";
+import { fetchInteractiveItems } from "./interactive.js";
 import type { ParseContext, ParseOptions, ParseResult, Parser } from "./types.js";
 
 /** B 站 Web API 基址 */
@@ -130,6 +131,12 @@ export async function fetchViewItems(
   }
   if (!body.data) {
     throw new BiliError("API_ERROR", "view 接口缺少 data");
+  }
+
+  // 互动视频（rights.is_stein_gate === 1）：不按分P 展开，改走 BFS 分支节点
+  if (body.data.rights?.is_stein_gate === 1) {
+    const items = await fetchInteractiveItems(ctx, body.data);
+    return { title: body.data.title, items };
   }
 
   return { title: body.data.title, items: buildItems(body.data) };

@@ -3,7 +3,7 @@ import { stream, streamSSE } from "hono/streaming";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { BiliError } from "@bili23-web/engine";
-import type { ParseResult } from "@bili23-web/engine";
+import type { ParseResult, ParseHistoryEntry } from "@bili23-web/engine";
 import type {
   AppConfig,
   AppConfigPatch,
@@ -63,6 +63,9 @@ export interface ApiDeps {
   updateConfig?(patch: AppConfigPatch): Promise<AppConfig>;
   /** 类型化解析请求（type 入口） */
   parseRequest?(req: ParseRequest): Promise<ParseResult[]>;
+  /** 解析历史 */
+  listParseHistory?(): ParseHistoryEntry[];
+  deleteParseHistory?(id: number): boolean;
   loginAuth?(sessdata: string): Promise<AuthStatus>;
   logoutAuth?(): Promise<AuthStatus>;
   authStatus?(): Promise<AuthStatus>;
@@ -234,6 +237,29 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
   });
 
   app.get("/api/history", (c) => c.json({ history: getManager().listHistory() }));
+
+  // 解析历史（已解析过的链接列表）
+  app.get("/api/parse-history", (c) => {
+    const manager = getManager();
+    if (!manager.listParseHistory) {
+      return c.json({ error: { code: "NOT_FOUND", message: "接口不可用" } }, 404);
+    }
+    return c.json({ history: manager.listParseHistory() });
+  });
+
+  app.delete("/api/parse-history/:id", (c) => {
+    const manager = getManager();
+    if (!manager.deleteParseHistory) {
+      return c.json({ error: { code: "NOT_FOUND", message: "接口不可用" } }, 404);
+    }
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: { code: "INVALID_PATH", message: "id 非法" } }, 400);
+    }
+    const ok = manager.deleteParseHistory(id);
+    if (!ok) return c.json({ error: { code: "NOT_FOUND", message: "解析记录不存在" } }, 404);
+    return c.json({ ok: true });
+  });
 
   app.delete("/api/history/:taskId", (c) => {
     const manager = getManager();

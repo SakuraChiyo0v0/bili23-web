@@ -30,6 +30,7 @@ export { FavlistParser } from "./parser/favlist.js";
 export { PopularParser } from "./parser/popular.js";
 export { WatchLaterParser } from "./parser/watch-later.js";
 export { HistoryParser } from "./parser/history.js";
+export { ListParser } from "./parser/list.js";
 export { AudioParser, AUDIO_API_BASE } from "./parser/audio.js";
 export { LessonParser, LESSON_API_BASE, LESSON_DETAIL_URL } from "./parser/lesson.js";
 export type { Parser, ParseContext, ParseOptions, ParseResult } from "./parser/types.js";
@@ -90,7 +91,7 @@ export type { MergeOptions, MergeResult, ProbeInfo, ProbeStream } from "./ffmpeg
 export { HASH_ID_VERSION, calcHashId, stableJson } from "./store/hash.js";
 export type { HashIdentity } from "./store/hash.js";
 export { TaskStore } from "./store/task-store.js";
-export type { TaskRecord } from "./store/task-store.js";
+export type { TaskRecord, ParseHistoryEntry } from "./store/task-store.js";
 export { HistoryService } from "./store/history.js";
 export type { HistoryEntry } from "./store/history.js";
 export {

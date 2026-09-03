@@ -20,6 +20,15 @@ export interface TaskRecord {
   data: unknown;
 }
 
+export interface ParseHistoryEntry {
+  id: number;
+  url: string;
+  title: string;
+  type: string;
+  itemCount: number;
+  createdAt: number;
+}
+
 export interface TaskStoreOptions {
   /** data 列是否以 JSON 字符串读写（默认 true） */
   json?: boolean;
@@ -46,6 +55,15 @@ CREATE INDEX IF NOT EXISTS idx_download_task_hash_id ON download_task (hash_id);
 CREATE INDEX IF NOT EXISTS idx_completed_task_hash_id ON completed_task (hash_id);
 CREATE INDEX IF NOT EXISTS idx_download_task_created_time ON download_task (created_time);
 CREATE INDEX IF NOT EXISTS idx_completed_task_completed_time ON completed_task (completed_time);
+CREATE TABLE IF NOT EXISTS parse_history (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  url          TEXT NOT NULL,
+  title        TEXT NOT NULL DEFAULT '',
+  type         TEXT NOT NULL DEFAULT '',
+  item_count   INTEGER NOT NULL DEFAULT 0,
+  created_time INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_parse_history_created_time ON parse_history (created_time);
 `;
 
 export class TaskStore {
@@ -163,6 +181,46 @@ export class TaskStore {
   }
 
   /** 统计任务数 */
+  // ---- 解析历史（parse_history） ----
+
+  addParseHistory(entry: { url: string; title?: string; type?: string; itemCount?: number }): number {
+    const time = Math.floor(Date.now() / 1000);
+    const res = this.#db
+      .prepare("INSERT INTO parse_history (url, title, type, item_count, created_time) VALUES (?, ?, ?, ?, ?)")
+      .run(entry.url, entry.title ?? "", entry.type ?? "", entry.itemCount ?? 0, time);
+    return Number(res.lastInsertRowid);
+  }
+
+  listParseHistory(limit?: number): ParseHistoryEntry[] {
+    const sql =
+      limit === undefined
+        ? "SELECT id, url, title, type, item_count, created_time FROM parse_history ORDER BY created_time DESC, id DESC"
+        : "SELECT id, url, title, type, item_count, created_time FROM parse_history ORDER BY created_time DESC, id DESC LIMIT ?";
+    const rows = (limit === undefined
+      ? this.#db.prepare(sql).all()
+      : this.#db.prepare(sql).all(limit)) as Array<{
+      id: number;
+      url: string;
+      title: string;
+      type: string;
+      item_count: number;
+      created_time: number;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      url: r.url,
+      title: r.title,
+      type: r.type,
+      itemCount: r.item_count,
+      createdAt: r.created_time,
+    }));
+  }
+
+  removeParseHistory(id: number): boolean {
+    const res = this.#db.prepare("DELETE FROM parse_history WHERE id = ?").run(id);
+    return Number(res.changes) > 0;
+  }
+
   countActive(): number {
     const row = this.#db.prepare("SELECT COUNT(*) AS n FROM download_task").get() as { n: number };
     return row.n;

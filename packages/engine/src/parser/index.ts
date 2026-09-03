@@ -10,7 +10,8 @@ import { FavlistParser } from "./favlist.js";
 import { PopularParser } from "./popular.js";
 import { WatchLaterParser } from "./watch-later.js";
 import { HistoryParser } from "./history.js";
-import type { Parser, ParseContext, ParseResult } from "./types.js";
+import { ListParser } from "./list.js";
+import type { Parser, ParseContext, ParseOptions, ParseResult } from "./types.js";
 
 /** b23 短链最多跟随跳转次数 */
 const MAX_REDIRECT_HOPS = 3;
@@ -38,6 +39,8 @@ export function getParser(type: ContentType): Parser {
       return new WatchLaterParser();
     case "history":
       return new HistoryParser();
+    case "list":
+      return new ListParser();
     default:
       throw new BiliError("UNSUPPORTED_TYPE", `暂不支持的解析类型：${type}`);
   }
@@ -47,7 +50,7 @@ export function getParser(type: ContentType): Parser {
  * 统一解析入口：识别链接 →（b23 短链先解跳转）→ 按类型分发。
  * 语义对应桌面版 ParseWorker：一个链接解析出一棵条目列表。
  */
-export async function parseUrl(ctx: ParseContext, raw: string): Promise<ParseResult> {
+export async function parseUrl(ctx: ParseContext, raw: string, options?: ParseOptions): Promise<ParseResult> {
   let url = raw.trim();
   if (!url) throw new BiliError("INVALID_URL", "链接为空");
 
@@ -60,7 +63,7 @@ export async function parseUrl(ctx: ParseContext, raw: string): Promise<ParseRes
       url = await ctx.http.getRedirect(url);
       continue;
     }
-    return getParser(type).parse(ctx, url);
+    return getParser(type).parse(ctx, url, options);
   }
 
   throw new BiliError("INVALID_URL", "短链跳转次数超限");

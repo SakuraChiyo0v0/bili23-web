@@ -22,6 +22,8 @@ export interface ParseResult {
   items: MediaItem[];
   /** 内容发生了跳转（如视频被重定向到其他地址），调用方应改用该地址重新解析 */
   redirectUrl?: string;
+  /** 分页信息（合集/系列/空间等列表型返回） */
+  pagination?: { total: number; page: number; pageSize: number; totalPages: number };
 }
 
 export interface Parser {

@@ -1,3 +1,4 @@
+import { ProxyAgent } from "undici";
 import { BiliError } from "../errors.js";
 import { CookieJar } from "./cookies.js";
 
@@ -32,6 +33,8 @@ export interface HttpClientOptions {
   retries?: number;
   /** 测试注入用 */
   fetchImpl?: typeof fetch;
+  /** HTTP(S) 代理地址（如 http://127.0.0.1:7890） */
+  proxy?: string;
 }
 
 const DEFAULT_UA =
@@ -67,7 +70,9 @@ export class HttpClient {
   readonly jar: CookieJar;
   readonly timeoutMs: number;
   readonly retries: number;
-  readonly #fetch: typeof fetch;
+  #fetch: typeof fetch;
+  #proxy: string | undefined = undefined;
+  #agent: ProxyAgent | undefined = undefined;
 
   constructor(opts: HttpClientOptions = {}) {
     this.ua = opts.ua ?? DEFAULT_UA;
@@ -75,7 +80,8 @@ export class HttpClient {
     this.jar = opts.cookieJar ?? new CookieJar();
     this.timeoutMs = opts.timeoutMs ?? 10_000;
     this.retries = opts.retries ?? 3;
-    this.#fetch = opts.fetchImpl ?? fetch;
+    this.#fetch = opts.fetchImpl ?? (opts.proxy ? this.#makeProxyFetch(opts.proxy) : fetch);
+    this.#proxy = opts.proxy;
   }
 
   /** 发起请求（带 cookie/UA/Referer/重试），返回原始 Response（调用方负责消费） */
@@ -133,6 +139,25 @@ export class HttpClient {
     }
 
     throw new BiliError("NETWORK", `请求失败：${method} ${fullUrl}`, { cause: lastError });
+  }
+
+  /** 运行时切换代理（配置更新用）；无代理时回退全局 fetch */
+  setProxy(proxy?: string): void {
+    if (proxy === this.#proxy) return;
+    this.#proxy = proxy;
+    this.#agent?.close().catch(() => undefined);
+    this.#agent = undefined;
+    this.#fetch = proxy ? this.#makeProxyFetch(proxy) : fetch;
+  }
+
+  /** 用 undici ProxyAgent 包装 fetch（HTTP 代理，解析与取流共用） */
+  #makeProxyFetch(proxy: string): typeof fetch {
+    const agent = new ProxyAgent(proxy);
+    this.#agent = agent;
+    return ((input, init) => {
+      const options = (init ?? {}) as RequestInit & { dispatcher?: unknown };
+      return fetch(input, { ...options, dispatcher: agent as never });
+    }) as typeof fetch;
   }
 
   #captureSetCookie(headers: Headers): void {
