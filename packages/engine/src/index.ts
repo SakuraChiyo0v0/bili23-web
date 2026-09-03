@@ -25,3 +25,7 @@ export type { MediaItem } from "./types.js";
 export { parseUrl, getParser } from "./parser/index.js";
 export { VideoParser, API_BASE as BILI_API_BASE } from "./parser/video.js";
 export type { Parser, ParseContext, ParseOptions, ParseResult } from "./parser/types.js";
+export { fetchVideoMediaInfo } from "./media/video-info.js";
+export type { VideoMediaInfo, VideoMediaType, StreamRef } from "./media/video-info.js";
+export { ensureWbiKeys, resetWbiKeyCache } from "./media/wbi-keys.js";
+export type { WbiKeys } from "./media/wbi-keys.js";

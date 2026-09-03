@@ -136,6 +136,8 @@
 - Produces: `getVideoInfo(item): { qualities: {id,label}[], audioQualities: [...], codecs: [...], title, cover, duration, owner, ... }`
 - 数据源：`/x/player/wbi/playurl`（fnval 支持 DASH/杜比/8K 参数对齐桌面）
 
+- [x] Task 1.3 已完成：fetchVideoMediaInfo（playurl fnval=4048/fourk=1/wbi 签名；DASH/MP4、画质→编码映射、音质列表），5 单测 + 真实接口冒烟待 1.9 统一执行
+
 ### Task 1.4：取流解析（DASH + 候选 CDN）
 
 **Files:**
