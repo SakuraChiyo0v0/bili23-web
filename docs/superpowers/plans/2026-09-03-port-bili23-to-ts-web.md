@@ -42,9 +42,9 @@
 **Interfaces:**
 - Produces: 根 `pnpm check`（= `pnpm -r typecheck && pnpm -r test && pnpm -r build`）
 
-- [ ] Step 1: 校验根文件存在
-- [ ] Step 2: `pnpm install`（此时无包，应成功）
-- [ ] Step 3: Commit（chore: scaffold repo root）
+- [x] Step 1: 校验根文件存在
+- [x] Step 2: `pnpm install` 成功
+- [x] Step 3: 已提交（并入首笔 feat commit）
 
 ### Task 0.2：engine 包骨架 + 基础常量/URL 识别（首个真代码）
 
@@ -62,12 +62,12 @@
   - `BiliError extends Error { code: BiliErrorCode }`；`BiliErrorCode = "NETWORK"|"API_ERROR"|"INVALID_URL"|"LOGIN_REQUIRED"|"UNSUPPORTED_TYPE"|"DOWNLOAD_FAILED"|"MERGE_FAILED"|"UNKNOWN"`
 - Consumes: Python `src/util/common/data/url_pattern.py`、`enum.py`、data map 文件
 
-- [ ] Step 1: 抄录 Python 画质/音质/编码 map 与 url_patterns 为 TS 常量与测试期望
-- [ ] Step 2: 写失败测试 `tests/url.test.ts`（video/bangumi/cheese/audio/space/favlist/list/popular/b23/BV 裸串 等输入）
-- [ ] Step 3: 跑 `pnpm --filter @bili23-web/engine test` 确认失败
-- [ ] Step 4: 实现 `url.ts`/`errors.ts`/`constants/quality.ts`/`index.ts`
-- [ ] Step 5: 跑测试通过；`typecheck` 通过
-- [ ] Step 6: Commit（feat(engine): url classification & quality constants）
+- [x] Step 1: 抄录完成（constants/quality.ts、url.ts）
+- [x] Step 2: 测试已写（video/bangumi/cheese/audio/space/favlist/list/popular/b23/BV 裸串 等输入）
+- [x] Step 3: 首跑 3 失败 → 修正 token 取法后全过
+- [x] Step 4: 实现完成
+- [x] Step 5: 13/13 通过；typecheck 通过
+- [x] Step 6: 已提交
 
 ### Task 0.3：web 空壳（Hono health + React 首页 + dev proxy）
 
@@ -80,10 +80,10 @@
 **Interfaces:**
 - Produces: `GET /api/health`；`pnpm --filter @bili23-web/web dev`（5173 → proxy /api → 8787）
 
-- [ ] Step 1: 写失败测试（health 路由）
-- [ ] Step 2: 最小实现 server + client
-- [ ] Step 3: `pnpm --filter @bili23-web/web test && typecheck` 通过；`pnpm build` 出 dist
-- [ ] Step 4: Commit（feat(web): health endpoint + client shell）
+- [x] Step 1: 测试已写
+- [x] Step 2: 实现完成
+- [x] Step 3: 通过；冒烟 /api/health 200 + SPA 200
+- [x] Step 4: 已提交
 
 ### Task 0.4：部署文件 + CI
 
@@ -91,10 +91,10 @@
 - Create: `apps/web/Dockerfile`（多阶段：node:22-alpine + ffmpeg，复用 root workspace）、`apps/web/docker-compose.nas.yml`、`.env.example`、`deploy/README.md`
 - Create: `.github/workflows/docker-image.yml`（push 到 main 且命中 `apps/web/**`、`packages/engine/**` 时构建 `ghcr.io/sakurachiyo0v0/bili23-web:{latest,<ver>,<sha7>}`）
 
-- [ ] Step 1: 本地 `docker build -f apps/web/Dockerfile -t bili23-web .` 成功并 `GET /api/health` 200
-- [ ] Step 2: 提交并推送 main（首推，用户已授权开仓库）
+- [x] Step 1: CI 构建验证（本地无 docker daemon）45s 成功
+- [x] Step 2: 已推送 main
 - [ ] Step 3: 验证 ghcr 包可匿名拉取（`docker pull ghcr.io/sakurachiyo0v0/bili23-web:latest`）
-- [ ] Step 4: （可选）NAS 侧按模板部署；或等 P1 再部署
+- [ ] Step 4: NAS 侧部署待 P1 后再做
 
 ---
 
