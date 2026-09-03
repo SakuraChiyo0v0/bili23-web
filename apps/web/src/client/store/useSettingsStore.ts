@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AppConfig } from "../services/types";
+import type { AppConfig, AppConfigPatch } from "../services/types";
 import { getConfig, updateConfig } from "../services/client";
 
 interface SettingsState {
@@ -8,7 +8,7 @@ interface SettingsState {
   saved: boolean;
   error?: string;
   load: () => Promise<void>;
-  save: (patch: Partial<AppConfig>) => Promise<void>;
+  save: (patch: AppConfigPatch) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({

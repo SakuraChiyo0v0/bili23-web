@@ -1,6 +1,7 @@
 import type {
   DownloadOptions,
   AppConfig,
+  AppConfigPatch,
   MediaOptionSummary,
   ParseResult,
   TaskSummary,
@@ -97,7 +98,7 @@ export function listFiles(): Promise<{ files: Array<{ name: string; path: string
 export function fileRawUrl(relPath: string): string {
   return `${BASE}/files/raw?path=${encodeURIComponent(relPath)}`;
 }
-export function updateConfig(patch: Partial<AppConfig>): Promise<{ config: AppConfig }> {
+export function updateConfig(patch: AppConfigPatch): Promise<{ config: AppConfig }> {
   return request("/config", { method: "PUT", body: JSON.stringify({ config: patch }) });
 }
 export interface AuthStatus { loggedIn: boolean; preview: string }

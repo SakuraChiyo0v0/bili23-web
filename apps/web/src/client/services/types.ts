@@ -114,3 +114,12 @@ export interface AppConfig {
   fileNaming: { rules: unknown[]; numberingType: number; startingNumber: number };
   advanced: Record<string, unknown>;
 }
+
+/** 配置部分更新（与后端 AppConfigPatch 对齐）：组内字段均可缺省 */
+export interface AppConfigPatch {
+  additional?: Record<string, unknown>;
+  fileNaming?: { rules?: unknown[]; numberingType?: number; startingNumber?: number };
+  download?: Partial<AppConfig["download"]>;
+  behavior?: Partial<AppConfig["behavior"]>;
+  advanced?: Record<string, unknown>;
+}

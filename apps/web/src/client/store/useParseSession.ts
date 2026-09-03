@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type { MediaItem, ParseResult } from "../services/types";
 
-/** 解析树节点：叶子(item) 或 聚合容器(group) */
 export interface TreeNode {
   id: string;
   kind: "group" | "leaf";
@@ -20,8 +19,10 @@ interface ParseSession {
   results: ParseResult[];
   tree: TreeNode[];
   input: string;
+  parseType: string;
   error?: string;
   setInput: (v: string) => void;
+  setParseType: (t: string) => void;
   start: () => void;
   success: (results: ParseResult[]) => void;
   fail: (error: string) => void;
@@ -96,26 +97,26 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   results: [],
   tree: [],
   input: "",
+  parseType: "auto",
   error: undefined,
   setInput: (v) => set({ input: v }),
+  setParseType: (t) => set({ parseType: t }),
   start: () => set({ state: "parsing", error: undefined, tree: [] }),
   success: (results) => set({ state: "success", results, tree: buildTree(results) }),
   fail: (error) => set({ state: "error", error }),
-  reset: () => set({ state: "idle", results: [], tree: [], input: "", error: undefined }),
+  reset: () => set({ state: "idle", results: [], tree: [], input: "", parseType: "auto", error: undefined }),
   toggle: (id) => set((s) => ({ tree: recompute(toggleNode(s.tree, id)) })),
   setAll: (v) => set((s) => ({ tree: recompute(applyAll(s.tree, v)) })),
   toggleCollapse: (id) => set((s) => ({ tree: s.tree.map((n) => (n.id === id ? { ...n, collapsed: !n.collapsed } : n)) })),
   selectedLeaves: () => collect([], get().tree),
 }));
 
-/** 从后端 ParseResult 拉出全部叶子 */
 export function collectAllLeaves(results: ParseResult[]): MediaItem[] {
   const out: MediaItem[] = [];
   for (const r of results) for (const it of r.items) out.push(it);
   return out;
 }
 
-/** 全局任务列表 store（P1 记录已创建任务摘要；P2 接 全量 + SSE 实时更新） */
 import type { TaskSummary } from "../services/types";
 
 interface TasksState {

@@ -1,6 +1,7 @@
-import { useEffect } from "react";
-import { useSettingsStore } from "../store/useSettingsStore";
+import { useEffect, useState } from "react";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
+import { NamingRuleEditor, CONVENTION_TYPES } from "../components/NamingRuleEditor";
+import { useSettingsStore } from "../store/useSettingsStore";
 
 export function SettingsPage() {
   const { config, loading, saved, error, load, save } = useSettingsStore();
@@ -137,18 +138,26 @@ function NamingGroup({ config, onPatch }: { config: any; onPatch: (p: any) => vo
   const f = config.fileNaming;
   const rules = f.rules || [];
   const numbering = Number(f.numberingType);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const saveRules = (next: any[]) => {
+    onPatch({ fileNaming: { rules: next } });
+    useSettingsStore.getState().save({ fileNaming: { rules: next } });
+  };
   return (
     <Group title="命名规则">
-      <Row label="命名规则" desc={`共 ${rules.length} 条规则（P4 简化展示，编辑器 P6 完善）`} control={<span className="small muted">{rules.length} 条</span>} />
+      <Row label="命名规则" desc={`共 ${rules.length} 条规则`} control={
+        <button type="button" className="btn sm" onClick={() => setEditorOpen(true)}>编辑</button>
+      } />
       <div className="naming-list">
         {rules.map((r: any) => (
           <div key={r.id} className="naming-row">
             <span className="naming-name">{r.name}</span>
-            <span className="naming-type">分类 {r.type}</span>
+            <span className="naming-type">{CONVENTION_LABELS[r.type] ?? `分类 ${r.type}`}</span>
             <code className="naming-rule">{r.rule}</code>
           </div>
         ))}
       </div>
+      <NamingRuleEditor open={editorOpen} onClose={() => setEditorOpen(false)} rules={rules} onChange={saveRules} />
       <Row label="编号模式" desc="FROM_SPECIFIED / USE_PARSE_LIST / CONTINUOUS" control={
         <Seg value={String(numbering)} options={[["0","批次从 1"],["1","用解析列表序号"],["2","全局连续"]]} onChange={(v) => onPatch({ fileNaming: { numberingType: Number(v) } })} />
       }/>
@@ -192,3 +201,4 @@ function Slider({ value, min, max, onChange, suffix }: { value: number; min: num
     </div>
   );
 }
+const CONVENTION_LABELS: Record<number, string> = Object.fromEntries(CONVENTION_TYPES.map((t) => [t.id, t.label]));

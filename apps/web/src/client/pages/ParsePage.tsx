@@ -9,6 +9,7 @@ import { ParseTree } from "../components/ParseTree";
 export function ParsePage() {
   const session = useParseSession();
   const { toast } = useToast();
+  const typePlaceholder = (t: string) => { if (t === "auto") return "粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…"; if (t === "space") return "UP 主 UID 或主页链接"; if (t === "favlist") return "收藏夹链接 / 列表 ID"; if (t === "watch_later") return "（自动）稍后再看"; if (t === "history") return "（自动）历史记录"; if (t === "popular") return "每周必看（可填期数）"; return "粘贴相应分类的链接"; };
 
   const doParse = useCallback(async () => {
     const input = session.input.trim();
@@ -18,8 +19,15 @@ export function ParsePage() {
     }
     session.start();
     try {
-      const urls = input.split(/\r?\n|,|;/).map((s) => s.trim()).filter(Boolean);
-      const { results } = await parseUrl({ urls });
+      let results;
+      if (session.parseType === "auto") {
+        const urls = input.split(/\r?\n|,|;/).map((s) => s.trim()).filter(Boolean);
+        const r = await parseUrl({ urls });
+        results = r.results;
+      } else {
+        const r = await parseUrl({ type: session.parseType, query: input });
+        results = r.results;
+      }
       if (!results.length) throw new Error("解析结果为空");
       session.success(results);
       toast(`解析完成，共 ${results.reduce((n, r) => n + r.items.length, 0)} 个条目`, "ok");
@@ -48,9 +56,22 @@ export function ParsePage() {
               value={session.input}
               onChange={(e) => session.setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") doParse(); }}
-              placeholder="粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…"
+              placeholder={typePlaceholder(session.parseType)}
             />
           </div>
+          <select className="type-select" value={session.parseType} onChange={(e) => session.setParseType(e.target.value)}>
+            <option value="auto">自动识别</option>
+            <option value="video">视频</option>
+            <option value="bangumi">番剧/电影</option>
+            <option value="cheese">课程</option>
+            <option value="audio">音频</option>
+            <option value="space">UP 空间</option>
+            <option value="favlist">收藏夹</option>
+            <option value="watch_later">稍后再看</option>
+            <option value="history">历史记录</option>
+            <option value="popular">每周必看</option>
+            <option value="list">合集/系列</option>
+          </select>
           <button type="button" className="btn primary parse-btn" disabled={session.state === "parsing"} onClick={doParse}>
             {session.state === "parsing" ? "解析中…" : "解析"}
           </button>
