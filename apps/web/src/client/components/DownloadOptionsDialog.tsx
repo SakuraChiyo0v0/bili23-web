@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { mediaOptions, createTasks } from "../services/client";
+import { DuplicateDialog } from "./DuplicateDialog";
 import { useDownloadOptions } from "../store/useDownloadOptions";
 import { useTasksStore } from "../store/useTasksStore";
 import { useToast } from "../lib/toast";
@@ -14,6 +15,7 @@ export function DownloadOptionsDialog() {
   } = useDownloadOptions();
   const { toast } = useToast();
   const setTasks = useTasksStore((s) => s.setTasks);
+  const [dupList, setDupList] = useState<Array<{ itemId: string; title: string }>>([]);
 
   // 打开时拉取首个条目的媒体候选
   useEffect(() => {
@@ -73,7 +75,26 @@ export function DownloadOptionsDialog() {
       toast(`已创建 ${tasks.length} 个下载任务`, "ok");
       close();
     } catch (e) {
-      toast("创建任务失败：" + (e instanceof Error ? e.message : String(e)), "err");
+      const err = e as Error & { code?: string; duplicates?: Array<{ itemId: string; title: string }> };
+      if (err.code === "DUPLICATE" || (err.duplicates && err.duplicates.length)) {
+        // 全部/部分重复：用本次尝试的条目展示重复列表，提供强制下载
+        setDupList(err.duplicates?.length ? err.duplicates : items.map((i) => ({ itemId: i.id, title: i.title })));
+      } else {
+        toast("创建任务失败：" + (e instanceof Error ? e.message : String(e)), "err");
+      }
+    }
+  };
+
+  const forceDownload = async (dupIds: string[]) => {
+    const resolved = useDownloadOptions.getState().resolved;
+    try {
+      const { tasks } = await createTasks(dupIds, resolved, true);
+      if (tasks.length) setTasks([...useTasksStore.getState().tasks, ...tasks]);
+      toast("已强制下载 " + tasks.length + " 个", "ok");
+      setDupList([]);
+      close();
+    } catch (e) {
+      toast("强制下载失败：" + (e instanceof Error ? e.message : String(e)), "err");
     }
   };
 
@@ -113,6 +134,7 @@ export function DownloadOptionsDialog() {
           </div>
         </div>
       </div>
+      <DuplicateDialog open={dupList.length > 0} onClose={() => setDupList([])} duplicates={dupList} onForce={forceDownload} />
     </div>
   );
 }

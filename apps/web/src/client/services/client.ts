@@ -19,7 +19,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const json = text ? (JSON.parse(text) as Record<string, unknown>) : {};
   if (!res.ok) {
     const err = (json.error ?? {}) as { code?: string; message?: string };
-    throw new Error(err.message ?? `请求失败（${res.status}）`);
+    const e = new Error(err.message ?? ("请求失败（" + res.status + "）")) as Error & { code?: string; status?: number; duplicates?: Array<{ itemId: string; title: string }> };
+    e.code = err.code;
+    e.status = res.status;
+    if (Array.isArray((json as any).duplicates)) e.duplicates = (json as any).duplicates;
+    throw e;
   }
   return json as T;
 }
