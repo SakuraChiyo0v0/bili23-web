@@ -254,3 +254,37 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .btn-group{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 .btn-group .btn.sm.ghost{ color:var(--ink-2); }
 .btn-group .btn.sm.ghost:hover{ background:var(--surface-3); color:var(--ink); }
+/* ===== Download options dialog ===== */
+.tabs-nav{ display:flex; gap:2px; border-bottom:1px solid var(--line); padding:0 18px; }
+.tabs-nav .tab{ position:relative; background:transparent; box-shadow:none; height:40px; border-radius:0; color:var(--ink-2); font-weight:500; }
+.tabs-nav .tab.active{ background:transparent; color:var(--ink); }
+.tabs-nav .tab.active::after{ content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent); }
+.dl-body{ padding:16px 18px 8px; overflow:auto; }
+.dl-card{ border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
+.dl-card-title{ font-weight:600; font-size:14.5px; margin-bottom:10px; }
+.dl-selects{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:8px; }
+.dl-field{ display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:var(--ink-2); }
+.dl-field select{ height:32px; }
+.dl-toggle{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--line); min-height:40px; font-size:13.5px; }
+.dl-toggle:last-child{ border-bottom:none; }
+.dl-inline{ display:flex; align-items:center; gap:10px; padding:8px 0 2px; font-size:13px; color:var(--ink-2); }
+.dl-inline select{ height:30px; }
+.switch{ appearance:none; width:40px; height:22px; border-radius:99px; background:var(--surface-3); position:relative; cursor:pointer; transition:background .18s; flex:none; }
+.switch::after{ content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:var(--shadow-sm); transition:transform .18s; }
+.switch:checked{ background:var(--accent); }
+.switch:checked::after{ transform:translateX(18px); }
+.switch:disabled{ opacity:.5; cursor:default; }
+.dl-footer{ display:flex; align-items:center; gap:12px; padding:14px 18px 18px; border-top:1px solid var(--line); flex-wrap:wrap; }
+.dl-preview{ flex:1; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.dl-footer-actions{ display:flex; gap:8px; }
+.tag{ display:inline-flex; align-items:center; height:22px; padding:0 9px; border-radius:6px; font-size:11.5px; gap:4px; white-space:nowrap; }
+.tag.video{ background:rgba(76,111,255,.14); color:#4c6fff; }
+.tag.audio{ background:rgba(23,164,91,.14); color:#17a45b; }
+.tag.danmaku{ background:rgba(194,57,179,.14); color:#b83aa8; }
+.tag.subtitle{ background:rgba(217,130,11,.14); color:#d9820b; }
+.tag.cover{ background:rgba(32,161,216,.14); color:#20a1d8; }
+.tag.chapter{ background:rgba(132,94,247,.14); color:#845ef7; }
+.tag.metadata{ background:rgba(224,68,68,.14); color:#e04444; }
+.tag.none{ background:var(--surface-3); color:var(--muted); }
+@keyframes modalIn{ from{opacity:0; transform:scale(.97) translateY(8px);} to{opacity:1; transform:none;} }
+html[data-theme=dark] .tab.active::after{ background:var(--accent); }

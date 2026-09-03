@@ -23,6 +23,7 @@ interface TasksState {
   loading: boolean;
   error?: string;
   setTab: (t: TaskTab) => void;
+  setTasks: (t: TaskSummary[]) => void;
   refresh: () => Promise<void>;
   upsert: (t: TaskSummary) => void;
   remove: (id: string) => void;
@@ -34,6 +35,7 @@ export const useTasksStore = create<TasksState>((set) => ({
   loading: false,
   error: undefined,
   setTab: (t) => set({ activeTab: t }),
+  setTasks: (tasks) => set({ tasks }),
   refresh: async () => {
     set({ loading: true, error: undefined });
     try {

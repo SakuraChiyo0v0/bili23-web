@@ -1,5 +1,6 @@
 import type {
   DownloadOptions,
+  AppConfig,
   MediaOptionSummary,
   ParseResult,
   TaskSummary,
@@ -76,7 +77,7 @@ export function subscribeTaskEvents(id: string, onTask: (task: TaskSummary) => v
 }
 
 /** SSE 全部任务聚合：轮询 + 事件订阅（P2 下载页用，P1 暂不用） */
-export function getConfig<T = any>(): Promise<{ config: T }> {
+export function getConfig(): Promise<{ config: AppConfig }> {
   return request("/config");
 }
 
@@ -95,4 +96,7 @@ export function listFiles(): Promise<{ files: Array<{ name: string; path: string
 /** 产物文件下载地址（用于"打开文件"） */
 export function fileRawUrl(relPath: string): string {
   return `${BASE}/files/raw?path=${encodeURIComponent(relPath)}`;
+}
+export function updateConfig(patch: Partial<AppConfig>): Promise<{ config: AppConfig }> {
+  return request("/config", { method: "PUT", body: JSON.stringify({ config: patch }) });
 }

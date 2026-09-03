@@ -1,13 +1,13 @@
 import { useCallback } from "react";
-import { parseUrl, createTasks } from "../services/client";
+import { parseUrl } from "../services/client";
+import { useDownloadOptions } from "../store/useDownloadOptions";
+import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
 import { useParseSession } from "../store/useParseSession";
-import { useTasksStore } from "../store/useParseSession";
 import { useToast } from "../lib/toast";
 import { ParseTree } from "../components/ParseTree";
 
 export function ParsePage() {
   const session = useParseSession();
-  const tasksStore = useTasksStore();
   const { toast } = useToast();
 
   const doParse = useCallback(async () => {
@@ -28,21 +28,13 @@ export function ParsePage() {
     }
   }, [session, toast]);
 
-  const doDownload = useCallback(async () => {
+  const { openDialog } = useDownloadOptions();
+  const doDownload = useCallback(() => {
     const leaves = session.selectedLeaves();
-    if (!leaves.length) {
-      toast("请先勾选要下载的条目", "warn");
-      return;
-    }
-    try {
-      const { tasks, duplicates } = await createTasks(leaves.map((l) => l.id));
-      tasksStore.setTasks(tasks);
-      if (duplicates.length) toast(`已跳过 ${duplicates.length} 个重复项`, "warn");
-      toast(`已创建 ${tasks.length} 个下载任务`, "ok");
-    } catch (e) {
-      toast("创建任务失败：" + (e instanceof Error ? e.message : String(e)), "err");
-    }
-  }, [session, tasksStore, toast]);
+    if (!leaves.length) { toast("请先勾选要下载的条目", "warn"); return; }
+    openDialog(leaves);
+  }, [session, openDialog, toast]);
+
 
   const leaves = session.selectedLeaves();
 
@@ -101,6 +93,7 @@ export function ParsePage() {
           </button>
         </div>
       )}
+      <DownloadOptionsDialog />
     </section>
   );
 }
