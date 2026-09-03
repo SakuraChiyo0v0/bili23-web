@@ -61,12 +61,13 @@ export function LoginDialog({ onClose, onLogin, onToast }: LoginDialogProps) {
           window.setTimeout(onClose, 600);
           return;
         }
-        if (res.status === 86090) {
+        if (res.status === 86038) {
           cleanup();
           setQrStatus("expired");
           return;
         }
-        if (res.status === 86102) {
+        if (res.status === 86090 || res.status === 86102) {
+          // 86090 = 已扫码待确认（B 站主状态）；86102 = 兼容旧接口的已扫码
           setQrStatus("scanned");
         }
         pollTimer.current = window.setTimeout(poll, 2000);

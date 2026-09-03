@@ -280,7 +280,7 @@ export interface QrLoginSession {
   qrUrl: string;
   /** 轮询 key */
   qrcodeKey: string;
-  /** 当前扫码状态码：86101 未扫 / 86102 已扫待确认 / 86090 过期 / 0 成功 */
+  /** 当前扫码状态码：86101 未扫 / 86090 已扫待确认 / 86038 过期 / 0 成功 */
   status: number;
   /** 是否已登录成功（poll 返回） */
   loggedIn?: boolean;

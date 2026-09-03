@@ -42,16 +42,16 @@ describe("QR 扫码登录 /api/auth", () => {
     expect(http.jar.get("SESSDATA")).toBe("abc123");
   });
 
-  it("qrPoll 在未扫码（86101）/ 已扫待确认（86102）/ 过期（86090）返回对应状态且不写 cookie", async () => {
+  it("qrPoll 状态码正确映射：86101 未扫 / 86090 已扫待确认 / 86038 过期 / 0 成功", async () => {
     let code = 86101;
     const fetchImpl = async (): Promise<Response> => {
       return new Response(JSON.stringify({ code: 0, data: { code, message: "" } }), { status: 200 });
     };
     const http = new HttpClient({ fetchImpl: fetchImpl as typeof fetch });
     expect(await qrPoll(http, "key")).toBe(QRCodeStatus.UNSCANNED);
-    code = 86102;
-    expect(await qrPoll(http, "key")).toBe(QRCodeStatus.SCANNED);
     code = 86090;
+    expect(await qrPoll(http, "key")).toBe(QRCodeStatus.CONFIRM_PENDING);
+    code = 86038;
     expect(await qrPoll(http, "key")).toBe(QRCodeStatus.EXPIRED);
     expect(http.jar.get("SESSDATA")).toBeUndefined();
   });

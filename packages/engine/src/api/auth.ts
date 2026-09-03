@@ -5,20 +5,23 @@
  * 由 HttpClient 捕获进 cookie jar；调用方决定是否持久化。
  *
  * 状态码语义参见桌面 util/common/enum.py QRCodeScanStatus：
- *   0      = 扫码成功（本轮视为 SUCCESS）
- *   86090  = 二维码已过期
- *   86101  = 未扫码
- *   86102  = 已扫码待确认
- *   86038  = 已确认（PSD 登录成功前奏，等同成功，按 code===0 处理）
+ *   0      = 扫码成功（SUCCESS）
+ *   86090  = 已扫码待确认（CONFIRM_PENDING，非过期）
+ *   86101  = 未扫码（UNSCANNED）
+ *   86102  = 已扫码待确认（兼容历史）
+ *   86038  = 二维码已过期（EXPIRED）
  *   86007  = 已确认（部分接口返回）
  */
 import type { HttpClient } from "./http.js";
 
 export enum QRCodeStatus {
+  /** 等待扫码 */
   UNSCANNED = 86101,
-  SCANNED = 86102,
-  EXPIRED = 86090,
-  CONFIRMED = 86038,
+  /** 已扫码，等待手机端确认（桌面 WAITING_FOR_CONFIRMATION；86090，不是过期） */
+  CONFIRM_PENDING = 86090,
+  /** 二维码已过期 */
+  EXPIRED = 86038,
+  /** 登录成功 */
   SUCCESS = 0,
 }
 
@@ -74,6 +77,6 @@ export async function qrPoll(http: HttpClient, qrcodeKey: string): Promise<QRCod
     throw new Error(`二维码轮询失败：${body.message || `code ${body.code}`}`);
   }
   const code = body.data?.code;
-  // code===0 表示扫码登录成功（B 站已下发 cookie）；86102/86101/86090 为过程态
+  // code===0 表示扫码登录成功（B 站已下发 cookie）；86101=未扫、86090=已扫待确认、86038=过期
   return (code as QRCodeStatus) ?? QRCodeStatus.UNSCANNED;
 }
