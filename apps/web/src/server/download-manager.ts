@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { mkdir, readdir, rm, rename, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import {
   BiliError,
   DownloadAbortedError,
   HistoryService,
+  SpeedGate,
   HttpClient,
   TaskStore,
   calcHashId,
@@ -75,7 +76,7 @@ import {
   type NumberingTypeId,
 } from "@bili23-web/engine";
 import { ConfigStore, deepMerge } from "./config.js";
-import type { AppConfig } from "./config.js";
+import type { AppConfig, AppConfigPatch } from "./config.js";
 
 /**
  * 服务端下载任务管理器（进程内队列 + SQLite 持久化 + SSE 订阅）。
@@ -89,6 +90,8 @@ export type TaskStatus =
   | "parsing"
   | "downloading"
   | "merging"
+  | "paused"
+  | "interrupted"
   | "completed"
   | "failed"
   | "cancelled";
@@ -118,6 +121,12 @@ export interface TaskSummary {
   createdAt: number;
   updatedAt: number;
   qualityLabel: string;
+  /** 本次运行开始时间（Unix 秒） */
+  startedAt?: number | undefined;
+  /** 下载速率（字节/秒），仅 downloading 阶段有效 */
+  speedBps?: number | undefined;
+  /** 预估剩余秒数，仅 downloading 阶段有效 */
+  etaSec?: number | undefined;
 }
 
 export interface MediaOptionSummary {
@@ -143,6 +152,28 @@ export interface TaskSnapshot {
   status: TaskStatus;
   /** 文件 key → 分片断点快照（断点续传） */
   files: Record<string, ChunkState>;
+}
+
+/** 已完成历史条目 DTO（completed_task 表映射，含重启前完成项） */
+export interface HistoryEntryDto {
+  taskId: string;
+  title: string;
+  /** 完成时间（Unix 秒） */
+  completedAt: number;
+  /** 产物绝对路径 */
+  outputPath?: string | undefined;
+  error?: string | undefined;
+}
+
+/** 正在运行（占用并发槽位）的状态集合 */
+const RUNNING_STATUSES = new Set<TaskStatus>(["parsing", "downloading", "merging"]);
+
+/** 规范化下载根内相对路径并防目录穿越；越界/非法返回 undefined */
+export function resolveDownloadPath(rootDir: string, relPath: string): string | undefined {
+  const abs = resolve(rootDir, relPath);
+  const prefix = rootDir.endsWith(sep) ? rootDir : rootDir + sep;
+  if (abs !== rootDir && !abs.startsWith(prefix)) return undefined;
+  return abs;
 }
 
 type Listener = (summary: TaskSummary) => void;
@@ -188,16 +219,30 @@ class ManagedTask {
   progress = 0;
   downloadedBytes = 0;
   totalBytes = 0;
-  outputPath?: string;
-  error?: string;
+  outputPath?: string | undefined;
+  error?: string | undefined;
   createdAt = Math.floor(Date.now() / 1000);
   updatedAt = this.createdAt;
   duplicate = false;
+  /** 断点快照（file key → 分片状态）；init 恢复/暂停/取消时保留，供续传 */
+  files: Record<string, ChunkState> = {};
+  /** 用户意图：paused=暂停（保留断点），cancelled=取消/删除（清理） */
+  requestedState?: "paused" | "cancelled" | undefined;
+  /** 当前 #run 的 Promise（删除时等待其收尾再清理目录） */
+  runPromise?: Promise<void> | undefined;
+  /** 本次运行开始时间（Unix 秒） */
+  startedAt?: number | undefined;
+  /** 下载速率（字节/秒），仅 downloading 阶段有效 */
+  speedBps = 0;
+  /** 预估剩余秒数，仅 downloading 阶段有效 */
+  etaSec = 0;
   #abort = new AbortController();
   readonly #listeners = new Set<Listener>();
+  /** 任务生命周期日志（环形，上限 200 行） */
+  readonly #log: string[] = [];
 
-  constructor(item: MediaItem, options: DownloadOptions) {
-    this.id = randomUUID();
+  constructor(item: MediaItem, options: DownloadOptions, id?: string) {
+    this.id = id ?? randomUUID();
     this.item = item;
     this.options = options;
   }
@@ -224,6 +269,9 @@ class ManagedTask {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       qualityLabel: videoQualityLabel(this.options.videoQualityId ?? 200),
+      startedAt: this.startedAt,
+      speedBps: this.status === "downloading" ? this.speedBps : undefined,
+      etaSec: this.status === "downloading" ? this.etaSec : undefined,
     };
   }
 
@@ -240,13 +288,44 @@ class ManagedTask {
     if (patch.totalBytes !== undefined) this.totalBytes = patch.totalBytes;
     if (patch.outputPath !== undefined) this.outputPath = patch.outputPath;
     if (patch.error !== undefined) this.error = patch.error;
+    if (patch.speedBps !== undefined) this.speedBps = patch.speedBps;
+    if (patch.etaSec !== undefined) this.etaSec = patch.etaSec;
+    if (patch.startedAt !== undefined) this.startedAt = patch.startedAt;
     this.updatedAt = Math.floor(Date.now() / 1000);
     const summary = this.summary();
     for (const l of [...this.#listeners]) l(summary);
   }
 
-  cancel(): void {
+  /** 记录一行任务日志（环形，超上限丢弃最旧） */
+  pushLog(message: string): void {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    this.#log.push("[" + hh + ":" + mm + ":" + ss + "] " + message);
+    if (this.#log.length > 200) this.#log.splice(0, this.#log.length - 200);
+  }
+
+  logLines(): string[] {
+    return [...this.#log];
+  }
+
+  /** 暂停：置意图后中止（#run 收尾时保留断点与 download_task 行） */
+  pause(): void {
+    this.requestedState = "paused";
     this.#abort.abort();
+  }
+
+  /** 取消：置意图后中止（#run 收尾时按取消清理） */
+  cancel(): void {
+    this.requestedState = "cancelled";
+    this.#abort.abort();
+  }
+
+  /** 重新运行前重置中止状态与意图（resume/retry 用） */
+  resetForRun(): void {
+    this.requestedState = undefined;
+    this.#abort = new AbortController();
   }
 }
 
@@ -262,6 +341,16 @@ export class DownloadManager {
   #items = new Map<string, MediaItem>();
   #configStore: ConfigStore;
   #configReady: Promise<void>;
+  /** 全局限速门（跨任务共享；0=不限速，由 config.download.speedLimitKbps 驱动） */
+  #gate: SpeedGate;
+  /** 并发运行上限（config.download.parallel，默认 2；新任务创建/设置变更时刷新） */
+  #maxParallel = 2;
+  /** 单文件分片并发（config.download.threads，默认 4） */
+  #maxThreads = 4;
+  /** FIFO 等待队列（仅 status=queued 的任务） */
+  #pending: ManagedTask[] = [];
+  /** init 幂等标记 */
+  #initPromise?: Promise<void> | undefined;
 
   constructor(opts: { dataDir: string; downloadDir?: string }) {
     this.#http = new HttpClient();
@@ -275,7 +364,11 @@ export class DownloadManager {
     this.#store = new TaskStore(join(opts.dataDir, "task.db"));
     this.#history = new HistoryService(this.#store);
     this.#configStore = new ConfigStore(join(opts.dataDir, "config.json"));
-    this.#configReady = this.#configStore.load();
+    // 全局限速门初始 0（不限）；配置就绪后按 speedLimitKbps 生效
+    this.#gate = new SpeedGate(0);
+    this.#configReady = this.#configStore.load().then(() => {
+      this.#applyRuntimeConfig(this.#configStore.get());
+    });
   }
 
   get ctx(): ParseContext {
@@ -286,6 +379,14 @@ export class DownloadManager {
     this.#store.close();
   }
 
+  /** 重启恢复：读 download_task 遗留任务标为 interrupted（保留 .part 与断点，可手动继续）。幂等。 */
+  async init(): Promise<void> {
+    if (!this.#initPromise) {
+      this.#initPromise = this.#rehydrate();
+    }
+    return this.#initPromise;
+  }
+
   // ---------- 全局设置（附加内容默认值 / 命名规则 / 编号）----------
 
   async getConfig(): Promise<AppConfig> {
@@ -293,9 +394,19 @@ export class DownloadManager {
     return this.#configStore.get();
   }
 
-  async updateConfig(patch: Partial<AppConfig>): Promise<AppConfig> {
+  async updateConfig(patch: AppConfigPatch): Promise<AppConfig> {
     await this.#configReady;
-    return this.#configStore.update(patch);
+    const prev = this.#configStore.get();
+    const next = await this.#configStore.update(patch);
+    // 全局限速即时生效：speedLimitKbps 变化时更新共享门
+    if (next.download.speedLimitKbps !== prev.download.speedLimitKbps) {
+      this.#gate.setBps(next.download.speedLimitKbps * 1024);
+    }
+    this.#maxParallel = next.download.parallel;
+    this.#maxThreads = next.download.threads;
+    // 并行上限变化后立即按新值推进队列（调大时 queued 任务马上补位，调小则保持现状）
+    this.#scheduleNext();
+    return next;
   }
 
   // ---------- 解析会话 ----------
@@ -386,7 +497,7 @@ export class DownloadManager {
     const duplicates: Array<{ itemId: string; title: string }> = [];
     for (const itemId of itemIds) {
       const item = this.#items.get(itemId);
-      if (!item) throw new BiliError("INVALID_URL", `条目不存在：${itemId}`);
+      if (!item) throw new BiliError("INVALID_URL", "条目不存在：" + itemId);
       const hash = this.#hashOf(item);
       if (!force && this.#store.checkDuplicate(hash)) {
         duplicates.push({ itemId, title: item.title });
@@ -400,6 +511,8 @@ export class DownloadManager {
 
     const created: ManagedTask[] = [];
     const cfg = await this.#configReady.then(() => this.#configStore.get());
+    // 新任务创建时刷新运行时并发/限速（决策 2：调度器上限实时更新）
+    this.#applyRuntimeConfig(cfg);
     const numberingType = cfg.fileNaming.numberingType;
     // USE_PARSE_LIST：序号 = 本次勾选条目在批量创建时的顺序（1 起），见 P3 计划差异记录
     const allocator = new NumberingAllocator(numberingType as NumberingTypeId, cfg.fileNaming.startingNumber);
@@ -419,24 +532,164 @@ export class DownloadManager {
       const task = new ManagedTask(item, resolved);
       task.duplicate = duplicates.some((d) => d.itemId === item.id);
       this.#tasks.set(task.id, task);
-      const snapshot: TaskSnapshot = { item, options: resolved, status: task.status, files: {} };
-      this.#store.upsertActive({
-        taskId: task.id,
-        hashId: hash,
-        title: item.title,
-        data: snapshot,
-      });
+      // 进入等待队列：先持久化 queued，再由调度器按并发上限启动
+      this.#persist(task, { status: "queued" });
+      task.pushLog("已加入队列，等待调度");
       created.push(task);
-      void this.#run(task).catch(() => undefined);
+      this.#pending.push(task);
     }
+    this.#scheduleNext();
     return { tasks: created.map((t) => t.summary()), duplicates };
   }
 
-  /** 取消（中止下载/合并） */
+  /** 取消（中止下载/合并；queued 任务直接从队列移除） */
   cancelTask(id: string): void {
     const task = this.#tasks.get(id);
     if (!task) return;
+    if (task.status === "queued") {
+      this.#removePending(task);
+      task.update({ status: "cancelled" });
+      this.#store.removeActive(id);
+      task.pushLog("已取消");
+      return;
+    }
     task.cancel();
+  }
+
+  /** 暂停：仅 queued/parsing/downloading/merging 可暂停；任务不存在或状态非法返回 undefined */
+  pauseTask(id: string): TaskSummary | undefined {
+    const task = this.#tasks.get(id);
+    if (!task) return undefined;
+    if (task.status === "queued") {
+      this.#removePending(task);
+      task.pushLog("已暂停（等待中）");
+      task.update({ status: "paused" });
+      this.#persist(task, { status: "paused" });
+      return task.summary();
+    }
+    if (!RUNNING_STATUSES.has(task.status)) return undefined;
+    task.pushLog("收到暂停请求，正在中止…");
+    task.pause(); // #run 收尾时按 paused 保留断点与临时文件
+    return task.summary();
+  }
+
+  /** 继续：paused/interrupted/failed/cancelled → 复用断点续传 */
+  resumeTask(id: string): TaskSummary | undefined {
+    const task = this.#tasks.get(id);
+    if (!task) return undefined;
+    if (
+      task.status !== "paused" &&
+      task.status !== "interrupted" &&
+      task.status !== "failed" &&
+      task.status !== "cancelled"
+    ) {
+      return undefined;
+    }
+    task.resetForRun();
+    task.error = undefined;
+    task.pushLog("继续下载（断点续传）");
+    task.update({ status: "queued" });
+    this.#pending.push(task);
+    this.#scheduleNext();
+    return task.summary();
+  }
+
+  /** 重试：failed/cancelled → 清空断点、重建 download_task 行后全新下载（不续传） */
+  retryTask(id: string): TaskSummary | undefined {
+    const task = this.#tasks.get(id);
+    if (!task) return undefined;
+    if (task.status !== "failed" && task.status !== "cancelled") return undefined;
+    task.resetForRun();
+    task.files = {};
+    task.error = undefined;
+    task.outputPath = undefined;
+    task.startedAt = undefined;
+    task.progress = 0;
+    task.downloadedBytes = 0;
+    task.totalBytes = 0;
+    this.#store.removeActive(id);
+    task.update({ status: "queued" });
+    this.#persist(task, { status: "queued", files: {} });
+    task.pushLog("重试：清空断点，重新下载");
+    this.#pending.push(task);
+    this.#scheduleNext();
+    return task.summary();
+  }
+
+  /**
+   * 删除任务：移除内存任务 + download_task/completed_task 行 + 清理 .tmp/<id> 目录。
+   * 运行中的任务先中止并等 #run 收尾（句柄关闭）再删目录；不存在返回 false。
+   */
+  async deleteTask(id: string): Promise<boolean> {
+    const task = this.#tasks.get(id);
+    const hasActive = this.#store.getActive(id) !== null;
+    const hasCompleted = this.#store.getCompleted(id) !== null;
+    if (!task && !hasActive && !hasCompleted) return false;
+
+    if (task) {
+      if (task.status === "queued") {
+        this.#removePending(task);
+      } else if (RUNNING_STATUSES.has(task.status)) {
+        // 中止运行中的下载/合并，等待收尾后再清理目录（避免文件句柄未关）
+        task.cancel();
+        await task.runPromise?.catch(() => undefined);
+      }
+      task.pushLog("任务已删除");
+      this.#tasks.delete(id);
+    }
+    this.#store.removeActive(id);
+    if (hasCompleted) this.#store.removeCompleted(id);
+    const taskDir = join(this.#tmpDir, id);
+    await rm(taskDir, { recursive: true, force: true }).catch(() => undefined);
+    return true;
+  }
+
+  // ---------- 历史 / 日志 / 产物下载 ----------
+
+  /** 已完成历史（completed_task 表，含重启前完成项；时间倒序） */
+  listHistory(): HistoryEntryDto[] {
+    return this.#store.listCompleted().map((rec) => {
+      const data = (rec.data ?? {}) as Partial<TaskSnapshot> & {
+        outputPath?: string | undefined;
+        error?: string | undefined;
+      };
+      const entry: HistoryEntryDto = {
+        taskId: rec.taskId,
+        title: rec.title,
+        completedAt: rec.time,
+      };
+      if (typeof data.outputPath === "string") entry.outputPath = data.outputPath;
+      if (typeof data.error === "string") entry.error = data.error;
+      return entry;
+    });
+  }
+
+  /** 删除历史记录：移除 completed_task 行与内存已完成任务（不动产物文件） */
+  deleteHistory(taskId: string): boolean {
+    const task = this.#tasks.get(taskId);
+    const rec = this.#store.getCompleted(taskId);
+    if (!rec && !(task && task.status === "completed")) return false;
+    if (rec) this.#store.removeCompleted(taskId);
+    if (task) {
+      task.pushLog("历史记录已删除");
+      this.#tasks.delete(taskId);
+    }
+    return true;
+  }
+
+  /** 任务生命周期日志（内存环形，≤200 行）；不存在返回 undefined */
+  taskLog(id: string): string[] | undefined {
+    return this.#tasks.get(id)?.logLines();
+  }
+
+  /** 下载根目录（产物/临时文件均位于其下） */
+  downloadRootDir(): string {
+    return this.#rootDir;
+  }
+
+  /** 规范化下载根内相对路径并防目录穿越；越界/非法返回 undefined */
+  resolveDownloadFile(relPath: string): string | undefined {
+    return resolveDownloadPath(this.#rootDir, relPath);
   }
 
   /** 产物目录浏览（不含 .tmp 临时目录） */
@@ -444,10 +697,90 @@ export class DownloadManager {
     return this.#walk(this.#rootDir);
   }
 
+  // ---------- 队列调度 / 重启恢复 ----------
+
+  /** 调度：活动数 < 上限时按 FIFO 启动 queued 任务；终态（含 fail/cancel/pause）后都会再次调用 */
+  #scheduleNext(): void {
+    while (this.#activeCount() < this.#maxParallel) {
+      const task = this.#pending.shift();
+      if (!task) return;
+      if (task.status !== "queued") continue; // 已取消/删除的残留，跳过
+      task.runPromise = this.#run(task);
+      void task.runPromise.catch(() => undefined);
+    }
+  }
+
+  /** 活动任务数（parsing/downloading/merging 占用并发槽位） */
+  #activeCount(): number {
+    let n = 0;
+    for (const t of this.#tasks.values()) {
+      if (RUNNING_STATUSES.has(t.status)) n += 1;
+    }
+    return n;
+  }
+
+  /** 从等待队列移除（暂停/取消/删除 queued 任务时） */
+  #removePending(task: ManagedTask): void {
+    const idx = this.#pending.indexOf(task);
+    if (idx >= 0) this.#pending.splice(idx, 1);
+  }
+
+  /** 用最新配置刷新运行时并发/限速（创建任务与配置变更时调用） */
+  #applyRuntimeConfig(cfg: AppConfig): void {
+    this.#gate.setBps(cfg.download.speedLimitKbps * 1024);
+    this.#maxParallel = cfg.download.parallel;
+    this.#maxThreads = cfg.download.threads;
+  }
+
+  /** 重启恢复实现（见 init）：download_task 遗留任务一律置 interrupted，保留断点可手动继续 */
+  async #rehydrate(): Promise<void> {
+    await this.#configReady;
+    const rows = this.#store.listActive();
+    for (const rec of rows) {
+      const data = rec.data as Partial<TaskSnapshot> | null;
+      if (!data || typeof data !== "object") continue;
+      if (!data.item || !data.options) continue;
+      const task = new ManagedTask(data.item, data.options, rec.taskId);
+      // 写回断点快照（续传用），保留 .tmp/.part；状态一律 interrupted
+      task.files = data.files && typeof data.files === "object" ? data.files : {};
+      task.status = "interrupted";
+      task.error = "服务重启，任务中断，可点击继续";
+      task.createdAt = rec.time;
+      task.updatedAt = Math.floor(Date.now() / 1000);
+      task.pushLog("服务重启，任务中断（保留断点，可点击继续）");
+      this.#tasks.set(task.id, task);
+      if (!this.#items.has(task.item.id)) this.#items.set(task.item.id, task.item);
+      this.#persist(task, { status: "interrupted", files: task.files });
+    }
+  }
+
   // ---------- 内部执行 ----------
 
   async #run(task: ManagedTask): Promise<void> {
+    // 速率估算：滑动窗口（最近 ~5s 样本）计算 bytes/s 与剩余秒数
+    let speedSamples: Array<{ t: number; bytes: number }> = [];
+    const updateSpeed = (bytes: number, total: number): void => {
+      const now = Date.now();
+      speedSamples.push({ t: now, bytes });
+      while (speedSamples.length > 1 && now - (speedSamples[0]?.t ?? now) > 5000) {
+        speedSamples.shift();
+      }
+      let bps = 0;
+      if (speedSamples.length >= 2) {
+        const first = speedSamples[0];
+        const last = speedSamples[speedSamples.length - 1];
+        if (first && last) {
+          const dtMs = last.t - first.t;
+          const delta = last.bytes - first.bytes;
+          if (dtMs >= 200 && delta > 0) bps = Math.round((delta * 1000) / dtMs);
+        }
+      }
+      task.speedBps = bps;
+      task.etaSec = bps > 0 ? Math.max(0, Math.round((total - bytes) / bps)) : 0;
+    };
     try {
+      if (task.startedAt === undefined) task.startedAt = Math.floor(Date.now() / 1000);
+      task.pushLog("开始解析视频信息");
       task.update({ status: "parsing" });
       this.#persist(task, { status: "parsing" });
       const info = await fetchPlayMediaInfo(this.ctx, task.item);
@@ -471,30 +804,34 @@ export class DownloadManager {
       task.update({ totalBytes });
       this.#persist(task, { status: "downloading" });
 
-      // 加载断点快照（服务重启/中断后 retry 续传）
+      // 断点续传：优先用内存断点（init 恢复/暂停/取消时保留），其次读取库中快照
       const stored = this.#storedSnapshot(task.id);
-      const resumeMap = stored?.files ?? {};
+      const resumeMap = Object.keys(task.files).length > 0 ? task.files : (stored?.files ?? {});
       let doneBytes = 0;
 
       for (const pf of probed) {
         if (task.aborted) throw new DownloadAbortedError();
         const destPath = join(taskDir, pf.fileName);
         const snapshot = resumeMap[pf.key];
+        task.pushLog("下载文件 " + pf.fileName);
         await downloadFile({
           http: this.#http,
           url: pf.url,
           destPath,
           fileSize: pf.fileSize,
           referer: "https://www.bilibili.com/",
-          concurrency: 4,
+          concurrency: this.#maxThreads,
           signal: task.signal,
+          gate: this.#gate,
           ...(snapshot ? { state: snapshot } : {}),
           onProgress: (p) => {
             const others = doneBytes;
             const partial = Math.min(p.downloadedBytes, pf.fileSize);
+            const downloaded = others + partial;
+            updateSpeed(downloaded, totalBytes);
             task.update({
-              downloadedBytes: others + partial,
-              progress: totalBytes > 0 ? ((others + partial) / totalBytes) * 100 : 0,
+              downloadedBytes: downloaded,
+              progress: totalBytes > 0 ? (downloaded / totalBytes) * 100 : 0,
             });
           },
           onSnapshot: (s) => {
@@ -514,13 +851,14 @@ export class DownloadManager {
       // audio(m4a)/lesson(mp4) 属单文件直链：下载件即成品，仅改名不再过 ffmpeg；
       // 输出扩展名以接口语义为准，忽略用户容器选择（桌面同样保持 m4a/mp4 直出）
       const outExt = info.singleFileExt ?? container;
-      const tempOut = join(taskDir, `output_${task.id}.${outExt}`);
+      const tempOut = join(taskDir, "output_" + task.id + "." + outExt);
       const labels = this.#qualityLabels(resolved);
       const target = this.#outputTarget(task, labels);
       const extrasOpt = task.options.extras ?? DEFAULT_EXTRAS_OPTIONS;
       const gathered = await this.#gatherExtraInputs(task, taskDir, info, extrasOpt, container);
 
       // 合并/转封装（附加内容随 ffmpeg 一并内嵌）
+      task.pushLog("开始合并/转封装（" + outExt + "）");
       task.update({ status: "merging" });
       this.#persist(task, { status: "merging" });
       if (info.singleFileExt) {
@@ -536,6 +874,9 @@ export class DownloadManager {
       await probeMedia(finalPath); // 校验产物可读（ffprobe）
       await this.#writeStandaloneExtras(task, finalPath, extrasOpt, gathered);
       task.update({ status: "completed", progress: 100, outputPath: finalPath });
+      task.speedBps = 0;
+      task.etaSec = 0;
+      task.pushLog("下载完成：" + finalPath);
       await rm(taskDir, { recursive: true, force: true });
 
       const completedData = {
@@ -552,15 +893,29 @@ export class DownloadManager {
         title: task.item.title,
         data: completedData,
       });
+      this.#scheduleNext();
     } catch (err) {
+      // 用户中止（暂停/取消/删除）：按意图区分；暂停保留断点与 download_task 行
       if (task.aborted || err instanceof DownloadAbortedError) {
-        task.update({ status: "cancelled" });
-        this.#store.removeActive(task.id);
+        const lastSnap = this.#storedSnapshot(task.id);
+        if (lastSnap && lastSnap.files) task.files = lastSnap.files;
+        if (task.requestedState === "paused") {
+          task.update({ status: "paused" });
+          this.#persist(task, { status: "paused", files: task.files });
+          task.pushLog("已暂停（断点已保留，可点击继续）");
+        } else {
+          task.update({ status: "cancelled", error: undefined });
+          this.#store.removeActive(task.id);
+          task.pushLog("已取消");
+        }
+        this.#scheduleNext();
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
       task.update({ status: "failed", error: message });
       this.#persist(task, { status: "failed" });
+      task.pushLog("失败：" + message);
+      this.#scheduleNext();
     }
   }
 

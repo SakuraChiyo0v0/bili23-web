@@ -1,0 +1,97 @@
+/* Bili23 Web 主题变量：由 theme.tsx 在 <html data-theme="..."> 上切换。 */
+
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --input-bg: #ffffff;
+  --border: #e3e7ec;
+  --border-strong: #c9d1d9;
+  --text: #1c2530;
+  --text-2: #57606a;
+  --text-3: #8b949e;
+  --accent: #2f6fed;
+  --accent-soft: #e8f0fe;
+  --on-accent: #ffffff;
+  --danger: #c0392b;
+  --success: #1e9e54;
+  --neutral: #6e7781;
+  --track: #e8edf2;
+  /* 状态徽标底色（配合白字，深浅两套各取可读值） */
+  --badge-ok: #1e9e54;
+  --badge-danger: #c0392b;
+  --badge-active: #2f6fed;
+  --badge-neutral: #6e7781;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12151c;
+  --surface: #1a1f29;
+  --surface-2: #212736;
+  --input-bg: #14181f;
+  --border: #2b3240;
+  --border-strong: #3d4657;
+  --text: #e7eaee;
+  --text-2: #a8b1bd;
+  --text-3: #7d8695;
+  --accent: #5b9bff;
+  --accent-soft: #22334d;
+  --on-accent: #0b1220;
+  --danger: #e5534b;
+  --success: #3fb971;
+  --neutral: #8a93a1;
+  --track: #2a3140;
+  --badge-ok: #279a5b;
+  --badge-danger: #c94a42;
+  --badge-active: #3f7fe0;
+  --badge-neutral: #5c6572;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* 原生控件统一配色（浅深主题均可读；checkbox/radio 交给 accent-color） */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  color: var(--text);
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-3);
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* 复选框/单选框跟随主色 */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}

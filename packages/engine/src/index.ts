@@ -63,6 +63,7 @@ export {
   DEFAULT_MAX_CHUNK_RETRIES,
   DEFAULT_CONCURRENCY,
 } from "./download/downloader.js";
+export { SpeedGate } from "./download/rate.js";
 export type {
   ChunkState,
   DownloadFileOptions,

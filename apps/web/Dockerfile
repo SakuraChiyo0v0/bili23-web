@@ -27,6 +27,8 @@ RUN rm -rf /repo/packages/*/src /repo/packages/*/tests /repo/apps/web/src /repo/
 FROM ${NODE_BASE} AS runtime
 WORKDIR /repo
 ENV NODE_ENV=production
+# 数据根目录固定到 /data（config.json / task.db / downloads），由 compose 挂载宿主 ./data 落盘
+ENV BILI23_DATA_DIR=/data
 RUN apk add --no-cache ffmpeg ca-certificates
 COPY --from=prod /repo /repo
 WORKDIR /repo/apps/web

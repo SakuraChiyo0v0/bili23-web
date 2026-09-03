@@ -49,6 +49,8 @@ export function createApp(opts: CreateAppOptions = {}) {
 const app = createApp();
 
 if (process.env.NODE_ENV !== "test") {
+  // 监听前先恢复遗留任务（download_task → interrupted，幂等），保证重启后任务可继续
+  await getDefaultManager().init();
   const port = Number(process.env.PORT ?? 8787);
   const { serve } = await import("@hono/node-server");
   serve({ fetch: app.fetch, port }, (info) => {

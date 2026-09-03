@@ -157,6 +157,11 @@ export class TaskStore {
     return rows.map(mapRow);
   }
 
+  /** 删除某条已完成历史记录（deleteHistory/deleteTask 用） */
+  removeCompleted(taskId: string): void {
+    this.#db.prepare("DELETE FROM completed_task WHERE task_id = ?").run(taskId);
+  }
+
   /** 统计任务数 */
   countActive(): number {
     const row = this.#db.prepare("SELECT COUNT(*) AS n FROM download_task").get() as { n: number };

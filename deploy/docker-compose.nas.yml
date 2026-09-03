@@ -1,0 +1,42 @@
+# bili23-web NAS 部署模板（正式模板：以本目录 deploy/ 为准，旧 apps/web/docker-compose.nas.yml 已删除）
+#
+# 部署目录约定：/volume1/docker/bili23-web/
+#   deploy/   本文件 + .env.example + README.md
+#   data/     容器 ./data 挂载目标（config.json / task.db / downloads）
+#
+# .env 用法：把 .env.example 复制为工程目录下的 .env 后按需修改（如 TZ/PORT/DOWNLOAD_DIR）。
+# compose 用 ${VAR:-默认值} 语法读取；不建 .env 时全部使用下方默认值，可直接部署。
+#
+# 常用命令（工程目录 /volume1/docker/bili23-web 下执行）：
+#   sudo docker compose --project-directory /volume1/docker/bili23-web \
+#     -f deploy/docker-compose.nas.yml up -d
+#   sudo docker compose --project-directory /volume1/docker/bili23-web \
+#     -f deploy/docker-compose.nas.yml pull && ... up -d   # 更新镜像
+services:
+  bili23-web:
+    image: ghcr.io/sakurachiyo0v0/bili23-web:latest
+    container_name: bili23-web
+    restart: unless-stopped
+    ports:
+      # 宿主 8788 → 容器 8787（与同机其它服务的 8787 错开）
+      - "8788:8787"
+    environment:
+      - TZ=${TZ:-Asia/Hong_Kong}
+      - PORT=${PORT:-8787}
+      # 下载产物目录（容器内），随 ./data 落盘到宿主
+      - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/data/downloads}
+      # 数据根目录（config.json / task.db / downloads），须与 volumes 的 /data 对应，通常不要改
+      - BILI23_DATA_DIR=${BILI23_DATA_DIR:-/data}
+    volumes:
+      # 容器 /data ↔ 宿主 ./data（工程目录下，即 /volume1/docker/bili23-web/data）
+      - ./data:/data
+    labels:
+      # watchtower 检测到 ghcr latest digest 变化后自动重建（需 watchtower 已运行）
+      - com.centurylinklabs.watchtower.enable=true
+    healthcheck:
+      # alpine 自带 busybox wget；/api/health 返回 200 即健康
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8787/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

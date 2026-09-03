@@ -11,6 +11,7 @@ import type {
   SubtitleFormatDTO,
 } from "./types.js";
 import { formatDuration } from "./types.js";
+import { useI18n } from "./i18n.js";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -20,7 +21,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   });
   const json = (await res.json()) as T & { error?: { message?: string } };
   if (!res.ok || (json as { error?: unknown }).error) {
-    throw new Error(json.error?.message ?? `请求失败（HTTP ${res.status}）`);
+    throw new Error(json.error?.message ?? `HTTP ${res.status}`);
   }
   return json;
 }
@@ -33,6 +34,7 @@ interface Props {
 const BATCH_BUSY = "__batch__";
 
 export function ParseView({ onCreated, onGoDownload }: Props) {
+  const { t } = useI18n();
   const [urlText, setUrlText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
@@ -155,7 +157,7 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
             duplicates += 1;
             continue;
           }
-          throw new Error(json.error?.message ?? `请求失败（HTTP ${res.status}）`);
+          throw new Error(json.error?.message ?? `HTTP ${res.status}`);
         }
         created += 1;
       }
@@ -163,14 +165,14 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
         onCreated();
         onGoDownload();
       } else if (duplicates > 0) {
-        setError("所选内容均已下载过（重复项已跳过）");
+        setError(t("parse.dupSkipped"));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
-  }, [visibleSelected, rowSel, busy, onCreated, onGoDownload]);
+  }, [visibleSelected, rowSel, busy, onCreated, onGoDownload, t]);
 
   const toggle = useCallback((id: string) => {
     setChecked((prev) => {
@@ -204,17 +206,23 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
 
   return (
     <div>
-      <h2>解析</h2>
+      <h2 style={{ margin: 0 }}>{t("parse.title")}</h2>
       <textarea
         rows={3}
-        style={{ width: "100%", boxSizing: "border-box", fontFamily: "inherit", padding: 8 }}
-        placeholder={"粘贴 B 站链接，可一次多条（每行一条）：\nhttps://www.bilibili.com/video/BVxxxx"}
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          fontFamily: "inherit",
+          padding: 8,
+          marginTop: 10,
+        }}
+        placeholder={t("parse.urlPlaceholder")}
         value={urlText}
         onChange={(e) => setUrlText(e.target.value)}
       />
       <div style={{ margin: "8px 0" }}>
         <button disabled={parsing || urlText.trim().length === 0} onClick={() => void parse()}>
-          {parsing ? "解析中…" : "解析"}
+          {parsing ? t("parse.parsingBtn") : t("parse.button")}
         </button>{" "}
         <button
           disabled={items.length === 0}
@@ -226,60 +234,79 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
             setKeyword("");
           }}
         >
-          清空
+          {t("parse.clear")}
         </button>
       </div>
-      {error && <p style={{ color: "#c0392b" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
 
       {items.length > 0 && (
         <div>
           <input
             type="search"
-            placeholder="关键词筛选（标题 / 分组 / UP 主）"
+            placeholder={t("parse.filterPlaceholder")}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", margin: "4px 0" }}
           />
-          <p style={{ margin: "6px 0" }}>
-            匹配 {visibleItems.length} / 共 {items.length}，已选 {visibleSelected.length} 项
-            {hiddenChecked > 0 ? `（另有 ${hiddenChecked} 项被筛选隐藏，不计入批量下载）` : ""}
+          <p style={{ margin: "6px 0", color: "var(--text-2)" }}>
+            {t("parse.matchLine", {
+              visible: visibleItems.length,
+              total: items.length,
+              selected: visibleSelected.length,
+            })}
+            {hiddenChecked > 0 ? ` ${t("parse.hiddenNote", { count: hiddenChecked })}` : ""}
           </p>
           <div style={{ marginBottom: 10 }}>
             <button disabled={visibleItems.length === 0} onClick={() => setAllVisible(true)}>
-              全选
+              {t("parse.selectAll")}
             </button>{" "}
             <button disabled={visibleItems.length === 0} onClick={() => setAllVisible(false)}>
-              全不选
+              {t("parse.selectNone")}
             </button>{" "}
             <button
               disabled={busy !== null || visibleSelected.length === 0}
               onClick={() => void startBatch()}
             >
-              {busy === BATCH_BUSY
-                ? "创建中…"
-                : `批量下载所选 ${visibleSelected.length} 项`}
+              {busy === BATCH_BUSY ? t("common.creating") : t("parse.batch", { count: visibleSelected.length })}
             </button>
           </div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {visibleItems.map((item) => (
-              <li key={item.id} style={{ border: "1px solid #ddd", borderRadius: 8, marginBottom: 8, padding: 8 }}>
+              <li
+                key={item.id}
+                style={{
+                  border: "1px solid var(--border-strong)",
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  padding: 8,
+                  background: "var(--surface)",
+                }}
+              >
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <input type="checkbox" checked={checked.has(item.id)} onChange={() => toggle(item.id)} />
                   {item.cover ? (
-                    <img src={item.cover} alt="" width={96} height={60} style={{ objectFit: "cover", borderRadius: 4 }} />
+                    <img
+                      src={item.cover}
+                      alt=""
+                      width={96}
+                      height={60}
+                      style={{ objectFit: "cover", borderRadius: 4 }}
+                    />
                   ) : (
-                    <div style={{ width: 96, height: 60, background: "#eee", borderRadius: 4 }} />
+                    <div style={{ width: 96, height: 60, background: "var(--surface-2)", borderRadius: 4 }} />
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600 }}>{item.title}</div>
-                    <div style={{ color: "#666", fontSize: 13 }}>
+                    <div style={{ color: "var(--text-2)", fontSize: 13 }}>
                       {item.groupTitle} · {formatDuration(item.duration)}
                       {item.bvid ? ` · BV${item.bvid}` : ""}
-                      {item.interactive ? <span style={{ color: "#7d3c98" }}> · 互动</span> : null}
-                      {item.badge ? <span style={{ color: "#c0392b" }}> · {item.badge}</span> : null}
+                      {item.interactive ? (
+                        <span style={{ color: "var(--accent)" }}> · {t("parse.interactiveTag")}</span>
+                      ) : null}
+                      {item.badge ? <span style={{ color: "var(--danger)" }}> · {item.badge}</span> : null}
                     </div>
                   </div>
-                  <button onClick={() => void loadOptions(item)}>选项 / 下载</button>
+                  <button onClick={() => void loadOptions(item)}>{t("parse.optionsBtn")}</button>
                 </div>
                 {expanded === item.id && (
                   <OptionPanel
@@ -310,6 +337,7 @@ function OptionPanel(props: {
   onDownload: () => void;
 }) {
   const { item, summary, value, busy, onChange, onDownload } = props;
+  const { t } = useI18n();
   const quality = value.videoQualityId ?? 200;
   const codecs =
     summary?.qualities.find((q) => q.id === quality)?.codecs ??
@@ -320,19 +348,28 @@ function OptionPanel(props: {
     onChange({ extras: { ...(value.extras ?? {}), ...patch } });
   };
   return (
-    <div style={{ marginTop: 8, padding: 10, background: "#f6f8fa", borderRadius: 6 }}>
+    <div
+      style={{
+        marginTop: 8,
+        padding: 10,
+        background: "var(--surface-2)",
+        borderRadius: 6,
+        border: "1px solid var(--border)",
+      }}
+    >
       {!summary ? (
-        <p style={{ color: "#888", margin: 0 }}>加载可选画质中…</p>
+        <p style={{ color: "var(--text-3)", margin: 0 }}>{t("parse.loadingOptions")}</p>
       ) : (
         <>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "end" }}>
             <label>
-              画质
+              {t("parse.quality")}
               <select
                 value={quality}
                 onChange={(e) => onChange({ videoQualityId: Number(e.target.value), videoCodecId: 20 })}
+                style={{ marginLeft: 6 }}
               >
-                <option value={200}>自动</option>
+                <option value={200}>{t("parse.auto")}</option>
                 {summary.qualities.map((q) => (
                   <option key={q.id} value={q.id}>
                     {q.label}
@@ -341,12 +378,13 @@ function OptionPanel(props: {
               </select>
             </label>
             <label>
-              编码
+              {t("parse.codec")}
               <select
                 value={value.videoCodecId ?? 20}
                 onChange={(e) => onChange({ videoCodecId: Number(e.target.value) })}
+                style={{ marginLeft: 6 }}
               >
-                <option value={20}>自动</option>
+                <option value={20}>{t("parse.auto")}</option>
                 {codecs.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -356,9 +394,13 @@ function OptionPanel(props: {
             </label>
             {summary.audioQualities.length > 0 && (
               <label>
-                音质
-                <select value={audioId} onChange={(e) => onChange({ audioQualityId: Number(e.target.value) })}>
-                  <option value={0}>自动</option>
+                {t("parse.audioQuality")}
+                <select
+                  value={audioId}
+                  onChange={(e) => onChange({ audioQualityId: Number(e.target.value) })}
+                  style={{ marginLeft: 6 }}
+                >
+                  <option value={0}>{t("parse.auto")}</option>
                   {summary.audioQualities.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.label}
@@ -368,23 +410,22 @@ function OptionPanel(props: {
               </label>
             )}
             <label>
-              容器
+              {t("parse.container")}
               <select
                 value={value.container ?? "mp4"}
                 onChange={(e) => onChange({ container: e.target.value as "mp4" | "mkv" })}
+                style={{ marginLeft: 6 }}
               >
                 <option value="mp4">MP4</option>
                 <option value="mkv">MKV</option>
               </select>
             </label>
             <button disabled={busy} onClick={onDownload}>
-              {busy ? "创建中…" : `下载「${item.title}」`}
+              {busy ? t("common.creating") : t("parse.downloadItem", { title: item.title })}
             </button>
           </div>
-          <div style={{ marginTop: 10, borderTop: "1px solid #e5e5e5", paddingTop: 8 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>
-              附加内容（仅本次下载；不勾选时沿用全局设置）
-            </div>
+          <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>{t("parse.extrasTitle")}</div>
             <ExtrasEditor value={value.extras ?? {}} onChange={patchExtras} />
           </div>
         </>
@@ -419,12 +460,14 @@ const METADATA_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "json", label: "JSON" },
 ];
 
+
 function ExtrasEditor(props: { value: ExtrasOptionsDTO; onChange: (patch: ExtrasOptionsDTO) => void }) {
   const { value, onChange } = props;
+  const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <ExtraRow
-        label="弹幕"
+        label={t("parse.extra.danmaku")}
         enabled={value.danmaku?.enabled}
         format={value.danmaku?.format}
         formats={DANMAKU_FORMAT_OPTIONS}
@@ -432,7 +475,7 @@ function ExtrasEditor(props: { value: ExtrasOptionsDTO; onChange: (patch: Extras
         onFormat={(v) => onChange({ danmaku: { ...value.danmaku, format: v as DanmakuFormatDTO } })}
       />
       <ExtraRow
-        label="字幕"
+        label={t("parse.extra.subtitle")}
         enabled={value.subtitle?.enabled}
         format={value.subtitle?.format}
         formats={SUBTITLE_FORMAT_OPTIONS}
@@ -440,7 +483,7 @@ function ExtrasEditor(props: { value: ExtrasOptionsDTO; onChange: (patch: Extras
         onFormat={(v) => onChange({ subtitle: { ...value.subtitle, format: v as SubtitleFormatDTO } })}
       />
       <ExtraRow
-        label="封面"
+        label={t("parse.extra.cover")}
         enabled={value.cover?.enabled}
         format={value.cover?.format}
         formats={COVER_FORMAT_OPTIONS}
@@ -448,7 +491,7 @@ function ExtrasEditor(props: { value: ExtrasOptionsDTO; onChange: (patch: Extras
         onFormat={(v) => onChange({ cover: { ...value.cover, format: v as CoverFormatDTO } })}
       />
       <ExtraRow
-        label="元数据"
+        label={t("parse.extra.metadata")}
         enabled={value.metadata?.enabled}
         format={value.metadata?.format}
         formats={METADATA_FORMAT_OPTIONS}
@@ -468,6 +511,7 @@ function ExtraRow(props: {
   onFormat: (format: string) => void;
 }) {
   const { label, enabled, format, formats, onEnabled, onFormat } = props;
+  const { t } = useI18n();
   return (
     <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
       <label style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 150 }}>
@@ -475,10 +519,10 @@ function ExtraRow(props: {
         {label}
       </label>
       <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        格式
+        {t("parse.extra.format")}
         <select value={format ?? ""} onChange={(e) => onFormat(e.target.value)}>
           <option value="" disabled>
-            默认
+            {t("parse.extra.default")}
           </option>
           {formats.map((f) => (
             <option key={f.value} value={f.value}>

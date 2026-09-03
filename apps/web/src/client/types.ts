@@ -56,16 +56,21 @@ export interface MediaOptionSummaryDTO {
   audioQualities: CodecOptionDTO[];
 }
 
+/** 任务状态集（P4 扩展：paused / interrupted） */
+export type TaskStatusDTO =
+  | "queued"
+  | "parsing"
+  | "downloading"
+  | "merging"
+  | "paused"
+  | "interrupted"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
 export interface TaskDTO {
   id: string;
-  status:
-    | "queued"
-    | "parsing"
-    | "downloading"
-    | "merging"
-    | "completed"
-    | "failed"
-    | "cancelled";
+  status: TaskStatusDTO;
   title: string;
   groupTitle: string;
   progress: number;
@@ -76,13 +81,30 @@ export interface TaskDTO {
   createdAt: number;
   updatedAt: number;
   qualityLabel: string;
+  /** P4：瞬时下载速率（字节/秒），下载中才可能提供 */
+  speedBps?: number;
+  /** P4：预估剩余秒数 */
+  etaSec?: number;
+  /** P4：任务开始（真正进入下载）的时间戳 */
+  startedAt?: number;
 }
 
 export interface FileEntryDTO {
   name: string;
+  /** 相对下载根目录的路径（正斜杠） */
   path: string;
   size: number;
   mtime: number;
+}
+
+/** 历史记录（来自 completed_task，含服务重启前完成项） */
+export interface HistoryEntryDTO {
+  taskId: string;
+  title: string;
+  completedAt: number;
+  outputPath?: string;
+  size?: number;
+  error?: string;
 }
 
 export interface DownloadOptionsDTO {
@@ -103,21 +125,17 @@ export interface ApiErrorDTO {
   error: { code: string; message: string; duplicates?: Array<{ itemId: string; title: string }> };
 }
 
-export const STATUS_LABEL: Record<TaskDTO["status"], string> = {
-  queued: "排队中",
-  parsing: "解析中",
-  downloading: "下载中",
-  merging: "合并中",
-  completed: "已完成",
-  failed: "失败",
-  cancelled: "已取消",
-};
-
 export function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+/** 速率（字节/秒）→ 可读文本，如 "3.2 MB/s" */
+export function formatSpeed(bps: number): string {
+  if (!bps || bps <= 0) return "";
+  return `${formatBytes(bps)}/s`;
 }
 
 export function formatDuration(seconds: number): string {
@@ -231,7 +249,43 @@ export interface FileNamingConfigDTO {
   startingNumber?: number;
 }
 
+// ==================== P4 配置组（与 server config.ts 扩展对应） ====================
+
+export type LanguageDTO = "zh-CN" | "zh-TW" | "en" | "system";
+export type ThemePrefDTO = "light" | "dark" | "system";
+
+export interface DownloadConfigDTO {
+  /** 下载目录（可选；留空表示默认下载根） */
+  dir?: string;
+  /** 并行任务数（1-16） */
+  parallel: number;
+  /** 每任务分片线程数（1-16） */
+  threads: number;
+  /** 全局限速 KB/s（0 = 不限速） */
+  speedLimitKbps: number;
+  renamePolicy: "auto" | "overwrite";
+  duplicatePolicy: "prompt" | "skip" | "force";
+  defaultContainer: "mp4" | "mkv";
+}
+
+export interface BehaviorConfigDTO {
+  language: LanguageDTO;
+  theme: ThemePrefDTO;
+}
+
+export interface AdvancedConfigDTO {
+  defaultVideoQualityId?: number;
+  defaultAudioQualityId?: number;
+  defaultCodecId?: number;
+  cdnHosts: string[];
+  ffmpegPath?: string;
+  proxy?: string;
+}
+
 export interface AppConfigDTO {
   additional?: ExtrasOptionsDTO;
   fileNaming?: FileNamingConfigDTO;
+  download?: DownloadConfigDTO;
+  behavior?: BehaviorConfigDTO;
+  advanced?: AdvancedConfigDTO;
 }

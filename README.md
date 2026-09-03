@@ -10,8 +10,8 @@
 
 ```
 packages/engine/   全新 TS 下载引擎（解析/取流/下载/合并/附加内容/命名规则/登录态/存储）
-apps/web/          Web 端：Hono 后端(REST+SSE) + React 前端
-deploy/            Dockerfile / docker-compose.nas.yml / .env.example
+apps/web/          Web 端：Hono 后端(REST+SSE) + React 前端（Dockerfile 在此）
+deploy/            NAS compose（docker-compose.nas.yml / .env.example / README）
 .github/workflows/ push → ghcr 自动构建
 docs/              设计文档与实施计划
 ```

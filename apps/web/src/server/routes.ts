@@ -1,14 +1,19 @@
 import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
+import { stream, streamSSE } from "hono/streaming";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { BiliError } from "@bili23-web/engine";
 import type { ParseResult } from "@bili23-web/engine";
 import type {
   AppConfig,
+  AppConfigPatch,
 } from "./config.js";
 import type {
   DownloadOptions,
   FileEntry,
+  HistoryEntryDto,
   MediaOptionSummary,
+  TaskStatus,
   TaskSummary,
 } from "./download-manager.js";
 
@@ -20,7 +25,15 @@ import type {
  * - GET  /api/tasks                          → 全部任务
  * - GET  /api/tasks/:id/events               → SSE 进度
  * - POST /api/tasks/:id/cancel               → 取消
+ * - POST /api/tasks/:id/pause                → 暂停（保留断点）
+ * - POST /api/tasks/:id/resume               → 继续（断点续传）
+ * - POST /api/tasks/:id/retry                → 重试（清空断点）
+ * - POST /api/tasks/:id/delete               → 删除任务（含历史行与 .tmp）
+ * - GET  /api/tasks/:id/log                  → 任务生命周期日志
+ * - GET  /api/history                        → 已完成历史（completed_task）
+ * - DELETE /api/history/:taskId              → 删除单条历史记录
  * - GET  /api/files                          → 产物目录
+ * - GET  /api/files/raw?path=...             → 产物文件下载（防目录穿越）
  */
 
 export interface ApiDeps {
@@ -35,9 +48,17 @@ export interface ApiDeps {
   getTask(id: string): TaskSummary | undefined;
   subscribeTask(id: string, listener: (summary: TaskSummary) => void): (() => void) | undefined;
   cancelTask(id: string): void;
+  pauseTask(id: string): TaskSummary | undefined;
+  resumeTask(id: string): TaskSummary | undefined;
+  retryTask(id: string): TaskSummary | undefined;
+  deleteTask(id: string): Promise<boolean>;
+  listHistory(): HistoryEntryDto[];
+  deleteHistory(taskId: string): boolean;
+  taskLog(id: string): string[] | undefined;
+  resolveDownloadFile(relPath: string): string | undefined;
   listFiles(): Promise<FileEntry[]>;
   getConfig?(): Promise<AppConfig>;
-  updateConfig?(patch: Partial<AppConfig>): Promise<AppConfig>;
+  updateConfig?(patch: AppConfigPatch): Promise<AppConfig>;
 }
 
 export type ApiErrorStatus = 400 | 401 | 404 | 409 | 500 | 502;
@@ -57,6 +78,13 @@ export function errorBody(err: unknown): { status: ApiErrorStatus; body: { error
   const message = err instanceof Error ? err.message : String(err);
   return { status: 500, body: { error: { code: "UNKNOWN", message } } };
 }
+
+/** 可暂停状态（queued 或运行中） */
+const PAUSABLE_STATUSES = new Set<TaskStatus>(["queued", "parsing", "downloading", "merging"]);
+/** 可继续状态（暂停/中断/失败/已取消 → 断点续传） */
+const RESUMABLE_STATUSES = new Set<TaskStatus>(["paused", "interrupted", "failed", "cancelled"]);
+/** 可重试状态（失败/已取消 → 清空断点全新下载） */
+const RETRYABLE_STATUSES = new Set<TaskStatus>(["failed", "cancelled"]);
 
 export function registerApi(app: Hono, getManager: () => ApiDeps): void {
   app.post("/api/parse", async (c) => {
@@ -141,6 +169,95 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
 
   app.get("/api/files", async (c) => c.json({ files: await getManager().listFiles() }));
 
+  app.post("/api/tasks/:id/pause", (c) => {
+    const manager = getManager();
+    const id = c.req.param("id");
+    const task = manager.getTask(id);
+    if (!task) return c.json({ error: { code: "NOT_FOUND", message: "任务不存在" } }, 404);
+    if (!PAUSABLE_STATUSES.has(task.status)) {
+      return c.json({ error: { code: "INVALID_STATE", message: "任务当前状态不可暂停" } }, 409);
+    }
+    manager.pauseTask(id);
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/tasks/:id/resume", (c) => {
+    const manager = getManager();
+    const id = c.req.param("id");
+    const task = manager.getTask(id);
+    if (!task) return c.json({ error: { code: "NOT_FOUND", message: "任务不存在" } }, 404);
+    if (!RESUMABLE_STATUSES.has(task.status)) {
+      return c.json({ error: { code: "INVALID_STATE", message: "任务当前状态不可继续" } }, 409);
+    }
+    manager.resumeTask(id);
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/tasks/:id/retry", (c) => {
+    const manager = getManager();
+    const id = c.req.param("id");
+    const task = manager.getTask(id);
+    if (!task) return c.json({ error: { code: "NOT_FOUND", message: "任务不存在" } }, 404);
+    if (!RETRYABLE_STATUSES.has(task.status)) {
+      return c.json({ error: { code: "INVALID_STATE", message: "任务当前状态不可重试" } }, 409);
+    }
+    manager.retryTask(id);
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/tasks/:id/delete", async (c) => {
+    const manager = getManager();
+    const ok = await manager.deleteTask(c.req.param("id"));
+    if (!ok) return c.json({ error: { code: "NOT_FOUND", message: "任务不存在" } }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/tasks/:id/log", (c) => {
+    const manager = getManager();
+    const id = c.req.param("id");
+    const task = manager.getTask(id);
+    if (!task) return c.json({ error: { code: "NOT_FOUND", message: "任务不存在" } }, 404);
+    return c.json({ lines: manager.taskLog(id) ?? [] });
+  });
+
+  app.get("/api/history", (c) => c.json({ history: getManager().listHistory() }));
+
+  app.delete("/api/history/:taskId", (c) => {
+    const manager = getManager();
+    const ok = manager.deleteHistory(c.req.param("taskId"));
+    if (!ok) return c.json({ error: { code: "NOT_FOUND", message: "历史记录不存在" } }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/files/raw", async (c) => {
+    const manager = getManager();
+    const rel = c.req.query("path") ?? "";
+    if (rel.length === 0) {
+      return c.json({ error: { code: "INVALID_PATH", message: "缺少 path 参数" } }, 400);
+    }
+    const abs = manager.resolveDownloadFile(rel);
+    if (!abs) {
+      return c.json({ error: { code: "INVALID_PATH", message: "路径越界或非法" } }, 400);
+    }
+    let st;
+    try {
+      st = await stat(abs);
+    } catch {
+      return c.json({ error: { code: "NOT_FOUND", message: "文件不存在" } }, 404);
+    }
+    if (st.isDirectory()) {
+      return c.json({ error: { code: "INVALID_PATH", message: "不能下载目录" } }, 400);
+    }
+    c.header("Content-Type", "application/octet-stream");
+    return stream(c, async (s) => {
+      const rs = createReadStream(abs);
+      for await (const chunk of rs) {
+        await s.write(chunk as Uint8Array);
+      }
+      rs.destroy();
+    });
+  });
+
   // 全局设置（P3：附加内容默认 + 文件命名/编号）
   app.get("/api/config", async (c) => {
     const manager = getManager();
@@ -152,7 +269,7 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
     const manager = getManager();
     if (!manager.updateConfig) return c.json({ error: { code: "NOT_FOUND", message: "配置接口不可用" } }, 404);
     try {
-      const body = (await c.req.json()) as { config?: Partial<AppConfig> };
+      const body = (await c.req.json()) as { config?: AppConfigPatch };
       const config = await manager.updateConfig(body.config ?? {});
       return c.json({ config });
     } catch (err) {

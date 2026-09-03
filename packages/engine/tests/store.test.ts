@@ -61,6 +61,17 @@ describe("TaskStore 任务持久化", () => {
     store.close();
   });
 
+  it("历史任务：removeCompleted 删除单条记录", () => {
+    const store = makeStore();
+    store.addCompleted({ taskId: "c1", hashId: "h1", title: "A", time: 100, data: {} });
+    store.addCompleted({ taskId: "c2", hashId: "h2", title: "B", time: 200, data: {} });
+    store.removeCompleted("c1");
+    expect(store.getCompleted("c1")).toBeNull();
+    expect(store.getCompleted("c2")?.title).toBe("B");
+    expect(store.listCompleted().map((r) => r.taskId)).toEqual(["c2"]);
+    store.close();
+  });
+
   it("重复判定覆盖进行中与已完成", () => {
     const store = makeStore();
     expect(store.checkDuplicate("h-video")).toBe(false);

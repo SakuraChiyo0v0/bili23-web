@@ -3,6 +3,7 @@ import { BiliError } from "../errors.js";
 import type { HttpClient } from "../api/http.js";
 import { DownloadAbortedError, downloadFile, probeStreamUrl } from "./downloader.js";
 import type { ChunkState } from "./downloader.js";
+import type { SpeedGate } from "./rate.js";
 
 /**
  * 文件级下载计划执行器。
@@ -43,6 +44,8 @@ export interface RunPlanOptions {
   chunkSize?: number;
   /** 限速（字节/秒），默认不限 */
   rateLimitBps?: number;
+  /** 共享限速门（跨文件/调用共享、可即时调整）；缺省按 rateLimitBps 自建桶 */
+  gate?: SpeedGate;
   /** 取流 Referer */
   referer?: string;
   /** 用户中止（暂停/取消） */
@@ -90,6 +93,7 @@ export async function runDownloadPlan(options: RunPlanOptions): Promise<RunPlanR
     if (concurrency !== undefined) downloadOptions.concurrency = concurrency;
     if (chunkSize !== undefined) downloadOptions.chunkSize = chunkSize;
     if (rateLimitBps !== undefined) downloadOptions.rateLimitBps = rateLimitBps;
+    if (options.gate !== undefined) downloadOptions.gate = options.gate;
     if (referer !== undefined) downloadOptions.referer = referer;
     if (signal !== undefined) downloadOptions.signal = signal;
     const snapshot = resume[file.key];

@@ -28,11 +28,12 @@ NAS watchtower 检测到 latest digest 变化后自动重建。
 
 ```bash
 sudo mkdir -p /volume1/docker/bili23-web/data
-# docker-compose.yaml = docker-compose.nas.yml；.env 见 .env.example（chmod 600）
+# 把 deploy/ 下的 compose 模板拷到 NAS 部署目录（.env 见 .env.example，chmod 600）
+sudo cp ../../deploy/docker-compose.nas.yml ../../deploy/.env.example /volume1/docker/bili23-web/
 sudo chown -R root:root /volume1/docker/bili23-web
 sudo chmod 700 /volume1/docker/bili23-web
 sudo docker compose --project-directory /volume1/docker/bili23-web \
-  -f /volume1/docker/bili23-web/docker-compose.yaml up -d
+  -f /volume1/docker/bili23-web/docker-compose.nas.yml up -d
 ```
 
 访问：http://<NAS_IP>:8788 （端口与 account-panel 的 8787 错开；只走内网/门户后，勿直接暴露公网）

@@ -2,6 +2,7 @@ import { open, mkdir } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { BiliError } from "../errors.js";
 import type { HttpClient } from "../api/http.js";
+import type { SpeedGate } from "./rate.js";
 
 /**
  * 分块并发下载器（语义对齐桌面 download/downloader.py）。
@@ -142,6 +143,8 @@ export interface DownloadFileOptions {
   maxRetries?: number;
   /** 限速（字节/秒），0 不限，默认 0 */
   rateLimitBps?: number;
+  /** 共享限速门（跨调用/任务共享、可即时调整）；有 gate 时优先于 rateLimitBps */
+  gate?: SpeedGate;
   /** 取流 Referer（CDN 校验来源），缺省用 http 默认 */
   referer?: string;
   /** 单次分片请求超时（毫秒），默认 180s */
@@ -376,7 +379,9 @@ export async function downloadFile(options: DownloadFileOptions): Promise<Downlo
     committedTotal += offset;
   }
 
-  const bucket = new TokenBucket(options.rateLimitBps ?? 0);
+  // 有共享 gate 用 gate（跨任务共享限速），否则保留 rateLimitBps 自建桶行为（旧调用不回归）
+  const gate = options.gate;
+  const bucket = gate === undefined ? new TokenBucket(options.rateLimitBps ?? 0) : undefined;
   const innerAbort = new AbortController();
   const combinedSignal = AbortSignal.any([innerAbort.signal, ...(signal ? [signal] : [])]);
   let firstError: unknown = null;
@@ -477,7 +482,11 @@ export async function downloadFile(options: DownloadFileOptions): Promise<Downlo
             const value = result.value;
             if (!value || value.length === 0) continue;
             if (combinedSignal.aborted) throw new DownloadAbortedError();
-            await bucket.consume(value.length, combinedSignal);
+            if (gate !== undefined) {
+              await gate.take(value.length, combinedSignal);
+            } else if (bucket !== undefined) {
+              await bucket.consume(value.length, combinedSignal);
+            }
             await writeAll(handle, value, start + written + pending);
             downloaded += value.length;
             pending += value.length;

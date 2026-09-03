@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { BiliError } from "@bili23-web/engine";
 import type { MediaItem, ParseResult } from "@bili23-web/engine";
 import { createApp } from "../src/server/index.js";
 import type { ApiDeps } from "../src/server/routes.js";
+import { defaultAppConfig } from "../src/server/config.js";
+import { resolveDownloadPath } from "../src/server/download-manager.js";
 import type {
   DownloadOptions,
   FileEntry,
+  HistoryEntryDto,
   MediaOptionSummary,
   TaskSummary,
 } from "../src/server/download-manager.js";
@@ -44,9 +50,22 @@ function makeTask(id: string, patch: Partial<TaskSummary> = {}): TaskSummary {
   };
 }
 
-function makeDeps(): ApiDeps & { cancelled: string[]; created: Array<{ ids: string[]; options: DownloadOptions; force: boolean }> } {
+function makeDeps(): ApiDeps & {
+  cancelled: string[];
+  created: Array<{ ids: string[]; options: DownloadOptions; force: boolean }>;
+  paused: string[];
+  resumed: string[];
+  retried: string[];
+  deleted: string[];
+  historyDeleted: string[];
+} {
   const cancelled: string[] = [];
   const created: Array<{ ids: string[]; options: DownloadOptions; force: boolean }> = [];
+  const paused: string[] = [];
+  const resumed: string[] = [];
+  const retried: string[] = [];
+  const deleted: string[] = [];
+  const historyDeleted: string[] = [];
   const deps: ApiDeps = {
     async parseUrls(urls) {
       const results: ParseResult[] = urls.map((url) => ({
@@ -87,11 +106,43 @@ function makeDeps(): ApiDeps & { cancelled: string[]; created: Array<{ ids: stri
     cancelTask(id) {
       cancelled.push(id);
     },
+    pauseTask(id) {
+      paused.push(id);
+      return makeTask(id, { status: "paused" });
+    },
+    resumeTask(id) {
+      resumed.push(id);
+      return makeTask(id, { status: "parsing" });
+    },
+    retryTask(id) {
+      retried.push(id);
+      return makeTask(id, { status: "queued" });
+    },
+    async deleteTask(id) {
+      if (id === "nope") return false;
+      deleted.push(id);
+      return true;
+    },
+    listHistory(): HistoryEntryDto[] {
+      return [{ taskId: "h1", title: "老视频", completedAt: 100, outputPath: "/data/x/a.mp4" }];
+    },
+    deleteHistory(taskId) {
+      if (taskId === "nope") return false;
+      historyDeleted.push(taskId);
+      return true;
+    },
+    taskLog(id) {
+      if (id !== "task-1") return undefined;
+      return ["[12:00:00] 开始解析视频信息", "[12:00:01] 已加入队列"];
+    },
+    resolveDownloadFile() {
+      return undefined;
+    },
     async listFiles(): Promise<FileEntry[]> {
       return [{ name: "a.mp4", path: "视频A/a.mp4", size: 100, mtime: 1 }];
     },
   };
-  return { ...deps, cancelled, created };
+  return { ...deps, cancelled, created, paused, resumed, retried, deleted, historyDeleted };
 }
 
 describe("Web API 路由", () => {
@@ -181,5 +232,174 @@ describe("Web API 路由", () => {
     expect(text).toContain("event: task");
     expect(text).toContain("task-1");
     await reader!.cancel();
+  });
+
+  it("POST /api/tasks/:id/pause：合法状态 200、不存在 404、非法状态 409", async () => {
+    const deps = makeDeps();
+    const app = createApp({ manager: deps as never });
+    const ok = await app.request("/api/tasks/task-1/pause", { method: "POST" });
+    expect(ok.status).toBe(200);
+    expect(deps.paused).toEqual(["task-1"]);
+
+    const missing = createApp({ manager: makeDeps() as never });
+    expect((await missing.request("/api/tasks/nope/pause", { method: "POST" })).status).toBe(404);
+
+    const bad = makeDeps();
+    bad.getTask = (id) =>
+      id === "task-1" ? makeTask("task-1", { status: "completed" }) : undefined;
+    const appBad = createApp({ manager: bad as never });
+    const conflict = await appBad.request("/api/tasks/task-1/pause", { method: "POST" });
+    expect(conflict.status).toBe(409);
+  });
+
+  it("POST /api/tasks/:id/resume：paused 200、运行中 409、不存在 404", async () => {
+    const deps = makeDeps();
+    deps.getTask = (id) =>
+      id === "task-1" ? makeTask("task-1", { status: "paused" }) : undefined;
+    const app = createApp({ manager: deps as never });
+    const ok = await app.request("/api/tasks/task-1/resume", { method: "POST" });
+    expect(ok.status).toBe(200);
+    expect(deps.resumed).toEqual(["task-1"]);
+
+    const bad = makeDeps();
+    bad.getTask = (id) =>
+      id === "task-1" ? makeTask("task-1", { status: "downloading" }) : undefined;
+    const conflict = await createApp({ manager: bad as never }).request(
+      "/api/tasks/task-1/resume",
+      { method: "POST" },
+    );
+    expect(conflict.status).toBe(409);
+
+    const missing = createApp({ manager: makeDeps() as never });
+    expect((await missing.request("/api/tasks/nope/resume", { method: "POST" })).status).toBe(404);
+  });
+
+  it("POST /api/tasks/:id/retry：failed 200、queued 409、不存在 404", async () => {
+    const deps = makeDeps();
+    deps.getTask = (id) =>
+      id === "task-1" ? makeTask("task-1", { status: "failed", error: "x" }) : undefined;
+    const app = createApp({ manager: deps as never });
+    const ok = await app.request("/api/tasks/task-1/retry", { method: "POST" });
+    expect(ok.status).toBe(200);
+    expect(deps.retried).toEqual(["task-1"]);
+
+    const bad = makeDeps();
+    bad.getTask = (id) =>
+      id === "task-1" ? makeTask("task-1", { status: "queued" }) : undefined;
+    const conflict = await createApp({ manager: bad as never }).request(
+      "/api/tasks/task-1/retry",
+      { method: "POST" },
+    );
+    expect(conflict.status).toBe(409);
+
+    const missing = createApp({ manager: makeDeps() as never });
+    expect((await missing.request("/api/tasks/nope/retry", { method: "POST" })).status).toBe(404);
+  });
+
+  it("POST /api/tasks/:id/delete：存在 200、不存在 404", async () => {
+    const deps = makeDeps();
+    const app = createApp({ manager: deps as never });
+    const ok = await app.request("/api/tasks/task-1/delete", { method: "POST" });
+    expect(ok.status).toBe(200);
+    expect(deps.deleted).toEqual(["task-1"]);
+    const missing = await app.request("/api/tasks/nope/delete", { method: "POST" });
+    expect(missing.status).toBe(404);
+  });
+
+  it("GET /api/history 与 DELETE /api/history/:taskId", async () => {
+    const deps = makeDeps();
+    const app = createApp({ manager: deps as never });
+    const listRes = await app.request("/api/history");
+    expect(listRes.status).toBe(200);
+    const json = (await listRes.json()) as { history: HistoryEntryDto[] };
+    expect(json.history[0]?.taskId).toBe("h1");
+
+    const del = await app.request("/api/history/h1", { method: "DELETE" });
+    expect(del.status).toBe(200);
+    expect(deps.historyDeleted).toEqual(["h1"]);
+
+    const missing = await app.request("/api/history/nope", { method: "DELETE" });
+    expect(missing.status).toBe(404);
+  });
+
+  it("GET /api/tasks/:id/log 返回任务日志；不存在 404", async () => {
+    const app = createApp({ manager: makeDeps() as never });
+    const ok = await app.request("/api/tasks/task-1/log");
+    expect(ok.status).toBe(200);
+    const json = (await ok.json()) as { lines: string[] };
+    expect(json.lines.length).toBe(2);
+    const missing = await app.request("/api/tasks/nope/log");
+    expect(missing.status).toBe(404);
+  });
+
+  it("GET /api/files/raw：防目录穿越、目录/缺失处理、流式返回文件", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bili23-raw-"));
+    try {
+      await writeFile(join(dir, "ok.mp4"), "hello-bytes");
+      await mkdir(join(dir, "subdir"));
+      const deps = makeDeps();
+      deps.resolveDownloadFile = (rel) => {
+        if (rel === "ok.mp4") return join(dir, "ok.mp4");
+        if (rel === "missing.mp4") return join(dir, "missing.mp4");
+        if (rel === "subdir") return join(dir, "subdir");
+        return undefined; // 越界/绝对路径解析阶段即被拒
+      };
+      const app = createApp({ manager: deps as never });
+
+      const ok = await app.request("/api/files/raw?path=ok.mp4");
+      expect(ok.status).toBe(200);
+      expect(await ok.text()).toBe("hello-bytes");
+
+      const traversal = await app.request(
+        "/api/files/raw?path=" + encodeURIComponent("../secret.txt"),
+      );
+      expect(traversal.status).toBe(400);
+
+      const absolute = await app.request(
+        "/api/files/raw?path=" + encodeURIComponent("C:\\Windows\\win.ini"),
+      );
+      expect(absolute.status).toBe(400);
+
+      const missing = await app.request("/api/files/raw?path=missing.mp4");
+      expect(missing.status).toBe(404);
+
+      const dirRes = await app.request("/api/files/raw?path=subdir");
+      expect(dirRes.status).toBe(400);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("PUT /api/config 非法值映射为 400 INVALID_CONFIG", async () => {
+    const deps = makeDeps();
+    deps.getConfig = async () => defaultAppConfig();
+    deps.updateConfig = async () => {
+      throw new Error("download.parallel 需为 1..16 的整数");
+    };
+    const app = createApp({ manager: deps as never });
+    const res = await app.request("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: { download: { parallel: 0 } } }),
+    });
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: { code: string } };
+    expect(json.error.code).toBe("INVALID_CONFIG");
+  });
+});
+
+describe("resolveDownloadPath 防目录穿越", () => {
+  it("根目录内相对路径正常解析", () => {
+    const root = resolve(join(tmpdir(), "dl-root"));
+    expect(resolveDownloadPath(root, "视频A/a.mp4")).toBe(join(root, "视频A", "a.mp4"));
+    expect(resolveDownloadPath(root, "a/./b.mp4")).toBe(join(root, "a", "b.mp4"));
+  });
+
+  it("拒绝 ../ 与绝对路径（越界）", () => {
+    const root = resolve(join(tmpdir(), "dl-root"));
+    expect(resolveDownloadPath(root, "../secret.txt")).toBeUndefined();
+    expect(resolveDownloadPath(root, "a/../../secret.txt")).toBeUndefined();
+    expect(resolveDownloadPath(root, "C:\\Windows\\win.ini")).toBeUndefined();
+    expect(resolveDownloadPath(root, "/etc/passwd")).toBeUndefined();
   });
 });
