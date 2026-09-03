@@ -369,3 +369,19 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 .type-select{ height:42px; padding:0 10px; border-radius:10px; border:1px solid var(--line); background:var(--surface); outline:none; font-size:13px; }
 .type-select:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 .url-row .type-select{ flex:none; }
+
+/* ===== CDN editor ===== */
+.cdn-editor{ max-width:620px; }
+.cdn-body{ display:flex; flex-direction:column; gap:12px; }
+.cdn-add-row{ display:flex; gap:8px; }
+.cdn-list{ display:flex; flex-direction:column; gap:6px; max-height:260px; overflow:auto; }
+.cdn-row{ display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; }
+.cdn-host{ font-family:var(--mono); font-size:12px; flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.cdn-ops{ display:flex; gap:4px; flex:none; }
+
+/* ===== Style editor ===== */
+.style-editor{ max-width:720px; }
+.style-body{ display:flex; flex-direction:column; gap:14px; }
+.style-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.style-toggles{ display:flex; gap:14px; flex-wrap:wrap; }
+.style-toggle{ display:flex; align-items:center; gap:6px; font-size:13px; }

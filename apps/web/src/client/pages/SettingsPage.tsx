@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
 import { NamingRuleEditor, CONVENTION_TYPES } from "../components/NamingRuleEditor";
+import { CdnEditor } from "../components/CdnEditor";
+import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
 
 export function SettingsPage() {
@@ -123,13 +125,19 @@ function BehaviorGroup({ onPatch }: { onPatch: (p: any) => void }) {
 
 function AdditionalGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
   const a = config.additional || {};
+  const [styleKind, setStyleKind] = useState<"" | "danmaku" | "subtitle">("");
   return (
     <Group title="附加内容">
-      <Row label="弹幕" desc="下载弹幕" control={<Toggle checked={a.danmaku?.enabled} onChange={(v) => onPatch({ additional: { danmaku: { ...a.danmaku, enabled: v } } })} />} />
-      <Row label="字幕" desc="下载字幕" control={<Toggle checked={a.subtitle?.enabled} onChange={(v) => onPatch({ additional: { subtitle: { ...a.subtitle, enabled: v } } })} />} />
+      <Row label="弹幕" desc="下载弹幕" control={<><Toggle checked={a.danmaku?.enabled} onChange={(v) => onPatch({ additional: { danmaku: { ...a.danmaku, enabled: v } } })} /><button type="button" className="btn sm ghost" onClick={() => setStyleKind("danmaku")}>样式</button></>} />
+      <Row label="字幕" desc="下载字幕" control={<><Toggle checked={a.subtitle?.enabled} onChange={(v) => onPatch({ additional: { subtitle: { ...a.subtitle, enabled: v } } })} /><button type="button" className="btn sm ghost" onClick={() => setStyleKind("subtitle")}>样式</button></>} />
       <Row label="封面" desc="下载封面" control={<Toggle checked={a.cover?.enabled} onChange={(v) => onPatch({ additional: { cover: { ...a.cover, enabled: v } } })} />} />
       <Row label="章节" desc="内嵌章节信息" control={<Toggle checked={a.chapter?.embed} onChange={(v) => onPatch({ additional: { chapter: { ...a.chapter, embed: v } } })} />} />
       <Row label="元数据" desc="下载元数据（NFO 刮削）" control={<Toggle checked={a.metadata?.enabled} onChange={(v) => onPatch({ additional: { metadata: { ...a.metadata, enabled: v } } })} />} />
+    <StyleEditor open={!!styleKind} onClose={() => setStyleKind("")} kind={styleKind || "danmaku"} value={styleKind === "subtitle" ? a.subtitle?.style : a.danmaku?.style} onChange={(sv) => {
+        if (styleKind === "subtitle") onPatch({ additional: { subtitle: { ...a.subtitle, style: sv } } });
+        else onPatch({ additional: { danmaku: { ...a.danmaku, style: sv } } });
+        useSettingsStore.getState().save({ additional: styleKind === "subtitle" ? { subtitle: { ...a.subtitle, style: sv } } : { danmaku: { ...a.danmaku, style: sv } } });
+      }} />
     </Group>
   );
 }
@@ -170,6 +178,11 @@ function NamingGroup({ config, onPatch }: { config: any; onPatch: (p: any) => vo
 
 function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
   const ad = config.advanced || {};
+  const [cdnOpen, setCdnOpen] = useState(false);
+  const saveCdnHosts = (next: any[]) => {
+    onPatch({ advanced: { cdnHosts: next } });
+    useSettingsStore.getState().save({ advanced: { cdnHosts: next } });
+  };
   return (
     <Group title="高级">
       <Row label="默认画质档位" desc="缺省时不覆盖自动选择" control={
@@ -181,7 +194,8 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
       <Row label="默认编码档位" desc="" control={
         <input type="number" className="text-input" style={{ width: 120 }} value={ad.defaultCodecId ?? ""} placeholder="Auto" onChange={(e) => onPatch({ advanced: { defaultCodecId: e.target.value ? Number(e.target.value) : undefined } })} />
       }/>
-      <Row label="CDN 节点" desc="自定义服务商节点（P6 完善编辑器）" control={<span className="small muted">{ad.cdnHosts?.length ?? 0} 个</span>} />
+      <Row label="CDN 节点" desc="自定义服务商节点" control={<button type="button" className="btn sm" onClick={() => setCdnOpen(true)}>编辑</button>} />
+      <CdnEditor open={cdnOpen} onClose={() => setCdnOpen(false)} hosts={ad.cdnHosts ?? []} onChange={saveCdnHosts} />
       <Row label="FFmpeg 路径" desc="自定义 FFmpeg" control={<input className="text-input" style={{ width: 260 }} value={ad.ffmpegPath ?? ""} placeholder="系统 PATH" onChange={(e) => onPatch({ advanced: { ffmpegPath: e.target.value || undefined } })} />} />
       <Row label="代理" desc="代理服务器地址" control={<input className="text-input" style={{ width: 260 }} value={ad.proxy ?? ""} placeholder="http://host:port" onChange={(e) => onPatch({ advanced: { proxy: e.target.value || undefined } })} />} />
       <Row label="MCP / 日志查看器 / 检查更新" desc="桌面专属，Web 端暂不支持" control={<span className="small muted">—</span>} />
