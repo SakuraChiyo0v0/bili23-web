@@ -40,3 +40,43 @@ export {
   resolveStreams,
 } from "./stream/resolver.js";
 export type { StreamOptions, ResolvedStreams } from "./stream/resolver.js";
+
+export {
+  DownloadAbortedError,
+  TokenBucket,
+  downloadFile,
+  probeStreamUrl,
+  extractFileSize,
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_FLUSH_INTERVAL,
+  DEFAULT_MAX_CHUNK_RETRIES,
+  DEFAULT_CONCURRENCY,
+} from "./download/downloader.js";
+export type {
+  ChunkState,
+  DownloadFileOptions,
+  DownloadFileResult,
+  DownloadProgress,
+  ProbeOptions,
+  ProbeResult,
+} from "./download/downloader.js";
+export { runDownloadPlan } from "./download/task.js";
+export type {
+  DownloadStatus,
+  DownloadTaskFile,
+  RunPlanOptions,
+  RunPlanResult,
+} from "./download/task.js";
+
+export { runFfmpeg } from "./ffmpeg/runner.js";
+export type { FfmpegRunOptions, FfmpegRunResult } from "./ffmpeg/runner.js";
+export { buildMergeAudioVideo, buildRemux, buildConcatParts } from "./ffmpeg/command.js";
+export { mergeAudioVideo, remuxMedia, concatMediaParts, probeMedia } from "./ffmpeg/merge.js";
+export type { MergeOptions, MergeResult, ProbeInfo, ProbeStream } from "./ffmpeg/merge.js";
+
+export { HASH_ID_VERSION, calcHashId, stableJson } from "./store/hash.js";
+export type { HashIdentity } from "./store/hash.js";
+export { TaskStore } from "./store/task-store.js";
+export type { TaskRecord } from "./store/task-store.js";
+export { HistoryService } from "./store/history.js";
+export type { HistoryEntry } from "./store/history.js";

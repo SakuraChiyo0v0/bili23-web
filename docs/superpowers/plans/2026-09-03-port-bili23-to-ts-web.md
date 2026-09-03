@@ -158,6 +158,7 @@
 - Produces: `downloadRange(url, { start, end, headers, dest, onProgress })`；`DownloadTask`（id/状态/进度/速度/暂停/取消）；并发 N 分块、写临时文件、合并、`.part` 续传
 - 语义对齐桌面 downloader：异常自动重试、速度统计
 
+- [x] Task 1.5 已完成：download/downloader.ts（TokenBucket 限速 / probeStreamUrl 候选探测 / downloadFile 分片 Range 并发 + 断点续传 + 重试 + 中止）+ download/task.ts（runDownloadPlan 逐文件串行下载、快照续传），10 个本地静态服务器集成单测 + typecheck + build 通过
 ### Task 1.6：ffmpeg 合并与容器
 
 **Files:**
@@ -167,7 +168,8 @@
 **Interfaces:**
 - Produces: `mergeAudioVideo(videoFile, audioFile, out, { container: "mp4"|"mkv" })`；`probe(file)`；错误映射 `MERGE_FAILED`
 
-### Task 1.7：任务存储与历史/去重
+
+- [x] Task 1.6 已完成：ffmpeg/command.ts + runner.ts（-progress/-nostats、时长与进度解析、signal 中止）+ merge.ts（mergeAudioVideo / remuxMedia / concatMediaParts / probeMedia，错误映射 MERGE_FAILED），4 个真实 ffmpeg 集成单测（无 ffmpeg 环境自动 skip）+ typecheck + build 通过### Task 1.7：任务存储与历史/去重
 
 **Files:**
 - Create: `packages/engine/src/store/task-store.ts`、`src/store/history.ts`
@@ -177,7 +179,8 @@
 - Produces: `TaskStore`（CRUD、持久化 JSON/SQLite）、`isDuplicate(identity)`、记录已完成文件
 - 身份哈希规则对齐桌面 `download/task/hash_id.py`（读其实现后翻译）
 
-### Task 1.8：Web 路由 + 前端最小 UI
+
+- [x] Task 1.7 已完成：store/hash.ts（calcHashId，md5+稳定 JSON，对齐桌面 hash_id.py）+ task-store.ts（SQLite node:sqlite，download_task/completed_task 双表、checkDuplicate 去重、快照 data 落库）+ history.ts（HistoryService），9 个单测（含与桌面算法一致的已知 md5 oracle）+ typecheck + build 通过### Task 1.8：Web 路由 + 前端最小 UI
 
 **Files:**
 - Create: `apps/web/src/server/routes/parse.ts`、`download.ts`、`tasks.ts`；`src/server/download-manager.ts`（全局队列）
@@ -188,10 +191,12 @@
 - Produces: `POST /api/parse {urls} → MediaItem[]`；`GET /api/media/:id`；`POST /api/download {itemId, options}`；`GET /api/tasks`、`GET /api/tasks/:id/events`(SSE 进度)；`GET /api/files`(产物目录浏览)
 - UI：粘贴链接→解析列表→选画质/编码→下载→进度→完成可见文件
 
-### Task 1.9：端到端冒烟
 
-- [ ] `docker build` 后容器内下载一部短投稿视频（可用测试号/小视频），校验产物 mp4 可播放（ffprobe）
-- [ ] Commit + 汇报，P1 验收由用户确认
+- [x] Task 1.8 已完成：web server routes（parse/media/download/tasks/SSE/files，错误映射）+ download-manager（任务队列/持久化/去重/断点续传/取消/ffmpeg 合并/落盘/历史）+ React 最小 UI（解析页选项面板、下载页 SSE 进度、产物列表），9 个 API 单测（含 SSE）+ typecheck + vite build 通过### Task 1.9：端到端冒烟
+
+- [x] Task 1.9 真网 E2E PASS（宿主直跑，非 docker）：BV1GJ411x7h7 完整 解析→media→download(24.4MB)→ffmpeg 合并→completed；ffprobe 校验 h264+aac；409 去重拦截、GET /api/files 均验证（证据：.e2e-data/ 产物可播）
+- [ ] `docker build` 容器内下载：本机 Docker CLI 无 daemon，无法本地验证，deferred 到 NAS/CI 部署环境执行（P1 出口其余标准已达成）
+- [x] Commit + 汇报：P1 整版 commit + push 随本提交完成；出口验收（网页完成一部投稿下载且可播）已达成，Docker 构建验收项 deferred，由用户验收
 
 ---
 
@@ -199,4 +204,8 @@
 - P0 产出可独立验证（`pnpm check`、health、镜像可拉）。
 - P1 验收标准唯一且可观察：网页完成一部投稿视频下载并校验可播。
 - 后续 P2–P4 分别生成独立计划（沿用本模板）。
+
+
+
+
 

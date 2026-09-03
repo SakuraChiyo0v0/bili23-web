@@ -1,24 +1,75 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { ParseView } from "./ParseView.js";
+import { DownloadView } from "./DownloadView.js";
+
+type Tab = "parse" | "download";
+
+const NAV: Array<{ id: Tab; label: string }> = [
+  { id: "parse", label: "解析" },
+  { id: "download", label: "下载" },
+];
 
 export function App() {
-  const [health, setHealth] = useState<string>("checking…");
+  const [tab, setTab] = useState<Tab>("parse");
+  const [downloadKey, setDownloadKey] = useState(0);
 
-  useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((j: { ok?: boolean }) => setHealth(j.ok ? "ok" : "unexpected"))
-      .catch(() => setHealth("unreachable"));
-  }, []);
+  const goDownload = (): void => {
+    setDownloadKey((k) => k + 1);
+    setTab("download");
+  };
 
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: 24 }}>
-      <h1>Bili23 Web</h1>
-      <p>
-        桌面版 Bili23-Downloader 的 TS 1:1 Web 重做版。当前为 P0 骨架，解析/下载功能随后接入。
-      </p>
-      <p>
-        /api/health: <code>{health}</code>
-      </p>
-    </main>
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        fontFamily:
+          'system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+      }}
+    >
+      <nav
+        style={{
+          width: 160,
+          borderRight: "1px solid #e5e5e5",
+          padding: "20px 12px",
+          flexShrink: 0,
+          boxSizing: "border-box",
+        }}
+      >
+        <h1 style={{ fontSize: 18, margin: "0 0 16px", lineHeight: 1.3 }}>
+          Bili23
+          <br />
+          Web
+        </h1>
+        {NAV.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => setTab(n.id)}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              padding: "8px 12px",
+              marginBottom: 6,
+              border: "none",
+              borderRadius: 6,
+              background: tab === n.id ? "#e8f0fe" : "transparent",
+              color: tab === n.id ? "#1a56db" : "#333",
+              cursor: "pointer",
+              fontSize: 15,
+            }}
+          >
+            {n.label}
+          </button>
+        ))}
+      </nav>
+      <main style={{ flex: 1, padding: 24, minWidth: 0 }}>
+        {tab === "parse" ? (
+          <ParseView onCreated={() => setDownloadKey((k) => k + 1)} onGoDownload={goDownload} />
+        ) : (
+          <DownloadView refreshKey={downloadKey} />
+        )}
+      </main>
+    </div>
   );
 }
