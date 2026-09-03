@@ -410,3 +410,6 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 .fav-item:hover{ border-color:var(--accent); box-shadow:var(--shadow-sm); }
 .fav-name{ font-weight:600; font-size:13.5px; color:var(--ink); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:100%; }
 .fav-sub{ font-size:12px; color:var(--muted); }
+
+/* ===== Parse pagination inline ===== */
+.pager-inline{ display:flex; align-items:center; gap:6px; margin-right:auto; }

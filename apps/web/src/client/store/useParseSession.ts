@@ -20,9 +20,11 @@ interface ParseSession {
   tree: TreeNode[];
   input: string;
   parseType: string;
+  autoPages: number;
   error?: string;
   setInput: (v: string) => void;
   setParseType: (t: string) => void;
+  setAutoPages: (n: number) => void;
   start: () => void;
   success: (results: ParseResult[]) => void;
   fail: (error: string) => void;
@@ -98,9 +100,11 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   tree: [],
   input: "",
   parseType: "auto",
+  autoPages: 1,
   error: undefined,
   setInput: (v) => set({ input: v }),
   setParseType: (t) => set({ parseType: t }),
+  setAutoPages: (n) => set({ autoPages: n }),
   start: () => set({ state: "parsing", error: undefined, tree: [] }),
   success: (results) => set({ state: "success", results, tree: buildTree(results) }),
   fail: (error) => set({ state: "error", error }),

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { parseUrl } from "../services/client";
 import { useDownloadOptions } from "../store/useDownloadOptions";
+import { useParseSession as _sp } from "../store/useParseSession";
 import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
 import { useParseSession } from "../store/useParseSession";
 import { useToast } from "../lib/toast";
@@ -9,6 +10,8 @@ import { ParseTree } from "../components/ParseTree";
 export function ParsePage() {
   const session = useParseSession();
   const { toast } = useToast();
+  const parsePages = (t: string) => ["space","favlist","history","watch_later","list"].includes(t);
+
   const typePlaceholder = (t: string) => { if (t === "auto") return "粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…"; if (t === "space") return "UP 主 UID 或主页链接"; if (t === "favlist") return "收藏夹链接 / 列表 ID"; if (t === "watch_later") return "（自动）稍后再看"; if (t === "history") return "（自动）历史记录"; if (t === "popular") return "每周必看（可填期数）"; return "粘贴相应分类的链接"; };
 
   const doParse = useCallback(async () => {
@@ -25,7 +28,7 @@ export function ParsePage() {
         const r = await parseUrl({ urls });
         results = r.results;
       } else {
-        const r = await parseUrl({ type: session.parseType, query: input });
+        const r = await parseUrl({ type: session.parseType, query: input, ...(parsePages(session.parseType) ? { pages: session.autoPages } : {}) });
         results = r.results;
       }
       if (!results.length) throw new Error("解析结果为空");
@@ -78,6 +81,12 @@ export function ParsePage() {
         </div>
 
         <div className="toolbar">
+          {parsePages(session.parseType) && session.state !== "success" && (
+            <span className="pager-inline">
+              <label className="small muted">翻页数</label>
+              <input type="number" className="text-input" style={{ width: 64 }} min={1} max={100} value={session.autoPages} onChange={(e) => session.setAutoPages(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} />
+            </span>
+          )}
           <span className="toolbar-label">
             {session.state === "success" ? (
               <>共 <b>{leaves.length}</b> 项已选 / 全量 <b>{session.results.reduce((n, r) => n + r.items.length, 0)}</b></>
