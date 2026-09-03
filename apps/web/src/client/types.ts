@@ -1,11 +1,24 @@
 /** 客户端与服务端 API 共享的数据形状（与 server 返回 JSON 对应） */
 
+/** 叶子内容大类（与引擎 ItemKind 对齐：容器类型体现在 ParseResultDTO.type） */
+export type ItemTypeDTO = "video" | "bangumi" | "cheese" | "lesson" | "audio";
+
 export interface MediaItemDTO {
   id: string;
-  type: "video";
-  aid: number;
-  bvid: string;
-  cid: number;
+  type: ItemTypeDTO;
+  /** 以下取流标识随类型可选（video 系有 aid/bvid/cid；pgc 有 epId；audio 有 auId/sid 等） */
+  aid?: number;
+  bvid?: string;
+  cid?: number;
+  epId?: number;
+  auId?: number;
+  sid?: number;
+  courseId?: number;
+  lessonId?: number;
+  itemId?: number;
+  sectionId?: number;
+  /** 互动视频标记 */
+  interactive?: boolean;
   page: number;
   title: string;
   groupTitle: string;

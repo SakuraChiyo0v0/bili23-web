@@ -169,7 +169,9 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600 }}>{item.title}</div>
                     <div style={{ color: "#666", fontSize: 13 }}>
-                      {item.groupTitle} · {formatDuration(item.duration)} · BV{item.bvid}
+                      {item.groupTitle} · {formatDuration(item.duration)}
+                      {item.bvid ? ` · BV${item.bvid}` : ""}
+                      {item.interactive ? <span style={{ color: "#7d3c98" }}> · 互动</span> : null}
                       {item.badge ? <span style={{ color: "#c0392b" }}> · {item.badge}</span> : null}
                     </div>
                   </div>

@@ -84,6 +84,23 @@ describe("VideoParser", () => {
     expect(result.items[0]).toMatchObject({ page: 1, cid: 280001, title: "测试视频标题" });
   });
 
+  it("互动视频（rights.is_stein_gate=1）标记 interactive 且取流形态不变", async () => {
+    const body = {
+      code: 0,
+      data: { ...VIEW_MULTI_P.data, rights: { is_stein_gate: 1 }, pages: undefined },
+    };
+    const ctx: ParseContext = { http: httpWithJson(body) };
+    const result = await new VideoParser().parse(ctx, "BV1xx411c7mD");
+    expect(result.items[0]?.interactive).toBe(true);
+    expect(result.items[0]?.type).toBe("video");
+  });
+
+  it("普通视频不带 interactive 标记", async () => {
+    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
+    const result = await new VideoParser().parse(ctx, "BV1xx411c7mD");
+    expect(result.items[0]?.interactive).toBeUndefined();
+  });
+
   it("充电专属置角标", async () => {
     const body = {
       code: 0,
@@ -144,9 +161,9 @@ describe("parseUrl 分发入口", () => {
     await expect(parseUrl(ctx, "https://example.com/x")).rejects.toBeInstanceOf(BiliError);
   });
 
-  it("P2 未实现的类型抛 UNSUPPORTED_TYPE", async () => {
+  it("无解析器注册的类型抛 UNSUPPORTED_TYPE（festival 不在 P2 类型铺开范围）", async () => {
     const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
-    await expect(parseUrl(ctx, "https://www.bilibili.com/bangumi/play/ep123")).rejects.toMatchObject({
+    await expect(parseUrl(ctx, "https://www.bilibili.com/festival/2024")).rejects.toMatchObject({
       code: "UNSUPPORTED_TYPE",
     });
   });

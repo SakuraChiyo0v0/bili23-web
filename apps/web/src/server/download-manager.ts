@@ -9,8 +9,9 @@ import {
   TaskStore,
   calcHashId,
   concatMediaParts,
+  ensureAnonymousSession,
   downloadFile,
-  fetchVideoMediaInfo,
+  fetchPlayMediaInfo,
   mergeAudioVideo,
   parseUrl,
   probeMedia,
@@ -195,6 +196,8 @@ export class DownloadManager {
   #http: HttpClient;
   #store: TaskStore;
   #history: HistoryService;
+  /** 匿名会话引导（buvid/bili_ticket 等指纹 cookie），首次解析前就绪（最佳努力，不失败） */
+  #sessionReady: Promise<void>;
   #rootDir: string;
   #tmpDir: string;
   #tasks = new Map<string, ManagedTask>();
@@ -202,6 +205,7 @@ export class DownloadManager {
 
   constructor(opts: { dataDir: string; downloadDir?: string }) {
     this.#http = new HttpClient();
+    this.#sessionReady = ensureAnonymousSession(this.ctx);
     this.#rootDir = opts.downloadDir ?? join(opts.dataDir, "downloads");
     this.#tmpDir = join(this.#rootDir, ".tmp");
     void mkdir(opts.dataDir, { recursive: true });
@@ -222,6 +226,9 @@ export class DownloadManager {
   // ---------- 解析会话 ----------
 
   async parseUrls(urls: string[]): Promise<ParseResult[]> {
+    // 桌面在启动时初始化匿名指纹 cookie（CookieManager.init_cookie_info），
+    // Web 侧在首次解析前补齐同一套 cookie，降低 WBI 接口 412 概率
+    await this.#sessionReady;
     const results: ParseResult[] = [];
     for (const raw of urls) {
       const url = raw.trim();
@@ -245,9 +252,11 @@ export class DownloadManager {
   async mediaOptions(itemId: string): Promise<MediaOptionSummary> {
     const item = this.#items.get(itemId);
     if (!item) throw new BiliError("INVALID_URL", `条目不存在：${itemId}`);
-    const info = await fetchVideoMediaInfo(this.ctx, { bvid: item.bvid, aid: item.aid, cid: item.cid });
+    const info = await fetchPlayMediaInfo(this.ctx, item);
     const qualities: MediaOptionSummary["qualities"] = [];
+    const seen = new Set<number>();
     for (const q of info.qualities) {
+      seen.add(q);
       const byCodec = info.videoByQuality[q];
       const codecs = byCodec
         ? Object.keys(byCodec)
@@ -255,6 +264,15 @@ export class DownloadManager {
             .map((id) => ({ id, label: codecLabel(id) }))
         : [];
       qualities.push({ id: q, label: videoQualityLabel(q), codecs });
+    }
+    // 单文件/MP4 直链形态（audio=m4a 192K、lesson=mp4 1080P、durl 视频）没有 DASH qualities，
+    // 把接口返回的 mp4Qualities 补进选项，避免下拉只剩"自动"（Task 2.9 顺手修复）
+    if (info.mediaType === "mp4" || info.singleFileExt) {
+      for (const q of info.mp4Qualities) {
+        if (seen.has(q)) continue;
+        seen.add(q);
+        qualities.push({ id: q, label: info.mp4QualityLabel[q] ?? String(q), codecs: [] });
+      }
     }
     return {
       itemId,
@@ -294,12 +312,7 @@ export class DownloadManager {
     for (const itemId of itemIds) {
       const item = this.#items.get(itemId);
       if (!item) throw new BiliError("INVALID_URL", `条目不存在：${itemId}`);
-      const hash = calcHashId({
-        type: item.type,
-        aid: item.aid,
-        bvid: item.bvid,
-        cid: item.cid,
-      });
+      const hash = this.#hashOf(item);
       if (!force && this.#store.checkDuplicate(hash)) {
         duplicates.push({ itemId, title: item.title });
         continue;
@@ -346,11 +359,7 @@ export class DownloadManager {
     try {
       task.update({ status: "parsing" });
       this.#persist(task, { status: "parsing" });
-      const info = await fetchVideoMediaInfo(this.ctx, {
-        bvid: task.item.bvid,
-        aid: task.item.aid,
-        cid: task.item.cid,
-      });
+      const info = await fetchPlayMediaInfo(this.ctx, task.item);
       const streamOpts: StreamOptions = {};
       if (task.options.videoQualityId !== undefined) streamOpts.videoQualityId = task.options.videoQualityId;
       if (task.options.videoCodecId !== undefined) streamOpts.videoCodecId = task.options.videoCodecId;
@@ -413,11 +422,20 @@ export class DownloadManager {
       task.update({ status: "merging" });
       this.#persist(task, { status: "merging" });
       const container = task.options.container ?? "mp4";
-      const tempOut = join(taskDir, `output_${task.id}.${container}`);
-      await this.#merge(task, taskDir, mergePlan, files, tempOut, container);
+      // audio(m4a)/lesson(mp4) 属单文件直链：下载件即成品，仅改名不再过 ffmpeg；
+      // 输出扩展名以接口语义为准，忽略用户容器选择（桌面同样保持 m4a/mp4 直出）
+      const outExt = info.singleFileExt ?? container;
+      const tempOut = join(taskDir, `output_${task.id}.${outExt}`);
+      if (info.singleFileExt) {
+        const part = files[0];
+        if (!part) throw new BiliError("DOWNLOAD_FAILED", "缺少单文件直链");
+        await rename(join(taskDir, part.fileName), tempOut);
+      } else {
+        await this.#merge(task, taskDir, mergePlan, files, tempOut, container);
+      }
 
       // 落盘到最终目录
-      const finalPath = await this.#placeOutput(task, tempOut, container);
+      const finalPath = await this.#placeOutput(task, tempOut, outExt);
       await probeMedia(finalPath); // 校验产物可读（ffprobe）
       task.update({ status: "completed", progress: 100, outputPath: finalPath });
       await rm(taskDir, { recursive: true, force: true });
@@ -429,7 +447,7 @@ export class DownloadManager {
         qualityLabel: task.summary().qualityLabel,
       };
       this.#store.removeActive(task.id);
-      const hash = calcHashId({ type: task.item.type, aid: task.item.aid, bvid: task.item.bvid, cid: task.item.cid });
+      const hash = this.#hashOf(task.item);
       this.#store.addCompleted({
         taskId: task.id,
         hashId: hash,
@@ -600,10 +618,25 @@ export class DownloadManager {
       files: current?.files ?? {},
       ...patch,
     };
-    const hash = calcHashId({ type: task.item.type, aid: task.item.aid, bvid: task.item.bvid, cid: task.item.cid });
+    const hash = this.#hashOf(task.item);
     this.#store.upsertActive({ taskId: task.id, hashId: hash, title: task.item.title, data });
   }
 
+  /** 条目 → 去重 hash（按类型只带该类型相关键，避免 exactOptionalPropertyTypes 报错） */
+  #hashOf(item: MediaItem): string {
+    return calcHashId({
+      type: item.type,
+      ...(item.aid !== undefined ? { aid: item.aid } : {}),
+      ...(item.bvid !== undefined ? { bvid: item.bvid } : {}),
+      ...(item.cid !== undefined ? { cid: item.cid } : {}),
+      ...(item.epId !== undefined ? { epId: item.epId } : {}),
+      ...(item.sid !== undefined ? { sid: item.sid } : {}),
+      ...(item.courseId !== undefined ? { courseId: item.courseId } : {}),
+      ...(item.lessonId !== undefined ? { lessonId: item.lessonId } : {}),
+      ...(item.itemId !== undefined ? { itemId: item.itemId } : {}),
+      ...(item.sectionId !== undefined ? { sectionId: item.sectionId } : {}),
+    });
+  }
   #persistFiles(task: ManagedTask, files: Record<string, ChunkState>): void {
     const current = this.#storedSnapshot(task.id);
     const data: TaskSnapshot = {
@@ -613,7 +646,7 @@ export class DownloadManager {
       files,
       ...(current?.status ? { status: current.status } : {}),
     };
-    const hash = calcHashId({ type: task.item.type, aid: task.item.aid, bvid: task.item.bvid, cid: task.item.cid });
+    const hash = this.#hashOf(task.item);
     this.#store.upsertActive({ taskId: task.id, hashId: hash, title: task.item.title, data });
   }
 }

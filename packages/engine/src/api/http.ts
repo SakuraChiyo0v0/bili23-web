@@ -142,6 +142,20 @@ export class HttpClient {
     }
   }
 
+
+  /** POST 并解析 JSON（body 以 opts.json 传入，自动带 Content-Type: application/json） */
+  async postJSON<T = unknown>(url: string, opts: HttpRequestOptions = {}): Promise<T> {
+    const response = await this.request("POST", url, opts);
+    if (!response.ok) {
+      throw new BiliError("API_ERROR", `HTTP ${response.status} ${response.statusText}`);
+    }
+    const text = await response.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch (err) {
+      throw new BiliError("API_ERROR", `响应不是合法 JSON`, { cause: err });
+    }
+  }
   /** GET 并解析 JSON（文本按 JSON.parse 处理） */
   async getJSON<T = unknown>(url: string, opts: HttpRequestOptions = {}): Promise<T> {
     const response = await this.request("GET", url, opts);

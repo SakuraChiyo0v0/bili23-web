@@ -24,4 +24,4 @@ Thumbs.db
 
 # --- Test / coverage ---
 coverage/
-.e2e-data/
+.e2e-data*/

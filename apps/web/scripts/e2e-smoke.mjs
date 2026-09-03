@@ -30,18 +30,30 @@ async function get(path) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const parsed = await post("/api/parse", { urls: [videoUrl] });
-const item = parsed.results?.[0]?.items?.[0];
-if (!item) throw new Error(`解析结果为空：${JSON.stringify(parsed).slice(0, 500)}`);
-console.log(`[parse] ${item.groupTitle} / ${item.title} (${item.id})`);
+const all = parsed.results?.[0]?.items ?? [];
+if (all.length === 0) throw new Error(`解析结果为空：${JSON.stringify(parsed).slice(0, 500)}`);
+// 过滤 0 时长/空标题的失效行（历史/收藏夹可能混入），避免冒烟挑到无法下载的条目
+const valid = all.filter((i) => (i.duration ?? 0) > 0 && String(i.title ?? "").trim().length > 0);
+if (valid.length === 0) throw new Error(`没有有效条目（均 0 时长/空标题）：${JSON.stringify(parsed).slice(0, 500)}`);
+// 冒烟默认挑时长最短的条目，控制下载体积；可传 SHORTEST=0 取首条
+const item = (process.env.SHORTEST ?? "1") === "1"
+  ? valid.reduce((a, b) => ((b.duration ?? 0) < (a.duration ?? 0) ? b : a))
+  : valid[0];
+console.log(`[parse] ${item.groupTitle} / ${item.title} (${item.id}, ${item.duration}s)`);
 
 const options = await get(`/api/media/${encodeURIComponent(item.id)}`);
-console.log(
-  `[media] type=${options.mediaType} 画质=[${options.qualities.map((q) => `${q.label}(${q.id})`).join(",")}]`,
-);
+const qs = options.qualities ?? [];
+const qLabels = qs.map((q) => `${q.label}(${q.id})`).join(",");
+console.log(`[media] type=${options.mediaType} 画质=[${qLabels}]`);
+// 默认选最低可用画质（冒烟轻量）；QUALITY=80 可显式指定
+const qualityId = Number(process.env.QUALITY ?? "");
+const chosen = qualityId > 0
+  ? (qs.find((q) => q.id === qualityId) ?? qs[0])
+  : [...qs].reverse().find((q) => q.id >= 32) ?? qs[qs.length - 1];
 
 const created = await post("/api/download", {
   itemIds: [item.id],
-  options: { videoQualityId: options.qualities[0]?.id ?? 200 },
+  options: { videoQualityId: chosen?.id ?? 200 },
   force: true,
 });
 const taskId = created.tasks?.[0]?.id;

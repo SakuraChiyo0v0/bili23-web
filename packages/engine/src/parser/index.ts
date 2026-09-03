@@ -1,6 +1,15 @@
 import { BiliError } from "../errors.js";
 import { classifyUrl, type ContentType } from "../url.js";
 import { VideoParser } from "./video.js";
+import { BangumiParser } from "./bangumi.js";
+import { CheeseParser } from "./cheese.js";
+import { AudioParser } from "./audio.js";
+import { LessonParser } from "./lesson.js";
+import { SpaceParser } from "./space.js";
+import { FavlistParser } from "./favlist.js";
+import { PopularParser } from "./popular.js";
+import { WatchLaterParser } from "./watch-later.js";
+import { HistoryParser } from "./history.js";
 import type { Parser, ParseContext, ParseResult } from "./types.js";
 
 /** b23 短链最多跟随跳转次数 */
@@ -11,6 +20,24 @@ export function getParser(type: ContentType): Parser {
   switch (type) {
     case "video":
       return new VideoParser();
+    case "bangumi":
+      return new BangumiParser();
+    case "cheese":
+      return new CheeseParser();
+    case "audio":
+      return new AudioParser();
+    case "lesson":
+      return new LessonParser();
+    case "space":
+      return new SpaceParser();
+    case "favlist":
+      return new FavlistParser();
+    case "popular":
+      return new PopularParser();
+    case "watch_later":
+      return new WatchLaterParser();
+    case "history":
+      return new HistoryParser();
     default:
       throw new BiliError("UNSUPPORTED_TYPE", `暂不支持的解析类型：${type}`);
   }
