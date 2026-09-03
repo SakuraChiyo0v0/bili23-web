@@ -147,6 +147,7 @@
 **Interfaces:**
 - Produces: `resolveStream(item, { quality, audioQuality, codec }): { video: StreamRef[]; audio: StreamRef[]; container }`；`StreamRef = { url; backupUrls?; bandwidth; codecs }`（桌面从 playurl 与 playurl_durl 两条路径对齐）
 
+- [x] Task 1.4 已完成：stream/resolver.ts（AUTO 哨兵 + 默认优先级 + resolveStreams），DASH/MP4 选流语义对齐桌面 video_info.py/audio_info.py（自动按优先级、显式不可用回退/禁用音频、空流抛 DOWNLOAD_FAILED）；17 个单测 + typecheck + build 通过
 ### Task 1.5：下载器（分块并发/断点/重试/限速/进度）
 
 **Files:**
@@ -198,3 +199,4 @@
 - P0 产出可独立验证（`pnpm check`、health、镜像可拉）。
 - P1 验收标准唯一且可观察：网页完成一部投稿视频下载并校验可播。
 - 后续 P2–P4 分别生成独立计划（沿用本模板）。
+

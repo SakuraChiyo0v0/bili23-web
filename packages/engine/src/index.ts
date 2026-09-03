@@ -29,3 +29,14 @@ export { fetchVideoMediaInfo } from "./media/video-info.js";
 export type { VideoMediaInfo, VideoMediaType, StreamRef } from "./media/video-info.js";
 export { ensureWbiKeys, resetWbiKeyCache } from "./media/wbi-keys.js";
 export type { WbiKeys } from "./media/wbi-keys.js";
+
+export {
+  AUTO_QUALITY,
+  AUTO_CODEC,
+  AUTO_AUDIO_QUALITY,
+  DEFAULT_VIDEO_QUALITY_PRIORITY,
+  DEFAULT_VIDEO_CODEC_PRIORITY,
+  DEFAULT_AUDIO_QUALITY_PRIORITY,
+  resolveStreams,
+} from "./stream/resolver.js";
+export type { StreamOptions, ResolvedStreams } from "./stream/resolver.js";
