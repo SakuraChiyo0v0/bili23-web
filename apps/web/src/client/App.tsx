@@ -8,6 +8,7 @@ import { Sidebar, TopBar, MobileTabBar } from "./components/Layout";
 import { TermsPanel } from "./components/TermsPanel";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ParsePage } from "./pages/ParsePage";
+import { TasksPage } from "./pages/TasksPage";
 
 export function App() {
   return (
@@ -36,6 +37,7 @@ function Shell() {
 
   const renderPage = () => {
     if (route.id === "parse") return <ParsePage />;
+    if (route.id === "downloads") return <TasksPage />;
     return <PlaceholderPage key={route.id} route={route.id} />;
   };
 

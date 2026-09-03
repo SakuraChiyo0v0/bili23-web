@@ -79,3 +79,20 @@ export function subscribeTaskEvents(id: string, onTask: (task: TaskSummary) => v
 export function getConfig<T = any>(): Promise<{ config: T }> {
   return request("/config");
 }
+
+export function listHistory(): Promise<{ history: Array<{ taskId: string; title: string; completedAt: number; outputPath?: string; error?: string }> }> {
+  return request("/history");
+}
+export function deleteHistory(taskId: string): Promise<{ ok: boolean }> {
+  return request(`/history/${encodeURIComponent(taskId)}`, { method: "DELETE" });
+}
+export function taskLog(id: string): Promise<{ lines: string[] }> {
+  return request(`/tasks/${encodeURIComponent(id)}/log`);
+}
+export function listFiles(): Promise<{ files: Array<{ name: string; path: string; size: number; mtime: number }> }> {
+  return request("/files");
+}
+/** 产物文件下载地址（用于"打开文件"） */
+export function fileRawUrl(relPath: string): string {
+  return `${BASE}/files/raw?path=${encodeURIComponent(relPath)}`;
+}
