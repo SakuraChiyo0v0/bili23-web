@@ -13,6 +13,7 @@ import {
   FolderIcon,
   HistoryIcon,
   DownloadIcon,
+  FilmIcon,
 } from "./icons.js";
 
 /** 需要 SSE / 轮询兜底的“仍在推进”状态 */
@@ -71,7 +72,7 @@ function formatDateTime(ts: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function DownloadView({ refreshKey }: { refreshKey: number }) {
+export function DownloadView({ refreshKey, onGoParse }: { refreshKey: number; onGoParse?: () => void }) {
   const { t } = useI18n();
   const [tasks, setTasks] = useState<TaskDTO[]>([]);
   const [files, setFiles] = useState<FileEntryDTO[]>([]);
@@ -308,7 +309,12 @@ export function DownloadView({ refreshKey }: { refreshKey: number }) {
       {tasks.length === 0 ? (
         <div className="empty">
           <DownloadIcon size={36} />
-          <p style={{ margin: "8px 0 0" }}>{t("dl.emptyAll")}</p>
+          <p style={{ margin: "4px 0 10px" }}>{t("dl.emptyAll")}</p>
+          {onGoParse ? (
+            <button className="btn btn-primary btn-sm empty-cta" onClick={onGoParse}>
+              {t("nav.parse")}
+            </button>
+          ) : null}
         </div>
       ) : visible.length === 0 ? (
         <div className="empty">{t("dl.emptyGroup")}</div>
@@ -447,7 +453,6 @@ function TaskCard(props: {
     props;
   const { t } = useI18n();
   const pct = Math.min(100, Math.max(0, task.progress));
-  const progressText = `${pct.toFixed(1)}% · ${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}`;
   const speedText = task.status === "downloading" && task.speedBps ? formatSpeed(task.speedBps) : "";
   const etaText =
     task.status === "downloading" && task.etaSec !== undefined && task.etaSec > 0
@@ -482,76 +487,81 @@ function TaskCard(props: {
   }
 
   return (
-    <li className="task-card">
-      <div className="task-head">
-        <span className={`badge ${badgeClass(task.status)}`}>{t(statusLabelKey(task.status))}</span>
-        <strong className="task-title">{task.title}</strong>
-        {task.qualityLabel ? <span className="muted" style={{ fontSize: 12 }}>{task.qualityLabel}</span> : null}
-        <div className="task-actions">
-          {actions.map((a) => (
-            <button key={a.key} className={a.danger ? "btn btn-danger btn-sm" : "btn btn-ghost btn-sm"} onClick={a.onClick}>
-              {a.icon}
-              {a.label}
+    <li className="task-card" data-status={task.status}>
+      <div className="task-thumb">
+        <FilmIcon />
+      </div>
+      <div className="task-content">
+        <div className="task-head">
+          <span className={`badge ${badgeClass(task.status)}`}>{t(statusLabelKey(task.status))}</span>
+          <div className="task-title-wrap">
+            <div className="task-title">{task.title}</div>
+            <div className="task-sub">
+              {task.groupTitle ? <span className="muted">{task.groupTitle}</span> : null}
+              {task.qualityLabel ? <span className="tag brand">{task.qualityLabel}</span> : null}
+            </div>
+          </div>
+          <div className="task-actions">
+            {actions.map((a) => (
+              <button key={a.key} className={a.danger ? "btn btn-danger btn-sm" : "btn btn-ghost btn-sm"} onClick={a.onClick}>
+                {a.icon}
+                {a.label}
+              </button>
+            ))}
+            <button className="btn btn-ghost btn-sm" onClick={onToggleLog}>
+              <LogIcon />
+              {logOpen ? t("dl.logHide") : t("dl.log")}
             </button>
-          ))}
-          <button className="btn btn-ghost btn-sm" onClick={onToggleLog}>
-            <LogIcon />
-            {logOpen ? t("dl.logHide") : t("dl.log")}
-          </button>
+          </div>
         </div>
-      </div>
 
-      <div className="progress">
-        <span style={{ width: `${pct}%` }} />
-      </div>
-      <div className="task-meta">
-        {task.status === "downloading" ? (
-          <>
-            <span>{progressText}</span>
-            {speedText ? <span className="tag brand">{speedText}</span> : null}
-            {etaText ? <span>{etaText}</span> : null}
-          </>
-        ) : task.status === "merging" ? (
-          <span>{t("dl.mergingText")}</span>
-        ) : (
-          <span>{t(statusLabelKey(task.status))}</span>
-        )}
-      </div>
-
-      {task.status === "interrupted" && task.error && (
-        <p className="error-text" style={{ margin: "6px 0 0" }}>{task.error}</p>
-      )}
-      {task.status === "failed" && task.error && (
-        <p className="error-text" style={{ margin: "6px 0 0" }}>{task.error}</p>
-      )}
-      {task.status === "completed" && task.outputPath && (
-        <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-2)", wordBreak: "break-all" }}>
-          {t("dl.output", { path: task.outputPath })}
-          {rel && (
+        <div className="progress">
+          <span style={{ width: `${pct}%` }} />
+        </div>
+        <div className="task-meta">
+          {task.status === "downloading" ? (
             <>
-              {" "}
+              <span className="task-pct">{pct.toFixed(0)}%</span>
+              <span>{formatBytes(task.downloadedBytes)} / {formatBytes(task.totalBytes)}</span>
+              {speedText ? <span className="tag brand">{speedText}</span> : null}
+              {etaText ? <span className="muted">{etaText}</span> : null}
+            </>
+          ) : task.status === "merging" ? (
+            <span>{t("dl.mergingText")}</span>
+          ) : (
+            <span>{t(statusLabelKey(task.status))}</span>
+          )}
+        </div>
+
+        {(task.status === "interrupted" || task.status === "failed") && task.error && (
+          <p className="error-text" style={{ margin: "6px 0 0" }}>{task.error}</p>
+        )}
+        {task.status === "completed" && task.outputPath && (
+          <div className="task-output">
+            <span className="muted">{t("dl.output", { path: task.outputPath })}</span>
+            {rel && (
               <a className="btn btn-soft btn-sm" href={rawUrl(rel)} download={fileName}>
                 <DownloadIcon />
                 {t("dl.downloadFile")}
               </a>
-            </>
-          )}
-        </p>
-      )}
+            )}
+          </div>
+        )}
 
-      {logOpen && (
-        <div className="log-box">
-          {logLoading ? (
-            <span className="muted">{t("dl.logLoading")}</span>
-          ) : logErr ? (
-            <span className="error-text">{logErr}</span>
-          ) : logLines && logLines.length > 0 ? (
-            <pre>{logLines.join("\n")}</pre>
-          ) : (
-            <span className="muted">{t("dl.logEmpty")}</span>
-          )}
-        </div>
-      )}
+        {logOpen && (
+          <div className="log-box">
+            {logLoading ? (
+              <span className="muted">{t("dl.logLoading")}</span>
+            ) : logErr ? (
+              <span className="error-text">{logErr}</span>
+            ) : logLines && logLines.length > 0 ? (
+              <pre>{logLines.join("\n")}</pre>
+            ) : (
+              <span className="muted">{t("dl.logEmpty")}</span>
+            )}
+          </div>
+        )}
+      </div>
     </li>
   );
 }

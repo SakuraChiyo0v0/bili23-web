@@ -888,3 +888,60 @@ html[data-theme='dark'] .skeleton::after { background: linear-gradient(90deg, tr
 @keyframes tabPill { from { opacity: 0; transform: scaleX(0.4); } to { opacity: 1; transform: scaleX(1); } }
 
 @media (max-width: 767px) { .bottom-tabbar { display: flex; } }
+
+/* hero 支持类型说明（纯文本，非交互） */
+.hero-limit {
+  margin: 20px auto 0;
+  max-width: 560px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* 下载任务卡片：缩略图 + 内容 */
+.task-card { flex-direction: row; align-items: flex-start; gap: 16px; }
+
+.task-thumb {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--r-lg);
+  background: var(--grad-soft);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+.task-thumb svg { width: 30px; height: 30px; opacity: 0.75; }
+.task-card[data-status='completed'] .task-thumb { background: var(--success-soft); color: var(--success); }
+.task-card[data-status='failed'] .task-thumb,
+.task-card[data-status='cancelled'] .task-thumb { background: var(--danger-soft); color: var(--danger); }
+
+.task-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+
+.task-head { align-items: flex-start; }
+
+.task-title { flex: 1; min-width: 0; font-weight: 700; font-size: 14.5px; line-height: 1.35; }
+.task-title-wrap { flex: 1; min-width: 0; }
+
+.task-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; flex-wrap: wrap; }
+
+.task-pct { font-weight: 700; color: var(--accent); font-family: var(--mono); font-size: 13px; }
+
+.task-output {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+}
+.task-output .muted { flex: 1; min-width: 0; word-break: break-all; }
+
+/* 下载页空状态 CTA */
+.empty-cta { margin-top: 6px; }

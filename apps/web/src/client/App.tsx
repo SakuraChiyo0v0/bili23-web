@@ -77,7 +77,7 @@ export function App() {
               onGoDownload={goDownload}
             />
           ) : tab === "download" ? (
-            <DownloadView refreshKey={downloadKey} />
+            <DownloadView refreshKey={downloadKey} onGoParse={() => setTab("parse")} />
           ) : (
             <SettingsView />
           )}

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import type {
   CoverFormatDTO,
   DanmakuFormatDTO,
@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 import { formatDuration } from "./types.js";
 import { useI18n } from "./i18n.js";
-import { CheckIcon, SearchIcon, DownloadIcon, LogoIcon, FilmIcon, PlayIcon, StarIcon, ClockIcon, HistoryIcon } from "./icons.js";
+import { CheckIcon, SearchIcon, DownloadIcon, LogoIcon } from "./icons.js";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -33,39 +33,10 @@ interface Props {
 }
 
 const BATCH_BUSY = "__batch__";
-const TYPE_CHIPS: Record<string, Array<{ label: string; icon: ReactNode }>> = {
-  "zh-CN": [
-    { label: "投稿视频", icon: <FilmIcon /> },
-    { label: "番剧", icon: <PlayIcon /> },
-    { label: "课程", icon: <StarIcon /> },
-    { label: "音乐", icon: <PlayIcon /> },
-    { label: "收藏夹", icon: <StarIcon /> },
-    { label: "稍后再看", icon: <ClockIcon /> },
-    { label: "历史", icon: <HistoryIcon /> },
-  ],
-  "zh-TW": [
-    { label: "投稿影片", icon: <FilmIcon /> },
-    { label: "番劇", icon: <PlayIcon /> },
-    { label: "課程", icon: <StarIcon /> },
-    { label: "音樂", icon: <PlayIcon /> },
-    { label: "收藏清單", icon: <StarIcon /> },
-    { label: "稍後再看", icon: <ClockIcon /> },
-    { label: "歷史", icon: <HistoryIcon /> },
-  ],
-  en: [
-    { label: "Videos", icon: <FilmIcon /> },
-    { label: "Bangumi", icon: <PlayIcon /> },
-    { label: "Courses", icon: <StarIcon /> },
-    { label: "Music", icon: <PlayIcon /> },
-    { label: "Favorites", icon: <StarIcon /> },
-    { label: "Watch Later", icon: <ClockIcon /> },
-    { label: "History", icon: <HistoryIcon /> },
-  ],
-};
 
 
 export function ParseView({ onCreated, onGoDownload }: Props) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [urlText, setUrlText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
@@ -283,17 +254,9 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
             )}
           </button>
         </div>
-        <div className="hero-chips">
-          {(TYPE_CHIPS[lang] ?? []).map((c) => (
-            <span className="hero-chip" key={c.label}>
-              {c.icon}
-              {c.label}
-            </span>
-          ))}
-        </div>
+                <p className="hero-limit">支持：投稿视频 / 番剧 / 课程 / 音乐 / 收藏夹 / 稍后再看 / 历史记录</p>
       </div>
 
-      
       {error && <div className="error-text">{error}</div>}
 
       {hasResults && (
