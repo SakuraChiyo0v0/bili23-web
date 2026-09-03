@@ -2,6 +2,7 @@ import type {
   AppConfig,
   AppConfigPatch,
   AuthStatus,
+  QrLoginSession,
   DownloadCreateRequest,
   DownloadCreateResult,
   FileEntry,
@@ -130,6 +131,22 @@ export class ApiClient {
 
   async authStatus(): Promise<AuthStatus> {
     return this.#request("/api/auth/status");
+  }
+
+  async qrLoginStart(): Promise<QrLoginSession> {
+    return this.#request<QrLoginSession>("/api/auth/qr", { method: "POST" });
+  }
+
+  async qrLoginPoll(qrcodeKey: string): Promise<QrLoginSession> {
+    return this.#request<QrLoginSession>("/api/auth/qr/poll", { method: "POST", body: { qrcodeKey } });
+  }
+
+  async loginWithSessdata(sessdata: string): Promise<AuthStatus> {
+    return this.#request<AuthStatus>("/api/auth", { method: "POST", body: { sessdata } });
+  }
+
+  async logout(): Promise<AuthStatus> {
+    return this.#request<AuthStatus>("/api/auth", { method: "DELETE" });
   }
 
   fileUrl(path: string): string {

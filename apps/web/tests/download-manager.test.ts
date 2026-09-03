@@ -13,8 +13,9 @@ const h = vi.hoisted(() => {
     downloads: Array<{ resolve: () => void; reject: (e: unknown) => void }>;
     streamOpts: Array<Record<string, unknown>>;
     pageCalls: number[];
+    dashMode: boolean;
     pagination_totalPages: number | undefined;
-  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [], pageCalls: [], pagination_totalPages: undefined };
+  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [], pageCalls: [], dashMode: false, pagination_totalPages: undefined };
   return { state };
 });
 
@@ -46,6 +47,17 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
     },
     resolveStreams: (info: Record<string, unknown>, streamOpts: Record<string, unknown>) => {
       h.state.streamOpts.push(streamOpts);
+      if (h.state.dashMode) {
+        return {
+          mediaType: "dash",
+          videoQualityId: 80,
+          audioQualityId: 30280,
+          videoCodecId: 7,
+          videoRef: { baseUrl: "http://127.0.0.1/video.m4s", backupUrl: [] },
+          audioRef: { baseUrl: "http://127.0.0.1/audio.m4s", backupUrl: [] },
+          videoExt: "m4s",
+        } as never;
+      }
       return {
         mediaType: "mp4",
         videoQualityId: 80,
@@ -84,10 +96,13 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
       return { url: "http://127.0.0.1/fake.mp4", fileSize, downloadedBytes: fileSize, state };
     },
     probeMedia: async () => ({ ok: true, format: { duration: 1 } }) as never,
+    remuxMedia: async (_i: string, out: string) => { await writeFile(out, Buffer.alloc(64, 1)); return { outputPath: out, code: 0, stderr: "" }; },
+    mergeAudioVideo: async (_v: string, _a: string, out: string) => { await writeFile(out, Buffer.alloc(64, 1)); return { outputPath: out, code: 0, stderr: "" }; },
+    concatMediaParts: async (_l: string, out: string) => { await writeFile(out, Buffer.alloc(64, 1)); return { outputPath: out, code: 0, stderr: "" }; },
   };
 });
 
-import { TaskStore, parseUrl, BiliError } from "@bili23-web/engine";
+import { TaskStore, parseUrl, BiliError, HttpClient } from "@bili23-web/engine";
 import { DownloadManager, normalizeExtrasStyles } from "../src/server/download-manager.js";
 import type { DownloadManager as DownloadManagerType } from "../src/server/download-manager.js";
 import type { TaskSummary } from "../src/server/download-manager.js";
@@ -201,6 +216,7 @@ describe("DownloadManager 登录 Cookie（auth）", () => {
     }
   });
 
+
   it("空 SESSDATA 抛错", async () => {
     const mgr = await makeManager();
     try {
@@ -211,6 +227,65 @@ describe("DownloadManager 登录 Cookie（auth）", () => {
   });
 });
 
+describe("DownloadManager 扫码登录", () => {
+  it("qrLoginStart 返回二维码与 key；poll 成功时把 SESSDATA 落库并持久化", async () => {
+    const dataDir = await mkdtemp(join(tmpRoot, "qrauth-"));
+    // 模拟 B 站 passport：generate 返回二维码，poll 成功时 Set-Cookie SESSDATA
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      if (url.includes("qrcode/generate")) {
+        return new Response(JSON.stringify({ code: 0, data: { url: "https://www.bilibili.com/??qr_login=qrcode", qrcode_key: "key123" } }), { status: 200 });
+      }
+      if (url.includes("qrcode/poll")) {
+        return new Response(JSON.stringify({ code: 0, data: { code: 0, message: "ok" } }), {
+          status: 200,
+          headers: { "Set-Cookie": "SESSDATA=qr_sess_1; Path=/; Domain=.bilibili.com" },
+        });
+      }
+      return new Response("{}", { status: 500 });
+    };
+    const http = new HttpClient({ fetchImpl: fetchImpl as typeof fetch });
+    let mgr: DownloadManagerType | undefined;
+    try {
+      mgr = new DownloadManager({ dataDir, httpClient: http });
+      await mgr.init();
+      const start = await mgr.qrLoginStart();
+      expect(start.qrUrl).toContain("qr_login");
+      expect(start.qrcodeKey).toBe("key123");
+
+      const poll = await mgr.qrLoginPoll("key123");
+      expect(poll.loggedIn).toBe(true);
+      expect((await mgr.authStatus()).loggedIn).toBe(true);
+
+      // 重启后持久化生效
+      mgr.close();
+      mgr = undefined as unknown as DownloadManagerType;
+      const mgr2 = new DownloadManager({ dataDir });
+      await mgr2.init();
+      expect(await mgr2.authStatus()).toEqual({ loggedIn: true, preview: "qr_sess_1" });
+      mgr2.close();
+    } finally {
+      mgr?.close();
+    }
+  });
+
+  it("poll 未扫码/过期时不登录", async () => {
+    const dataDir = await mkdtemp(join(tmpRoot, "qrauth2-"));
+    const fetchImpl = async (): Promise<Response> => {
+      return new Response(JSON.stringify({ code: 0, data: { code: 86101, message: "waiting" } }), { status: 200 });
+    };
+    const http = new HttpClient({ fetchImpl: fetchImpl as typeof fetch });
+    const mgr = new DownloadManager({ dataDir, httpClient: http });
+    try {
+      await mgr.init();
+      const poll = await mgr.qrLoginPoll("key");
+      expect(poll.loggedIn).toBe(false);
+      expect((await mgr.authStatus()).loggedIn).toBe(false);
+    } finally {
+      mgr.close();
+    }
+  });
+});
 describe("DownloadManager parseRequest（类型入口）", () => {
   it("未知类型抛 UNSUPPORTED_TYPE", async () => {
     const mgr = await makeManager();
@@ -563,7 +638,6 @@ describe("DownloadManager 高级默认档位兜底（advanced.default*）", () =
       const taskId = taskIds(mgr)[0]!;
       await waitFor(() => statusOf(mgr, taskId)?.status === "downloading");
       await waitDownloads(1);
-      await waitFor(() => h.state.streamOpts.length >= 1, 3000);
       const opts = h.state.streamOpts[h.state.streamOpts.length - 1]!;
       expect(opts.videoQualityId).toBe(16);
       releaseDownloads(1);
@@ -572,10 +646,85 @@ describe("DownloadManager 高级默认档位兜底（advanced.default*）", () =
       mgr.close();
       h.state.downloads.length = 0;
       h.state.streamOpts = [];
+      h.state.dashMode = false;
     }
   });
 });
 
+describe("DownloadManager 媒体流/合并/保留原文件（原版核心）", () => {
+  it("downloadAudio=false 时不下载音频文件（仅视频）", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      const created = await mgr.createTasks([items[0]!.id], { downloadVideo: true, downloadAudio: false, container: "mp4" });
+      const tid = created.tasks[0]!.id;
+      await waitFor(() => statusOf(mgr, tid)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, tid)?.status === "completed", 10000);
+      expect(statusOf(mgr, tid)?.outputPath).toContain(".mp4");
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+    }
+  });
+
+  it("mergeVideoAudio=false 且同时下载音频时，视频/音频分开落盘", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      // 让 mock resolveStreams 返回 DASH 风格（video+audio）
+      h.state.dashMode = true;
+      h.state.streamOpts = [];
+      const created = await mgr.createTasks([items[0]!.id], { downloadVideo: true, downloadAudio: true, mergeVideoAudio: false, container: "mp4" });
+      const tid = created.tasks[0]!.id;
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, tid)?.status === "completed", 10000);
+      expect(statusOf(mgr, tid)?.outputPath).toBeTruthy();
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+      h.state.dashMode = false;
+    }
+  });
+});
+describe("DownloadManager 优先级透传", () => {
+  it("任务传 videoQualityPriority/audioQualityPriority/videoCodecPriority 会透传到 resolveStreams", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      h.state.dashMode = true;
+      h.state.streamOpts = [];
+      await mgr.createTasks([items[0]!.id], {
+        downloadVideo: true,
+        downloadAudio: true,
+        videoQualityPriority: [116, 112], audioQualityPriority: [30280], videoCodecPriority: [7],
+      });
+      const tid = taskIds(mgr)[0]!;
+      await waitFor(() => statusOf(mgr, tid)?.status === "downloading");
+      await waitFor(() => h.state.streamOpts.length >= 1, 3000);
+      const opts = h.state.streamOpts[h.state.streamOpts.length - 1]!;
+      expect(opts.videoQualityPriority).toEqual([116, 112]);
+      expect(opts.audioQualityPriority).toEqual([30280]);
+      expect(opts.videoCodecPriority).toEqual([7]);
+      // 持续放行直到任务完成（DASH 有 video+audio 两个分片，逐个注册）
+      for (let guard = 0; guard < 40 && statusOf(mgr, tid)?.status !== "completed"; guard += 1) {
+        if (h.state.downloads.length > 0) releaseDownloads(h.state.downloads.length);
+        await sleep(15);
+      }
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+      h.state.dashMode = false;
+    }
+  });
+});
 describe("normalizeExtrasStyles 空 style 兜底", () => {
   it("弹幕/字幕启用但 style 传空对象时回填默认样式", () => {
     const out = normalizeExtrasStyles({

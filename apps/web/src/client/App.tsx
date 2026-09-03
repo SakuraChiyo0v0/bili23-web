@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
 import { api } from "./api.js";
+import { useCallback, useEffect, useState } from "react";
 import type { AppConfig, AuthStatus } from "./types.js";
 import { Icon, type IconName } from "./components/icons.js";
 import { ParseView } from "./views/ParseView.js";
 import { TasksView } from "./views/TasksView.js";
 import { SettingsView } from "./views/SettingsView.js";
+import { LoginDialog } from "./components/LoginDialog.js";
 import { cn } from "./utils.js";
 
 type View = "parse" | "tasks" | "settings";
@@ -23,6 +24,7 @@ export default function App() {
   const [config, setConfig] = useState<AppConfig>();
   const [auth, setAuth] = useState<AuthStatus>();
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" }>();
+  const [showLogin, setShowLogin] = useState(false);
   const [taskRevision, setTaskRevision] = useState(0);
 
   const showToast = useCallback((message: string, tone: "success" | "error" = "success") => {
@@ -74,8 +76,10 @@ export default function App() {
             ))}
           </nav>
           <div className="topbar-status">
-            <span className={cn("health-dot", auth?.loggedIn ? "is-online" : "")} />
-            <span>{auth?.loggedIn ? `已登录 ${auth.preview}` : "匿名模式"}</span>
+            <button className={cn("login-chip", auth?.loggedIn && "is-online")} type="button" onClick={() => auth?.loggedIn ? void api.logout().then((next) => setAuth(next)).catch(() => undefined) : setShowLogin(true)}>
+              <span className={cn("health-dot", auth?.loggedIn ? "is-online" : "")} />
+              <span>{auth?.loggedIn ? `已登录 ${auth.preview}` : "登录"}</span>
+            </button>
             <button className="theme-chip" type="button" onClick={() => setConfig((current) => current ? { ...current, behavior: { ...current.behavior, theme: current.behavior.theme === "dark" ? "light" : "dark" } } : current)} aria-label="切换主题"><Icon name={config?.behavior.theme === "dark" ? "sun" : "moon"} size={15} /></button>
           </div>
         </div>
@@ -101,6 +105,9 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {showLogin ? <LoginDialog onClose={() => setShowLogin(false)} onLogin={(preview) => setAuth((current) => current ? { ...current, loggedIn: true, preview } : { loggedIn: true, preview })} onToast={showToast} /> : null}
+
 
       {toast ? <div className={cn("toast", `toast-${toast.tone}`)}><Icon name={toast.tone === "success" ? "check" : "info"} size={16} /> {toast.message}</div> : null}
     </div>

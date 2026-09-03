@@ -110,6 +110,10 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
   const [audio, setAudio] = useState<string>("auto");
   const [codec, setCodec] = useState<string>("auto");
   const [container, setContainer] = useState<string>(config.download.defaultContainer);
+  const [downloadVideo, setDownloadVideo] = useState(true);
+  const [downloadAudio, setDownloadAudio] = useState(true);
+  const [mergeVideoAudio, setMergeVideoAudio] = useState(true);
+  const [keepOriginal, setKeepOriginal] = useState(false);
   const [ruleId, setRuleId] = useState<string>(config.fileNaming.rules.find((rule) => rule.default)?.id ?? "");
   const [number, setNumber] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -167,6 +171,10 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
       ...(numericAudio === undefined ? {} : { audioQualityId: numericAudio }),
       ...(numericCodec === undefined ? {} : { videoCodecId: numericCodec }),
       container: container === "mkv" ? "mkv" : "mp4",
+      downloadVideo,
+      downloadAudio,
+      mergeVideoAudio,
+      keepOriginalFiles: keepOriginal,
       extras,
       ...(selectedRule
         ? {
@@ -222,6 +230,13 @@ export function DownloadOptions({ config, media, selectedCount, onCancel, onSubm
                   <button type="button" className={container === "mkv" ? "is-active" : ""} onClick={() => setContainer("mkv")}>MKV</button>
                 </div>
               </Field>
+
+            <div className="media-stream-grid">
+              <SwitchRow label="下载视频流" hint="关闭则仅下载音频" checked={downloadVideo} onChange={setDownloadVideo} />
+              <SwitchRow label="下载音频流" hint="关闭则仅下载视频" checked={downloadAudio} onChange={setDownloadAudio} />
+              <SwitchRow label="合并音视频" hint="开启则合成一个文件；关闭则视频/音频分开落盘" checked={mergeVideoAudio} onChange={(v) => { setMergeVideoAudio(v); if (!v) setKeepOriginal(false); }} disabled={!(downloadVideo && downloadAudio)} />
+              <SwitchRow label="保留原始分片" hint="合并后保留原始 m4s 分片文件" checked={keepOriginal} onChange={setKeepOriginal} disabled={!(mergeVideoAudio && downloadVideo && downloadAudio)} />
+            </div>
             </div>
           </section>
 

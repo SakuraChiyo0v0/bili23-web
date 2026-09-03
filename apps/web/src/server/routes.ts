@@ -17,6 +17,7 @@ import type {
   TaskSummary,
   ParseRequest,
   AuthStatus,
+  QrLoginSession,
 } from "./download-manager.js";
 
 /**
@@ -67,6 +68,8 @@ export interface ApiDeps {
   listParseHistory?(): ParseHistoryEntry[];
   deleteParseHistory?(id: number): boolean;
   loginAuth?(sessdata: string): Promise<AuthStatus>;
+  qrLoginStart?(): Promise<QrLoginSession>;
+  qrLoginPoll?(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }>;
   logoutAuth?(): Promise<AuthStatus>;
   authStatus?(): Promise<AuthStatus>;
 }
@@ -323,6 +326,31 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
     const manager = getManager();
     if (!manager.logoutAuth) return c.json({ loggedIn: false, preview: "" });
     return c.json(await manager.logoutAuth());
+  });
+  app.post("/api/auth/qr", async (c) => {
+    const manager = getManager();
+    if (!manager.qrLoginStart) return c.json({ error: { code: "NOT_FOUND", message: "扫码登录不可用" } }, 404);
+    try {
+      return c.json(await manager.qrLoginStart());
+    } catch (err) {
+      const { status, body } = errorBody(err);
+      return c.json(body, status);
+    }
+  });
+
+  app.post("/api/auth/qr/poll", async (c) => {
+    const manager = getManager();
+    if (!manager.qrLoginPoll) return c.json({ error: { code: "NOT_FOUND", message: "扫码登录轮询不可用" } }, 404);
+    try {
+      const body = (await c.req.json()) as { qrcodeKey?: string };
+      if (!body.qrcodeKey?.trim()) {
+        return c.json({ error: { code: "INVALID_AUTH", message: "qrcodeKey 不能为空" } }, 400);
+      }
+      return c.json(await manager.qrLoginPoll(body.qrcodeKey));
+    } catch (err) {
+      const { status, body } = errorBody(err);
+      return c.json(body, status);
+    }
   });
 
   // 全局设置（P3：附加内容默认 + 文件命名/编号）

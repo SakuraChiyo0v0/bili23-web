@@ -12,6 +12,9 @@ import {
   calcHashId,
   concatMediaParts,
   ensureAnonymousSession,
+  qrGenerate,
+  qrPoll,
+  QRCodeStatus,
   BILI_API_BASE,
   classifyUrl,
   downloadFile,
@@ -107,6 +110,22 @@ export interface DownloadOptions {
   audioQualityId?: number;
   /** 输出容器，默认 mp4 */
   container?: "mp4" | "mkv";
+  /** 是否下载视频流（缺省 true） */
+  downloadVideo?: boolean;
+  /** 是否下载音频流（缺省 true） */
+  downloadAudio?: boolean;
+  /** 是否合并音视频（缺省 true；false 时视频流/音频流单独落盘） */
+  mergeVideoAudio?: boolean;
+  /** 合并后是否保留原始分片文件（缺省 false） */
+  keepOriginalFiles?: boolean;
+  /** 保留原始文件的类型：0 视频 / 1 音频 / 2 视频+音频（对齐桌面 keep_original_files_type） */
+  keepOriginalFilesType?: number;
+  /** 画质优先级（覆盖默认，从高到低） */
+  videoQualityPriority?: number[];
+  /** 编码优先级 */
+  videoCodecPriority?: number[];
+  /** 音质优先级 */
+  audioQualityPriority?: number[];
   /** 附加内容快照（组缺省由服务端全局附加配置补齐后固化，R-208） */
   extras?: ExtrasOptions;
   /** 命名/编号快照（创建任务时按命名规则 + 编号模式固化） */
@@ -357,6 +376,16 @@ export interface AuthStatus {
   preview: string;
 }
 
+/** 扫码登录会话状态（QR 生成后轮询用） */
+export interface QrLoginSession {
+  /** 二维码内容（前端渲染为二维码图片） */
+  qrUrl: string;
+  /** 轮询 key */
+  qrcodeKey: string;
+  /** 当前扫码状态 */
+  status: QRCodeStatus;
+}
+
 /** 附加内容样式兜底：前端可能传空 style，引擎需要完整 DanmakuStyle/SubtitleStyle 才能渲染 ASS */
 export function normalizeExtrasStyles(extras: ExtrasOptions): ExtrasOptions {
   if (extras.danmaku?.enabled && (!extras.danmaku.style || Object.keys(extras.danmaku.style).length === 0)) {
@@ -402,8 +431,8 @@ export class DownloadManager {
   /** 重复下载策略（config.download.duplicatePolicy）：prompt=询问 skip=跳过 force=强制 */
   #duplicatePolicy: "prompt" | "skip" | "force" = "prompt";
 
-  constructor(opts: { dataDir: string; downloadDir?: string }) {
-    this.#http = new HttpClient();
+  constructor(opts: { dataDir: string; downloadDir?: string; httpClient?: HttpClient }) {
+    this.#http = opts.httpClient ?? new HttpClient();
     this.#sessionReady = ensureAnonymousSession(this.ctx);
     this.#dataDir = opts.dataDir;
     this.#rootDir = opts.downloadDir ?? join(opts.dataDir, "downloads");
@@ -457,6 +486,27 @@ export class DownloadManager {
 
   // ---------- 登录（SESSDATA cookie）----------
 
+  /** 生成扫码登录会话（对应桌面 QRCode.generate）；成功后返回二维码与轮询 key */
+  async qrLoginStart(): Promise<QrLoginSession> {
+    const { url, qrcodeKey } = await qrGenerate(this.#http);
+    return { qrUrl: url, qrcodeKey, status: QRCodeStatus.UNSCANNED };
+  }
+
+  /** 轮询扫码状态；一旦登录成功（code 0），把 B 站下发的 cookie 落库并返回已登录态 */
+  async qrLoginPoll(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }> {
+    const status = await qrPoll(this.#http, qrcodeKey);
+    if (status === QRCodeStatus.SUCCESS) {
+      // B 站在 poll 响应 Set-Cookie 里下发 SESSDATA/bili_jct/DedeUserID，
+      // HttpClient 已捕获进 jar；这里取回并持久化
+      const sessdata = this.#http.jar.get("SESSDATA");
+      if (sessdata) {
+        this.#sessdata = sessdata;
+        await this.#persistAuth();
+      }
+      return { qrUrl: "", qrcodeKey, status, loggedIn: !!sessdata };
+    }
+    return { qrUrl: "", qrcodeKey, status, loggedIn: false };
+  }
   async loginAuth(sessdata: string): Promise<AuthStatus> {
     const s = sessdata.trim();
     if (!s) throw new BiliError("INVALID_URL", "SESSDATA 不能为空");
@@ -1093,6 +1143,9 @@ export class DownloadManager {
       if (task.options.videoQualityId !== undefined) streamOpts.videoQualityId = task.options.videoQualityId;
       if (task.options.videoCodecId !== undefined) streamOpts.videoCodecId = task.options.videoCodecId;
       if (task.options.audioQualityId !== undefined) streamOpts.audioQualityId = task.options.audioQualityId;
+      if (task.options.videoQualityPriority) streamOpts.videoQualityPriority = task.options.videoQualityPriority;
+      if (task.options.videoCodecPriority) streamOpts.videoCodecPriority = task.options.videoCodecPriority;
+      if (task.options.audioQualityPriority) streamOpts.audioQualityPriority = task.options.audioQualityPriority;
       const resolved = resolveStreams(info, streamOpts);
       const { files, mergePlan } = this.#buildPlan(task, info, resolved);
       if (files.length === 0) {
@@ -1166,28 +1219,55 @@ export class DownloadManager {
       task.pushLog("开始合并/转封装（" + outExt + "）");
       task.update({ status: "merging" });
       this.#persist(task, { status: "merging" });
+      const wantVideo = task.options.downloadVideo !== false;
+      const wantAudio = task.options.downloadAudio !== false;
+      const mergeVideoAudio = task.options.mergeVideoAudio !== false;
+      // 仅下载视频流或仅音频流时无合并可言，直接转封装/改名
+      const hasBoth = wantVideo && wantAudio && !info.singleFileExt;
+
+      let finalPath: string | undefined;
       if (info.singleFileExt) {
         const part = files[0];
         if (!part) throw new BiliError("DOWNLOAD_FAILED", "缺少单文件直链");
         await rename(join(taskDir, part.fileName), tempOut);
+        finalPath = await this.#placeOutput(task, tempOut, target.dir, target.stem, outExt);
+      } else if (!hasBoth) {
+        // 只下载视频流或只下载音频流：无合并，直接转封装/改名
+        const onlyKey: "video" | "audio" = wantVideo ? "video" : "audio";
+        finalPath = await this.#placeOutputSplit(task, files, taskDir, target.dir, target.stem, onlyKey, wantVideo ? outExt : "m4a");
+      } else if (!mergeVideoAudio) {
+        // 视频流/音频流分开下载（不合并）：各命名独立落盘
+        const videoFinal = wantVideo
+          ? await this.#placeOutputSplit(task, files, taskDir, target.dir, target.stem, "video", outExt)
+          : undefined;
+        const audioFinal = wantAudio && mergePlan.audioKey
+          ? await this.#placeOutputSplit(task, files, taskDir, target.dir, target.stem, "audio", "m4a")
+          : undefined;
+        finalPath = videoFinal ?? audioFinal;
+        // 产物以第一条实际落盘为准
+        task.update({ status: "completed", progress: 100, outputPath: finalPath });
+        this.#persist(task, { status: "completed" });
       } else {
         await this.#merge(task, taskDir, mergePlan, files, tempOut, container, gathered.merge);
+        finalPath = await this.#placeOutput(task, tempOut, target.dir, target.stem, outExt);
+        // 保留原始分片文件：把视频/音频 m4s 也落盘到产物目录
+        if (task.options.keepOriginalFiles) {
+          await this.#keepOriginalFiles(task, files, taskDir, target.dir, target.stem);
+        }
       }
-
-      // 落盘到最终目录（按命名规则 folder/stem，冲突自动改名）
-      const finalPath = await this.#placeOutput(task, tempOut, target.dir, target.stem, outExt);
-      await probeMedia(finalPath); // 校验产物可读（ffprobe）
-      await this.#writeStandaloneExtras(task, finalPath, extrasOpt, gathered);
-      task.update({ status: "completed", progress: 100, outputPath: finalPath });
+      const finalOut = finalPath as string; // 各分支均已落盘或抛错，此处必然存在
+      await probeMedia(finalOut); // 校验产物可读（ffprobe）
+      await this.#writeStandaloneExtras(task, finalOut, extrasOpt, gathered);
+      task.update({ status: "completed", progress: 100, outputPath: finalOut });
       task.speedBps = 0;
       task.etaSec = 0;
-      task.pushLog("下载完成：" + finalPath);
+      task.pushLog("下载完成：" + finalOut);
       await rm(taskDir, { recursive: true, force: true });
 
       const completedData = {
         ...this.#storedSnapshot(task.id),
         status: "completed",
-        outputPath: finalPath,
+        outputPath: finalOut,
         qualityLabel: task.summary().qualityLabel,
       };
       this.#store.removeActive(task.id);
@@ -1260,15 +1340,26 @@ export class DownloadManager {
     resolved: ResolvedStreams,
   ): { files: PlannedFile[]; mergePlan: MergePlan } {
     const files: PlannedFile[] = [];
+    const wantVideo = task.options.downloadVideo !== false;
+    const wantAudio = task.options.downloadAudio !== false;
     if (resolved.mediaType === "dash" && resolved.videoRef) {
-      const videoFile: PlannedFile = {
-        key: "video",
-        urls: this.#candidateUrls([resolved.videoRef.baseUrl, ...resolved.videoRef.backupUrl]),
-        fileName: `video_${task.id}.m4s`,
-      };
-      files.push(videoFile);
-      const mergePlan: MergePlan = { kind: "dash", videoKey: "video", partKeys: [] };
-      if (resolved.audioRef) {
+      let firstKey = "";
+      const mergePlan: MergePlan = { kind: "dash", videoKey: "", partKeys: [] };
+      if (wantVideo) {
+        const videoFile: PlannedFile = {
+          key: "video",
+          urls: this.#candidateUrls([resolved.videoRef.baseUrl, ...resolved.videoRef.backupUrl]),
+          fileName: `video_${task.id}.m4s`,
+        };
+        files.push(videoFile);
+        firstKey = "video";
+        mergePlan.videoKey = "video";
+      } else if (resolved.audioRef) {
+        // 仅音频：音频作为主文件
+        firstKey = "audio";
+        mergePlan.videoKey = "";
+      }
+      if (wantAudio && resolved.audioRef) {
         files.push({
           key: "audio",
           urls: this.#candidateUrls([resolved.audioRef.baseUrl, ...resolved.audioRef.backupUrl]),
@@ -1375,6 +1466,59 @@ export class DownloadManager {
     return unique;
   }
 
+  /** 不合并时，把视频/音频 m4s 转封装为可播容器并落盘（视频→mp4，音频→m4a） */
+  async #placeOutputSplit(
+    task: ManagedTask,
+    files: PlannedFile[],
+    taskDir: string,
+    dir: string,
+    stem: string,
+    key: "video" | "audio",
+    ext: string,
+  ): Promise<string> {
+    const file = files.find((f) => f.key === key);
+    if (!file) throw new BiliError("DOWNLOAD_FAILED", `缺少${key === "video" ? "视频" : "音频"}文件`);
+    await mkdir(dir, { recursive: true });
+    const suffix = key === "video" ? "video" : "audio";
+    const tempOut = join(taskDir, `out_${suffix}_${task.id}.${ext}`);
+    const src = join(taskDir, file.fileName);
+    // m4s 为 fMP4 分片，需 ffmpeg 转封装为可播容器（-c copy 保码流）。
+    // 输出容器由文件扩展名决定（mp4/mkv/m4a 均为 MP4 家族）；这里用 mp4 语义避免触发附加内容内嵌。
+    await remuxMedia(src, tempOut, {
+      container: "mp4",
+      signal: task.signal,
+      ...(this.#ffmpegPath !== undefined ? { ffmpegPath: this.#ffmpegPath } : {}),
+    });
+    const target = join(dir, `${stem}_${suffix}.${ext}`);
+    if (this.#renamePolicy === "overwrite") {
+      await rename(tempOut, target);
+      return target;
+    }
+    const unique = await this.#uniquePath(target);
+    await rename(tempOut, unique);
+    return unique;
+  }
+
+  /** 合并后保留原始分片文件（视频/音频 m4s 或直链 mp4 分片），落盘在产物目录 */
+  async #keepOriginalFiles(
+    task: ManagedTask,
+    files: PlannedFile[],
+    taskDir: string,
+    dir: string,
+    stem: string,
+  ): Promise<void> {
+    await mkdir(dir, { recursive: true });
+    // 复制（不移动）原始分片到产物目录，避免重复命名冲突时影响已合并产物
+    for (const file of files) {
+      const src = join(taskDir, file.fileName);
+      const target = join(dir, `${stem}.${file.fileName}`);
+      await rename(src, target).catch(async (err) => {
+        // 已存在同名则跳过（保留默认行为）
+        if ((err as Error).message.includes("EEXIST")) return;
+        throw err;
+      });
+    }
+  }
   // ---------- P3：命名与附加内容管线 ----------
 
   /** 从命名规则列表取指定分类的规则（默认优先） */

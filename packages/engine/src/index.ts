@@ -17,6 +17,8 @@ export {
 } from "./constants/quality.js";
 export type { VideoQualityKey, AudioQualityKey, VideoCodecKey } from "./constants/quality.js";
 export { CookieJar } from "./api/cookies.js";
+export { QRCodeStatus, qrGenerate, qrPoll } from "./api/auth.js";
+export type { QRGenerateResult } from "./api/auth.js";
 export { ensureAnonymousSession, buvidFpHex, makeUuid, makeBLsid } from "./api/session.js";
 export { HttpClient } from "./api/http.js";
 export type { HttpClientOptions, HttpRequestOptions, HttpMethod } from "./api/http.js";

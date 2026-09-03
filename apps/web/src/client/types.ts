@@ -207,9 +207,27 @@ export interface DownloadOptions {
   videoCodecId?: number;
   audioQualityId?: number;
   container?: "mp4" | "mkv";
+  /** 是否下载视频流（缺省 true） */
+  downloadVideo?: boolean;
+  /** 是否下载音频流（缺省 true） */
+  downloadAudio?: boolean;
+  /** 是否合并音视频（缺省 true） */
+  mergeVideoAudio?: boolean;
+  /** 保留原始分片文件 */
+  keepOriginalFiles?: boolean;
+  /** 保留原始文件类型 */
+  keepOriginalFilesType?: number;
+  /** 画质优先级（从高到低） */
+  videoQualityPriority?: number[];
+  /** 编码优先级 */
+  videoCodecPriority?: number[];
+  /** 音质优先级 */
+  audioQualityPriority?: number[];
   extras?: ExtrasOptions;
   naming?: { conventionType: number; rule: string; number: number | "" };
 }
+
+
 
 export interface DownloadConfig {
   dir: string;
@@ -254,6 +272,18 @@ export type AppConfigPatch = {
 export interface AuthStatus {
   loggedIn: boolean;
   preview: string;
+}
+
+/** 扫码登录会话（前端轮询状态用） */
+export interface QrLoginSession {
+  /** 二维码内容（渲染为二维码图片） */
+  qrUrl: string;
+  /** 轮询 key */
+  qrcodeKey: string;
+  /** 当前扫码状态码：86101 未扫 / 86102 已扫待确认 / 86090 过期 / 0 成功 */
+  status: number;
+  /** 是否已登录成功（poll 返回） */
+  loggedIn?: boolean;
 }
 
 export interface ParseRequest {

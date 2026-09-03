@@ -539,3 +539,32 @@ textarea { margin-top: 15px; resize: vertical; min-height: 92px; line-height: 1.
   .extras-settings { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) { .style-grid { grid-template-columns: 1fr; } .style-toggles { grid-template-columns: 1fr 1fr; } }
+/* ---------- 登录对话框 ---------- */
+.login-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .42); backdrop-filter: blur(6px); animation: fade-in .2s ease both; }
+.login-dialog { width: min(420px, 100%); position: relative; padding: 24px; border-radius: 20px; background: var(--surface-solid); box-shadow: var(--shadow-lg); animation: sheet-in .24s ease both; }
+.login-close { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px; color: var(--muted); background: transparent; cursor: pointer; }
+.login-close:hover { color: var(--text); background: var(--surface-2); }
+.login-head { display: flex; gap: 14px; align-items: flex-start; }
+.login-brand { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 13px; color: #fff; background: linear-gradient(135deg, var(--brand-deep), var(--accent-deep)); }
+.login-head h2 { margin: 3px 0 4px; font-size: 19px; letter-spacing: -.02em; }
+.login-head p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.login-tabs { display: flex; gap: 6px; margin: 20px 0; padding: 4px; border-radius: 12px; background: var(--surface-2); }
+.login-tabs button { flex: 1; padding: 9px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; cursor: pointer; font-weight: 600; }
+.login-tabs button.is-active { color: var(--text); background: var(--surface-solid); box-shadow: var(--shadow-sm); }
+.login-qr { display: grid; place-items: center; gap: 14px; }
+.qr-mask { position: relative; width: 220px; height: 220px; border-radius: 16px; overflow: hidden; background: #fff; }
+.qr-mask canvas { display: block; }
+.qr-overlay { position: absolute; inset: 0; display: grid; place-items: center; gap: 8px; align-content: center; text-align: center; color: #333; background: rgba(255, 255, 255, .92); font-size: 13px; z-index: 2; }
+.qr-overlay .text-button { margin-top: 4px; }
+.login-hint { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+.login-cookie { display: grid; gap: 12px; }
+.login-cookie .field { display: grid; gap: 6px; }
+.login-cookie input { width: 100%; }
+.login-cookie .button { justify-self: start; }
+
+.login-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface-solid); cursor: pointer; font-size: 12px; }
+.login-chip .health-dot { width: 7px; height: 7px; }
+.login-chip.is-online { color: var(--text); border-color: color-mix(in srgb, var(--accent-deep) 40%, var(--line)); background: color-mix(in srgb, var(--accent-deep) 8%, var(--surface-solid)); }
+
+.media-stream-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.media-stream-grid .switch-row { justify-content: space-between; }
