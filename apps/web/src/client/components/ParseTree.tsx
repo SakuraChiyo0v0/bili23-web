@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useParseSession, type TreeNode } from "../store/useParseSession";
 import { Icon } from "../lib/icons";
 
@@ -11,18 +12,42 @@ export function ParseTree() {
   const tree = useParseSession((s) => s.tree);
   const toggle = useParseSession((s) => s.toggle);
   const toggleCollapse = useParseSession((s) => s.toggleCollapse);
+  const [search, setSearch] = useState("");
+
+  // 搜索过滤：命中标题(含父级) 的叶子保留；含命中的组自动展开
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return { tree, forcedExpand: new Set<string>() };
+    const forced = new Set<string>();
+    const walk = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes.map((n) => {
+        if (n.children) {
+          const children = walk(n.children);
+          const selfMatch = n.title.toLowerCase().includes(q);
+          if (children.length || (selfMatch && n.children)) {
+            if (children.length) forced.add(n.id);
+            return { ...n, children: children.length ? children : n.children };
+          }
+          return selfMatch ? { ...n, children: n.children, collapsed: false } : null!;
+        }
+        return n.title.toLowerCase().includes(q) ? n : null!;
+      }).filter(Boolean) as TreeNode[];
+    };
+    const t = walk(tree).filter(Boolean) as TreeNode[];
+    return { tree: t, forcedExpand: forced };
+  }, [tree, search]);
+
+  const visibleTree = search.trim() ? filtered.tree : tree;
 
   const renderRow = (n: TreeNode, depth: number) => {
     const isLeaf = n.kind === "leaf";
     const checked = n.checked === true ? "on" : n.checked === "partial" ? "partial" : "";
+    const collapsed = n.collapsed && !filtered.forcedExpand.has(n.id);
     return (
       <div key={n.id}>
         <div
-          className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${n.collapsed ? " collapsed" : ""}`}
-          onClick={() => {
-            if (isLeaf) toggle(n.id);
-            else toggleCollapse(n.id);
-          }}
+          className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}`}
+          onClick={() => { if (isLeaf) toggle(n.id); else toggleCollapse(n.id); }}
         >
           <div className="tree-cell">
             <span className="tree-indent" style={{ paddingLeft: depth * 20 }} />
@@ -32,7 +57,7 @@ export function ParseTree() {
                 <span className={`checkbox ${checked}`}>{checked === "on" ? <Icon name="check" size={12} /> : null}</span>
               </>
             ) : (
-              <Icon name={n.collapsed ? "chevR" : "chevD"} size={16} />
+              <Icon name={collapsed ? "chevR" : "chevD"} size={16} />
             )}
             <span className="tree-num">{n.item?.page ?? ""}</span>
           </div>
@@ -43,23 +68,32 @@ export function ParseTree() {
           <div className="tree-cell muted">{n.item ? fmtDur(n.item.duration) : ""}</div>
           <div className="tree-cell muted col-time">{n.item ? new Date(n.item.pubtime * 1000).toLocaleDateString() : ""}</div>
         </div>
-        {n.children && !n.collapsed && n.children.map((c) => renderRow(c, depth + 1))}
+        {n.children && !collapsed && n.children.map((c) => renderRow(c, depth + 1))}
       </div>
     );
   };
 
-  if (!tree.length) return <div className="empty-state"><p>解析结果为空</p></div>;
-
   return (
-    <div className="tree">
-      <div className="tree-header">
-        <div className="tree-cell">#</div>
-        <div className="tree-cell title">标题</div>
-        <div className="tree-cell">标签</div>
-        <div className="tree-cell">时长</div>
-        <div className="tree-cell col-time">时间</div>
+    <div className="tree-wrap">
+      <div className="tree-search">
+        <Icon name="search" size={16} />
+        <input className="text-input" placeholder="搜索标题…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {search && <button type="button" className="btn sm ghost" onClick={() => setSearch("")}>清除</button>}
       </div>
-      <div className="tree-body">{tree.map((n) => renderRow(n, 0))}</div>
+      {visibleTree.length === 0 ? (
+        <div className="empty-state"><p>无匹配结果</p></div>
+      ) : (
+        <div className="tree">
+          <div className="tree-header">
+            <div className="tree-cell">#</div>
+            <div className="tree-cell title">标题</div>
+            <div className="tree-cell">标签</div>
+            <div className="tree-cell">时长</div>
+            <div className="tree-cell col-time">时间</div>
+          </div>
+          <div className="tree-body">{visibleTree.map((n) => renderRow(n, 0))}</div>
+        </div>
+      )}
     </div>
   );
 }
