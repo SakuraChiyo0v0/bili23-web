@@ -3,6 +3,8 @@
 > 本文档面向**接手继续开发的下一位开发者**。目标：你拿到仓库后，能快速理解它是什么、做到哪一步、
 > 为什么这样设计、怎么跑、怎么部署、有哪些坑，以及接下来该做什么。请先通读一遍再动手。
 > 最近更新：2026-09-04（前端整体移除到 backup 分支，main 为纯 REST/SSE 后端）。
+> 前端相关文档（重要）：`docs/frontend-kickoff-state.md`（开工状态/恢复入口）→ `docs/original-ui-baseline.md`（原版 1:1 交互基准）
+> → `docs/frontend-structure-plan.md`（前端结构/里程碑）→ `docs/original-reference-notes.md`（原版硬数据速查）。
 
 ---
 
@@ -14,7 +16,7 @@
 - **不是**在旧 TS SDK 上改，而是**独立新仓库**。
 - **功能基准** = 桌面版 Python 源码（行为参照、不复制代码）。
 - **当前阶段**：`main` 是**纯后端服务**（Hono REST/SSE + 下载引擎），不含任何前端。
-  此前一版 React/Vite 前端（含扫码登录 UI 等）整体备份在 `backup/frontend-20260904`，未删除，可随时参考。
+  此前一版 React/Vite 前端（含扫码登录 UI 等）在 `backup/frontend-20260904`，**已确认废弃：不参考、不复用、不移植**。
 
 ---
 
@@ -317,7 +319,7 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
 ### 必须
 - [ ] **重建前端**（响应式、移动端可用）。当前 `main` 不含前端，服务只提供 `/api/*`。
       建议做成 B 站官网风格、动效丰富、响应式；通过 `/api/*` 对接后端。
-      可直接参考 `backup/frontend-20260904` 里旧版 React/Vite 前端（布局、交互、登录扫码 UI、样式编辑器等）。
+      前端按 `docs/original-ui-baseline.md`（原版 UI/交互 1:1 基准）与 `docs/frontend-structure-plan.md`（结构与实现方案）重建。
 
 ### 建议
 - [ ] 把 `/api/parse` 的 `pn/pages` 透传到前端「批量翻页」交互。

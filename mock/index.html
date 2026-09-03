@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bili23 Web · UI 骨架演示</title>
+<style>
+/* ============ Reset & Tokens ============ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root{
+  --bg:#f2f5fb; --surface:#ffffff; --surface-2:#f0f3f9; --surface-3:#e8edf6;
+  --ink:#1b2436; --ink-2:#566070; --muted:#8a93a6;
+  --line:#dde3ee; --line-strong:#cbd4e3;
+  --accent:#4c6fff; --accent-strong:#3a5ae8; --accent-soft:rgba(76,111,255,.10);
+  --success:#17a45b; --success-soft:rgba(23,164,91,.12);
+  --warning:#d9820b; --warning-soft:rgba(217,130,11,.14);
+  --danger:#e04444; --danger-soft:rgba(224,68,68,.12);
+  --text-on-accent:#fff;
+  --radius:14px; --radius-sm:9px; --radius-lg:20px;
+  --shadow-sm:0 2px 8px rgba(27,36,54,.06); --shadow-md:0 10px 28px rgba(27,36,54,.10); --shadow-lg:0 24px 60px rgba(27,36,54,.18);
+  --sidebar-w:238px;
+  --dur:.18s; --ease:cubic-bezier(.2,.7,.3,1);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+html[data-theme="dark"]{
+  --bg:#0e131e; --surface:#171e2c; --surface-2:#1e2736; --surface-3:#263046;
+  --ink:#e8edf6; --ink-2:#a6b0c3; --muted:#768197;
+  --line:#2a3448; --line-strong:#3a4560;
+  --accent:#5f7dff; --accent-strong:#7390ff; --accent-soft:rgba(95,125,255,.16);
+  --success:#2fbf72; --success-soft:rgba(47,191,114,.16);
+  --warning:#f0a13a; --warning-soft:rgba(240,161,58,.16);
+  --danger:#f0605f; --danger-soft:rgba(240,96,95,.16);
+  --shadow-sm:0 2px 8px rgba(0,0,0,.25); --shadow-md:0 12px 30px rgba(0,0,0,.32); --shadow-lg:0 26px 64px rgba(0,0,0,.45);
+}
+html, body { height:100%; }
+body{ font-family:var(--font); background:var(--bg); color:var(--ink); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+input,select,textarea{ font:inherit; color:inherit; }
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-thumb{ background:var(--line-strong); border-radius:99px; border:2px solid transparent; background-clip:content-box; }
+::-webkit-scrollbar-thumb:hover{ background:var(--muted); border:2px solid transparent; background-clip:content-box; }
+.ico{ width:19px; height:19px; flex:none; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ico-fill{ fill:currentColor; stroke:none; }
+
+/* ============ App shell ============ */
+.app{ display:flex; height:100vh; overflow:hidden; }
+.sidebar{ width:var(--sidebar-w); flex:none; background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:14px 10px; z-index:20; }
+.brand{ display:flex; align-items:center; gap:10px; padding:8px 10px 18px; }
+.brand-logo{ width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,var(--accent),#7aa2ff); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; }
+.brand-name{ font-weight:700; font-size:15px; letter-spacing:.2px; }
+.brand-sub{ color:var(--muted); font-size:11px; margin-top:1px; }
+.nav{ display:flex; flex-direction:column; gap:2px; }
+.nav-spacer{ flex:1; }
+.nav-item{ display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:var(--radius-sm); color:var(--ink-2); text-decoration:none; user-select:none; transition:background var(--dur),color var(--dur); width:100%; text-align:left; }
+.nav-item:hover{ background:var(--surface-2); color:var(--ink); }
+.nav-item.active{ background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.nav-item .ico{ opacity:.9; }
+.nav-item.active .ico{ opacity:1; }
+.nav-label{ flex:1; }
+.nav-badge{ background:var(--danger); color:#fff; border-radius:99px; min-width:18px; height:18px; padding:0 5px; font-size:11px; display:none; align-items:center; justify-content:center; }
+.nav-badge.show{ display:flex; }
+.nav-user{ margin-top:6px; }
+.nav-user .avatar{ width:26px; height:26px; }
+.avatar{ border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; }
+.avatar.anon{ background:var(--surface-3); color:var(--muted); }
+.avatar.guest{ background:var(--surface-3); color:var(--muted); }
+
+.main{ flex:1; min-width:0; display:flex; flex-direction:column; height:100%; }
+.topbar{ display:none; align-items:center; gap:8px; padding:10px 16px; background:color-mix(in srgb,var(--surface) 86%,transparent); backdrop-filter:blur(12px); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:15; }
+html[data-theme=light] .topbar{ background:rgba(255,255,255,.86); }
+html[data-theme=dark] .topbar{ background:rgba(23,30,44,.86); }
+.topbar-title{ font-size:17px; font-weight:700; flex:1; }
+.topbar-actions{ display:flex; gap:6px; }
+.content{ flex:1; overflow:auto; padding:22px 28px 30px; }
+.page{ display:none; max-width:1140px; margin:0 auto; }
+.page.active{ display:block; animation:pageIn .22s var(--ease); }
+@keyframes pageIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+.icon-btn{ width:34px; height:34px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; color:var(--ink-2); transition:background var(--dur),color var(--dur); position:relative; }
+.icon-btn:hover{ background:var(--surface-3); color:var(--ink); }
+.icon-btn:disabled{ opacity:.4; cursor:default; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 15px; border-radius:9px; background:var(--surface); color:var(--ink); border:1px solid var(--line); font-weight:500; transition:all var(--dur); white-space:nowrap; }
+.btn:hover{ background:var(--surface-3); }
+.btn.primary{ background:var(--accent); border-color:transparent; color:var(--text-on-accent); }
+.btn.primary:hover{ background:var(--accent-strong); }
+.btn.dangerous{ color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); background:transparent; }
+.btn.dangerous:hover{ background:var(--danger-soft); }
+.btn.sm{ height:28px; padding:0 10px; font-size:12.5px; border-radius:8px; }
+.btn.ghost{ border-color:transparent; background:transparent; color:var(--ink-2); }
+.btn.ghost:hover{ background:var(--surface-3); color:var(--ink); }
+.icon-btn-round{ width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; color:var(--ink-2); }
+.icon-btn-round:hover{ background:var(--surface-3); color:var(--ink); }
+
+/* ============ Parse page ============ */
+.panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); }
+.parse-card{ padding:18px; }
+.url-row{ display:flex; gap:10px; }
+.url-input-wrap{ flex:1; display:flex; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); align-items:center; padding:0 6px 0 14px; transition:border var(--dur), box-shadow var(--dur); }
+.url-input-wrap:focus-within{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); background:var(--surface); }
+.url-input-wrap input{ flex:1; border:none; outline:none; background:transparent; height:42px; }
+.url-split{ width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); border-left:1px solid var(--line); margin-left:4px; border-radius:0 8px 8px 0; }
+.url-split:hover{ color:var(--ink); background:var(--surface-3); }
+.parse-btn{ height:42px; padding:0 22px; border-radius:10px; font-size:14.5px; }
+.toolbar{ display:flex; align-items:center; gap:6px; margin-top:14px; min-height:34px; flex-wrap:wrap; }
+.toolbar-label{ color:var(--ink-2); font-weight:500; margin-right:auto; }
+.toolbar-label b{ color:var(--ink); }
+.dropdown{ position:relative; }
+.menu{ position:absolute; top:calc(100% + 6px); right:0; min-width:190px; background:var(--surface); border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow-md); padding:6px; z-index:40; display:none; }
+.menu.open{ display:block; animation:popIn .14s var(--ease); }
+@keyframes popIn{ from{opacity:0; transform:translateY(-4px) scale(.98);} to{opacity:1; transform:none;} }
+.menu-item{ display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border-radius:8px; text-align:left; }
+.menu-item:hover{ background:var(--surface-2); }
+.menu-item .ico{ width:17px; height:17px; }
+
+.empty-state{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:70px 20px; color:var(--muted); text-align:center; gap:6px; }
+.empty-state .ico{ width:52px; height:52px; opacity:.5; margin-bottom:6px; stroke-width:1.2; }
+.empty-state h3{ color:var(--ink-2); font-weight:600; font-size:16px; }
+.empty-actions{ display:flex; gap:10px; margin-top:14px; }
+
+.tree{ overflow:auto; }
+.tree-header, .tree-row{ display:grid; align-items:center; column-gap:10px; padding:0 12px; }
+.tree-header{ grid-template-columns:110px minmax(240px,1fr) 110px 90px 140px; height:38px; color:var(--muted); font-size:12.5px; border-bottom:1px solid var(--line); background:var(--surface-2); position:sticky; top:0; z-index:2; }
+.tree-row{ grid-template-columns:110px minmax(240px,1fr) 110px 90px 140px; min-height:44px; border-bottom:1px solid var(--line); font-size:13.5px; }
+.tree-body .tree-row:last-child{ border-bottom:none; }
+.tree-row:hover{ background:var(--surface-2); }
+.tree-row.group{ background:var(--surface-2); font-weight:600; cursor:default; }
+.tree-row.group:hover{ background:var(--surface-3); }
+.tree-cell{ min-width:0; display:flex; align-items:center; gap:8px; }
+.tree-cell.title{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.tree-cell.muted{ color:var(--muted); font-size:12.5px; }
+.chev{ transition:transform .16s; color:var(--muted); width:16px; height:16px; flex:none; }
+.tree-row.collapsed .chev{ transform:rotate(-90deg); }
+.tree-row.child .tree-cell.title{ padding-left:26px; }
+.checkbox{ width:18px; height:18px; border-radius:5px; border:1.5px solid var(--line-strong); flex:none; display:inline-flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; background:var(--surface); transition:all .12s; }
+.checkbox:hover{ border-color:var(--accent); }
+.checkbox.on{ background:var(--accent); border-color:var(--accent); }
+.checkbox.partial{ background:var(--accent); border-color:var(--accent); }
+.checkbox.partial::after{ content:""; width:8px; height:2px; border-radius:2px; background:#fff; }
+.checkbox .tick{ width:12px; height:12px; }
+.badge{ display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:6px; font-size:11.5px; background:var(--surface-3); color:var(--ink-2); white-space:nowrap; }
+.badge.hot{ background:var(--danger-soft); color:var(--danger); }
+.badge.ok{ background:var(--success-soft); color:var(--success); }
+.parse-bottom{ display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.pager{ display:flex; align-items:center; gap:4px; color:var(--ink-2); }
+.pager .btn.sm{ min-width:30px; padding:0 8px; }
+.pager .btn.sm.active{ background:var(--accent); color:#fff; border-color:transparent; }
+.spacer{ flex:1; }
+
+/* ============ Task / Download page ============ */
+.page-head{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.tabs{ display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:11px; }
+.tab{ height:32px; padding:0 16px; border-radius:8px; font-weight:500; color:var(--ink-2); }
+.tab.active{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow-sm); }
+.tab .count{ font-size:12px; margin-left:5px; color:var(--muted); }
+.tab.active .count{ color:var(--accent); }
+.task-list{ display:flex; flex-direction:column; gap:10px; }
+.task-card{ display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; transition:box-shadow var(--dur),border var(--dur); }
+.task-card:hover{ border-color:var(--line-strong); box-shadow:var(--shadow-sm); }
+.cover{ width:150px; height:84px; border-radius:10px; flex:none; display:flex; align-items:flex-end; padding:7px 9px; color:#fff; font-size:12px; font-weight:600; overflow:hidden; position:relative; }
+.cover .cover-title{ position:relative; z-index:1; text-shadow:0 1px 4px rgba(0,0,0,.45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.cover-0{ background:linear-gradient(135deg,#5f7dff,#8e7cff); }
+.cover-1{ background:linear-gradient(135deg,#20a1d8,#5ad0a8); }
+.cover-2{ background:linear-gradient(135deg,#f08a5d,#f05b6e); }
+.cover-3{ background:linear-gradient(135deg,#845ef7,#d05bd0); }
+.task-main{ flex:1; min-width:0; }
+.task-title{ font-weight:600; font-size:14.5px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.task-meta{ color:var(--muted); font-size:12.5px; margin-top:3px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.task-size{ margin-left:auto; }
+.task-right{ width:230px; flex:none; display:flex; flex-direction:column; gap:7px; align-items:stretch; }
+.progress-track{ height:7px; border-radius:99px; background:var(--surface-3); overflow:hidden; }
+.progress-bar{ height:100%; border-radius:99px; background:var(--accent); transition:width .3s var(--ease); }
+.task-card.paused .progress-bar{ background:var(--warning); }
+.task-card.done .progress-bar{ background:var(--success); }
+.task-card.error .progress-bar{ background:var(--danger); }
+.task-status-row{ display:flex; align-items:center; gap:8px; }
+.status-chip{ font-size:12px; color:var(--ink-2); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; flex:1; }
+.status-chip.downloading{ color:var(--accent); }
+.status-chip.done{ color:var(--success); }
+.status-chip.error{ color:var(--danger); }
+.status-chip.paused{ color:var(--warning); }
+.task-actions{ display:flex; gap:6px; align-items:center; }
+.ripple{ border-radius:50%; }
+.empty-list{ background:var(--surface); border:1px dashed var(--line-strong); border-radius:var(--radius); color:var(--muted); padding:54px; text-align:center; }
+
+/* ============ Settings ============ */
+.settings-wrap{ max-width:880px; }
+.settings-group{ margin-bottom:22px; }
+.group-title{ font-size:15px; font-weight:700; margin:0 4px 10px; display:flex; align-items:center; gap:8px; }
+.group-title .g-num{ width:24px; height:24px; border-radius:7px; background:var(--accent-soft); color:var(--accent); display:inline-flex; align-items:center; justify-content:center; font-size:12.5px; }
+.setting-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+.setting-row{ display:flex; align-items:center; gap:14px; padding:14px 16px; min-height:52px; border-top:1px solid var(--line); }
+.setting-row:first-child{ border-top:none; }
+.setting-row .s-info{ flex:1; min-width:0; }
+.setting-row .s-title{ font-weight:500; font-size:14px; }
+.setting-row .s-desc{ color:var(--muted); font-size:12px; margin-top:1px; }
+.control{ flex:none; display:flex; align-items:center; gap:8px; }
+.switch{ width:42px; height:23px; border-radius:99px; background:var(--surface-3); border:1px solid var(--line); position:relative; transition:all .18s; flex:none; }
+.switch::after{ content:""; position:absolute; width:17px; height:17px; border-radius:50%; background:#fff; top:2px; left:2px; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .18s var(--ease); }
+.switch.on{ background:var(--accent); border-color:var(--accent); }
+.switch.on::after{ left:21px; }
+select{ height:32px; padding:0 28px 0 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface) url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a93a6' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center; appearance:none; max-width:180px; }
+input[type=text], textarea{ border:1px solid var(--line); border-radius:8px; background:var(--surface); padding:7px 10px; outline:none; }
+input[type=text]:focus, textarea:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+.slider-row{ display:flex; align-items:center; gap:10px; min-width:210px; }
+input[type=range]{ accent-color:var(--accent); }
+.slider-val{ min-width:26px; text-align:center; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+.setting-subrow{ padding:12px 16px 16px; border-top:1px solid var(--line); background:var(--surface-2); }
+.hidden{ display:none !important; }
+
+/* ============ Modal ============ */
+.overlay{ position:fixed; inset:0; background:rgba(10,14,24,.45); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; padding:18px; z-index:100; }
+.overlay.open{ display:flex; }
+html[data-theme=dark] .overlay{ background:rgba(0,0,0,.55); }
+.modal{ background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); width:min(760px,100%); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; animation:modalIn .2s var(--ease); }
+.modal.sm{ width:min(420px,100%); }
+.modal.md{ width:min(560px,100%); }
+.modal.lg{ width:min(760px,100%); }
+@keyframes modalIn{ from{opacity:0; transform:scale(.97) translateY(8px);} to{opacity:1; transform:none;} }
+.modal-head{ display:flex; align-items:center; gap:10px; padding:16px 18px 0; }
+.modal-title{ font-size:16px; font-weight:700; flex:1; }
+.modal-body{ padding:14px 18px 6px; overflow:auto; }
+.modal-foot{ display:flex; align-items:center; gap:10px; padding:14px 18px 18px; }
+.modal-foot .right{ margin-left:auto; display:flex; gap:8px; }
+.tabs-nav{ display:flex; gap:2px; border-bottom:1px solid var(--line); padding:0 18px; }
+.tabs-nav .tab{ height:38px; border-radius:0; position:relative; }
+.tabs-nav .tab.active::after{ content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent); }
+.modal-page{ display:none; padding:16px 18px 10px; }
+.modal-page.active{ display:block; animation:pageIn .16s var(--ease); }
+.form-field{ margin-bottom:14px; }
+.form-field label{ display:block; font-size:13px; color:var(--ink-2); margin-bottom:6px; }
+.form-field select, .form-field input[type=text]{ width:100%; max-width:none; height:34px; }
+.field-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+.field-note{ font-size:12px; color:var(--muted); margin-top:5px; }
+.chip-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.preview-chips{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.tag{ height:23px; padding:0 10px; border-radius:99px; font-size:12px; display:inline-flex; align-items:center; gap:4px; }
+.tag.video{ background:rgba(0,120,212,.14); color:#0078d4; } .tag.audio{ background:rgba(19,161,14,.14); color:#13a10e; } .tag.danmaku{ background:rgba(135,100,184,.15); color:#8764b8; } .tag.subtitle{ background:rgba(218,106,30,.15); color:#c75e18; } .tag.cover{ background:rgba(0,183,195,.15); color:#00a4ae; } .tag.chapter{ background:rgba(239,105,80,.16); color:#e05a41; } .tag.metadata{ background:rgba(194,57,179,.15); color:#b83aa8; } .tag.none{ background:var(--surface-3); color:var(--muted); }
+html[data-theme=dark] .tag.video{ color:#6cb2ff; } html[data-theme=dark] .tag.audio{ color:#6fd46b; } html[data-theme=dark] .tag.danmaku{ color:#c7a6f0; } html[data-theme=dark] .tag.subtitle{ color:#f0a765; } html[data-theme=dark] .tag.cover{ color:#55d4de; } html[data-theme=dark] .tag.chapter{ color:#f09482; } html[data-theme=dark] .tag.metadata{ color:#e58ad8; }
+
+.qr-box{ width:150px; height:150px; border:2px dashed var(--line-strong); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--muted); margin:0 auto; }
+.qr-grid{ display:grid; grid-template-columns:repeat(9,9px); gap:2px; margin-top:2px; }
+.qr-grid i{ width:9px; height:9px; background:var(--ink); border-radius:1.5px; opacity:.85; }
+.auth-tip{ text-align:center; color:var(--muted); font-size:12.5px; margin-top:10px; }
+.scan-status{ color:var(--accent); font-size:13px; margin-top:8px; text-align:center; min-height:20px; }
+
+/* ============ Favorites & About ============ */
+.fav-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+.fav-item{ cursor:pointer; }
+.fav-item .cover{ width:100%; height:84px; margin-bottom:6px; }
+.fav-item .name{ font-size:13px; font-weight:500; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.fav-item .sub{ font-size:11.5px; color:var(--muted); margin-top:1px; }
+.about-logo{ width:64px; height:64px; border-radius:18px; background:linear-gradient(135deg,var(--accent),#7aa2ff); color:#fff; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; margin:0 auto 10px; }
+.center{ text-align:center; }
+.muted{ color:var(--muted); }
+.small{ font-size:12.5px; }
+
+/* ============ Toast ============ */
+.toast-root{ position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:300; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; width:min(92vw,480px); }
+.toast{ background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px; box-shadow:var(--shadow-md); padding:10px 16px; font-size:13.5px; pointer-events:auto; display:flex; align-items:center; gap:9px; max-width:100%; animation:toastIn .22s var(--ease); }
+.toast.ok{ border-left-color:var(--success); } .toast.err{ border-left-color:var(--danger); } .toast.warn{ border-left-color:var(--warning); }
+.toast-dot{ width:8px; height:8px; border-radius:50%; flex:none; background:var(--accent); }
+.toast.ok .toast-dot{ background:var(--success); } .toast.err .toast-dot{ background:var(--danger); } .toast.warn .toast-dot{ background:var(--warning); }
+@keyframes toastIn{ from{opacity:0; transform:translateY(-8px);} to{opacity:1; transform:none;} }
+
+/* ============ Popover ============ */
+.popover{ position:fixed; z-index:60; background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow-lg); padding:14px; min-width:250px; animation:popIn .15s var(--ease); }
+.popover-head{ display:flex; align-items:center; gap:10px; padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:10px; }
+.popover-row{ display:flex; align-items:center; gap:9px; padding:9px 8px; border-radius:9px; cursor:pointer; }
+.popover-row:hover{ background:var(--surface-2); }
+
+/* ============ Tab bar (mobile) ============ */
+.tabbar{ display:none; }
+
+/* ============ Responsive ============ */
+@media (max-width:980px){
+  .sidebar{ display:none; }
+  .topbar{ display:flex; }
+  .content{ padding:14px 14px 92px; }
+  .tabbar{ display:flex; position:fixed; left:0; right:0; bottom:0; height:58px; background:color-mix(in srgb,var(--surface) 88%,transparent); backdrop-filter:blur(14px); border-top:1px solid var(--line); z-index:30; align-items:stretch; }
+  html[data-theme=light] .tabbar{ background:rgba(255,255,255,.92); }
+  html[data-theme=dark] .tabbar{ background:rgba(23,30,44,.92); }
+  .tabbar-item{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:var(--muted); font-size:11px; }
+  .tabbar-item.active{ color:var(--accent); }
+  .tabbar-item .ico{ width:22px; height:22px; }
+  .task-right{ width:170px; }
+}
+@media (max-width:640px){
+  .tree-header, .tree-row{ grid-template-columns:112px minmax(0,1fr) 74px; }
+  .tree-header .col-time, .tree-row .cell-time{ display:none; }
+  .task-card{ flex-wrap:wrap; }
+  .cover{ width:112px; height:63px; }
+  .task-right{ width:100%; }
+  .field-grid{ grid-template-columns:1fr; }
+  .modal{ border-radius:20px 20px 0 0; width:100%; max-height:94vh; }
+  .overlay{ padding:0; align-items:flex-end; }
+  .overlay.center-mobile{ align-items:center; padding:18px; }
+  .overlay.center-mobile .modal{ border-radius:var(--radius-lg); }
+  .qr-box{ width:130px; height:130px; }
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}
+</style>
+</head><body>
+<div class="app" id="app">
+  <!-- ======== Sidebar (desktop) ======== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">B</div>
+      <div>
+        <div class="brand-name">Bili23 Web</div>
+        <div class="brand-sub">下载工具 · 界面演示</div>
+      </div>
+    </div>
+    <nav class="nav" id="sideNav">
+      <button class="nav-item active" data-view="parse"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="nav-label">解析</span></button>
+      <button class="nav-item" data-view="tasks"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 21h14"/></svg><span class="nav-label">下载</span><span class="nav-badge" id="sideBadge">3</span></button>
+      <button class="nav-item" data-view="fav" id="favNav"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8L3.5 9.2l5.9-.9z"/></svg><span class="nav-label">收藏夹</span></button>
+      <button class="nav-item" data-action="about"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v5"/></svg><span class="nav-label">关于</span></button>
+      <div class="nav-spacer"></div>
+      <button class="nav-item" data-action="login" id="loginSide">
+        <span class="avatar guest" style="width:26px;height:26px;font-size:12px">登</span>
+        <span class="nav-label">未登录 · 点击登录</span>
+      </button>
+      <button class="nav-item" data-view="settings"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.6-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h.1a1.7 1.7 0 001-1.6V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v.1a1.7 1.7 0 001.6 1h.1a2 2 0 110 4h-.1a1.7 1.7 0 00-1.6 1z"/></svg><span class="nav-label">设置</span></button>
+    </nav>
+  </aside>
+
+  <!-- ======== Main ======== -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title" id="topbarTitle">解析</div>
+      <div class="topbar-actions">
+        <button class="icon-btn" data-action="theme" title="切换主题"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c.6 0 1-.5 1-1 0-.3-.1-.5-.3-.7-.6-.7-.4-1.8.4-2.2A9 9 0 0018 5c-.2-.1-.4-.1-.6-.1z"/></svg></button>
+        <button class="icon-btn" data-action="login" id="loginTop" title="登录"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- ============ PAGE: PARSE ============ -->
+      <section class="page active" id="page-parse">
+        <div class="panel parse-card">
+          <div class="url-row">
+            <div class="url-input-wrap">
+              <input id="urlInput" type="text" placeholder="粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…" value="https://www.bilibili.com/video/BV1GJ411x7h7" />
+              <button class="url-split" id="urlPasteBtn" title="粘贴并解析"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="4" width="10" height="16" rx="2"/><path d="M6 8H5a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-1"/><path d="M12 11v6m0 0l-2.5-2.5M12 17l2.5-2.5"/></svg></button>
+            </div>
+            <div class="dropdown">
+              <button class="btn primary parse-btn" id="parseBtn"><span>解析</span><svg class="ico" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+              <div class="menu" id="parseMenu">
+                <button class="menu-item" data-action="batchParse"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>批量解析</button>
+              </div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <div class="toolbar-label" id="parseLabel">投稿视频（<b>0</b> 项已选 · <b>0</b> 项）</div>
+            <div class="dropdown">
+              <button class="icon-btn" data-menu="toolMenu" title="更多"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>
+              <div class="menu" id="toolMenu">
+                <button class="menu-item" data-action="search"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>搜索当前列表</button>
+                <button class="menu-item" data-action="parseHistory"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>解析历史</button>
+                <button class="menu-item" data-action="batchSelect"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>按行号批量选择</button>
+              </div>
+            </div>
+            <button class="btn sm" id="selectAllBtn">全选</button>
+            <button class="btn sm" id="reverseBtn">反选</button>
+            <div class="spacer"></div>
+            <span class="badge ok" id="previewBadge" style="display:none">已获取媒体信息</span>
+          </div>
+
+          <div id="parseEmpty" class="empty-state">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <h3>粘贴链接后点击「解析」</h3>
+            <p class="small muted">支持：投稿视频 / 番剧 / 课程 / 音频 / 空间 / 收藏夹 / 每周必看 / 历史 / 稍后再看</p>
+            <div class="empty-actions">
+              <button class="btn" data-action="loadDemo">加载演示数据</button>
+              <button class="btn" data-action="batchParse">批量解析</button>
+            </div>
+          </div>
+
+          <div id="treeWrap" class="tree hidden">
+            <div class="tree-header">
+              <div class="tree-cell">序号 ☑</div><div class="tree-cell">标题</div><div class="tree-cell">备注</div><div class="tree-cell">时长</div><div class="tree-cell col-time">发布时间</div>
+            </div>
+            <div class="tree-body" id="treeBody"></div>
+          </div>
+
+          <div class="parse-bottom">
+            <div class="pager" id="pager" style="display:none">
+              <button class="btn sm" data-page="prev">‹</button><span id="pageInfo" class="small" style="color:var(--muted)"></span><button class="btn sm" data-page="next">›</button>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn" id="dlOptionsBtn" title="下载选项"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 4v5"/></svg>下载选项</button>
+            <button class="btn primary" id="downloadBtn" disabled>下载选中项</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PAGE: TASKS ============ -->
+      <section class="page" id="page-tasks">
+        <div class="page-head">
+          <div class="tabs" id="taskTabs">
+            <button class="tab active" data-tasktab="downloading">下载中<span class="count" id="dlCount">0</span></button>
+            <button class="tab" data-tasktab="completed">已完成<span class="count" id="doneCount">0</span></button>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn sm" data-action="sortTasks">排序</button>
+          <button class="btn sm primary" data-action="startAll">全部开始</button>
+          <button class="btn sm" data-action="pauseAll">全部暂停</button>
+          <button class="btn sm dangerous" data-action="clearDone">清空已完成</button>
+        </div>
+        <div class="task-list" id="taskList"></div>
+      </section>
+
+      <!-- ============ PAGE: SETTINGS ============ -->
+      <section class="page" id="page-settings">
+        <div class="page-head"><div class="topbar-title" style="display:none">设置</div></div>
+        <div class="settings-wrap">
+          <div class="settings-group">
+            <div class="group-title"><span class="g-num">1</span>界面</div>
+            <div class="setting-card">
+              <div class="setting-row"><div class="s-info"><div class="s-title">主题</div><div class="s-desc">跟随系统 / 浅色 / 深色，Web 端可自定义强调色</div></div><div class="control"><select id="setTheme"><option value="light">浅色</option><option value="dark">深色</option><option value="system">跟随系统</option></select></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">强调色</div><div class="s-desc">按钮、选中态、进度条主色</div></div><div class="control"><input type="color" id="setAccent" value="#4c6fff" style="width:44px;height:32px;border:none;background:none;cursor:pointer" /></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">动画强度</div><div class="s-desc">Web 端增强：切换与列表动画</div></div><div class="control"><select id="setMotion"><option value="smooth">流畅</option><option value="reduced">减弱</option></select></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">移动端底部导航</div><div class="s-desc">窄屏显示底部 Tab 栏（演示）</div></div><div class="control"><span class="badge ok">已启用</span></div></div>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="group-title"><span class="g-num">2</span>下载</div>
+            <div class="setting-card">
+              <div class="setting-row"><div class="s-info"><div class="s-title">保存位置</div><div class="s-desc">默认下载目录（NAS 磁盘）</div></div><div class="control"><input type="text" value="/volume1/downloads/bilibili" style="width:min(280px,60vw)" /></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">每任务线程数</div><div class="s-desc">Range 分片并发（1–10）</div></div><div class="control"><div class="slider-row"><input type="range" min="1" max="10" value="4" data-val="threadVal"><span class="slider-val" id="threadVal">4</span></div></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">并行任务数</div><div class="s-desc">同时下载几个任务（1–10）</div></div><div class="control"><div class="slider-row"><input type="range" min="1" max="10" value="2" data-val="parallelVal"><span class="slider-val" id="parallelVal">2</span></div></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">限速</div><div class="s-desc">单位 MB/s，0 = 不限速</div></div><div class="control"><input type="checkbox" class="switch" id="speedLimitSwitch"><input type="number" id="speedLimitVal" value="0" min="0" step="0.5" style="width:70px" disabled></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">下载前弹出选项</div><div class="s-desc">是否在开始下载前显示「下载选项」对话框</div></div><div class="control"><input type="checkbox" class="switch on" id="showDlOptionsSwitch"></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">重复下载处理</div><div class="s-desc">检测到相同内容时如何处理</div></div><div class="control"><select><option>总是询问</option><option>跳过</option><option>继续下载</option></select></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">文件重名处理</div><div class="s-desc">磁盘已有同名文件时</div></div><div class="control"><select><option>自动重命名</option><option>覆盖</option></select></div></div>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="group-title"><span class="g-num">3</span>解析 / 交互</div>
+            <div class="setting-card">
+              <div class="setting-row"><div class="s-info"><div class="s-title">自动勾选模式</div><div class="s-desc">解析完成后自动勾选下载项的策略</div></div><div class="control"><select id="autoSelectMode"><option value="conditional" selected>按条件</option><option value="all">全选</option><option value="manual">手动</option></select></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">保存解析历史</div><div class="s-desc">记录最近解析过的链接（最多 100 条）</div></div><div class="control"><input type="checkbox" class="switch on" checked></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">解析列表列</div><div class="s-desc">控制显示列与顺序（序号固定）</div></div><div class="control"><button class="btn sm" data-action="columnsDialog">配置列…</button></div></div>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="group-title"><span class="g-num">4</span>附加内容</div>
+            <div class="setting-card">
+              <div class="setting-row"><div class="s-info"><div class="s-title">弹幕</div><div class="s-desc">默认格式 / 样式 / 是否嵌入</div></div><div class="control"><select><option>ASS</option><option>XML</option><option>JSON</option></select><input type="checkbox" class="switch on" checked></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">字幕</div><div class="s-desc">语言 / 样式 / 是否嵌入</div></div><div class="control"><select><option>ASS</option><option>SRT</option><option>LRC</option><option>TXT</option><option>JSON</option></select><input type="checkbox" class="switch" id="subSwitch"></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">封面</div><div class="s-desc">保存原图 / 嵌入视频后删除</div></div><div class="control"><input type="checkbox" class="switch" checked></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">章节 / NFO</div><div class="s-desc">写入章节信息与媒体中心元数据</div></div><div class="control"><input type="checkbox" class="switch" checked></div></div>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="group-title"><span class="g-num">5</span>命名规则</div>
+            <div class="setting-card">
+              <div class="setting-row"><div class="s-info"><div class="s-title">投稿视频 / 分P</div><div class="s-desc">默认命名模板</div></div><div class="control"><button class="btn sm" data-action="namingDialog">编辑…</button></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">番剧 / 课程 / 音频…</div><div class="s-desc">各类型命名模板与变量</div></div><div class="control"><button class="btn sm" data-action="namingDialog">编辑…</button></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">编号方式</div><div class="s-desc">批内 1…N / 解析列表序号 / 全局连续</div></div><div class="control"><select><option>每批从 1 开始</option><option>使用解析列表序号</option><option>全局连续</option></select></div></div>
+            </div>
+          </div>
+          <div class="settings-group">
+            <div class="group-title"><span class="g-num">6</span>高级</div>
+            <div class="setting-card">
+              <div class="setting-row"><div class="s-info"><div class="s-title">CDN 节点</div><div class="s-desc">优先服务商节点 / 自定义列表</div></div><div class="control"><button class="btn sm" data-action="cdnDialog">配置…</button></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">代理</div><div class="s-desc">不使用 / 系统代理 / 手动</div></div><div class="control"><select><option>不使用代理</option><option>跟随系统</option><option>手动配置</option></select></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">FFmpeg 路径</div><div class="s-desc">用于合并 / 转封装</div></div><div class="control"><input type="text" value="/usr/bin/ffmpeg" style="width:min(220px,50vw)" /></div></div>
+              <div class="setting-row"><div class="s-info"><div class="s-title">User-Agent</div><div class="s-desc">请求 B 站接口使用</div></div><div class="control"><button class="btn sm" data-action="uaDialog">自定义…</button></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ======== Mobile TabBar ======== -->
+  <nav class="tabbar" id="tabbar">
+    <button class="tabbar-item active" data-view="parse"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>解析</span></button>
+    <button class="tabbar-item" data-view="tasks"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 21h14"/></svg><span>下载</span></button>
+    <button class="tabbar-item" data-action="login"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span>我的</span></button>
+    <button class="tabbar-item" data-view="settings"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10l1.4 1.4M18.4 5.6L17 7m-10 10l-1.4 1.4"/></svg><span>设置</span></button>
+  </nav>
+</div>
+
+<!-- ======== Modals ======== -->
+<div class="overlay" id="ovl-login">
+  <div class="modal sm" style="width:min(560px,100%)">
+    <div class="modal-head"><div class="modal-title">登录</div><button class="icon-btn" data-close><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:26px;flex-wrap:wrap;justify-content:center;padding:6px 0 12px">
+        <div style="text-align:center">
+          <div style="font-weight:600;margin-bottom:12px">扫码登录</div>
+          <div class="qr-box"><div class="qr-grid" id="qrGrid"></div><div class="small">请用 B 站 App 扫码</div></div>
+          <div class="scan-status" id="qrStatus">等待扫码…</div>
+          <button class="btn sm" data-action="simQr" style="margin-top:10px">模拟扫码成功</button>
+        </div>
+        <div style="flex:1;min-width:210px">
+          <div style="font-weight:600;margin-bottom:10px">Cookie 登录</div>
+          <div class="form-field"><label>粘贴 Cookie</label><textarea id="cookieArea" rows="3" style="width:100%;font-size:12px" placeholder="SESSDATA=xxx;bili_jct=xxx;DedeUserID=xxx"></textarea></div>
+          <button class="btn primary" data-action="simCookieLogin" style="width:100%">使用 Cookie 登录</button>
+          <div class="field-note">演示：点击后模拟登录成功</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovl-about">
+  <div class="modal sm">
+    <div class="modal-head"><div class="modal-title">关于 Bili23 Web</div><button class="icon-btn" data-close><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body center">
+      <div class="about-logo">B</div>
+      <div style="font-size:16px;font-weight:700">Bili23 Web · UI 骨架演示</div>
+      <div class="muted small" style="margin:4px 0 14px">对应桌面版 Bili23-Downloader v2.15.0 的结构复刻</div>
+      <p class="small muted" style="line-height:1.7">本文件为单 HTML Mock，不含后端。用于验收整体结构、交互与响应式观感。</p>
+      <div style="margin:14px 0 4px;font-size:13px;font-weight:600">GPL-3.0 · 仅供个人学习研究</div>
+    </div>
+    <div class="modal-foot"><div class="right"><button class="btn" data-close>关闭</button></div></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovl-options">
+  <div class="modal lg">
+    <div class="modal-head"><div class="modal-title">下载选项</div><button class="icon-btn" data-close><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="tabs-nav">
+      <button class="tab active" data-optpage="media">媒体设置</button>
+      <button class="tab" data-optpage="additional">附加内容</button>
+      <button class="tab" data-optpage="download">下载设置</button>
+    </div>
+    <div style="flex:1;overflow:auto">
+      <div class="modal-page active" id="opt-media">
+        <div class="form-field"><label>来源视频（媒体信息预览）</label><div id="optSourceText" class="small muted">#1 · 【4K演示】绝美风景 4K60（来自当前选中项）</div></div>
+        <div class="field-grid">
+          <div class="form-field"><label>视频画质</label><select id="optVq"><option>自动（按优先级）</option><option>8K 超高清</option><option selected>4K 超高清</option><option>1080P 高码率</option><option>1080P</option><option>720P</option></select><div class="field-note" id="optVqNote">4K · 3840×2160 · HEVC · 约 512 MB · 完整</div></div>
+          <div class="form-field"><label>视频编码</label><select id="optVc"><option>自动（按优先级）</option><option selected>AVC / H.264</option><option>HEVC / H.265</option><option>AV1</option></select><div class="field-note">AVC：文件最大、兼容性最好</div></div>
+          <div class="form-field"><label>音频音质</label><select id="optAq"><option>自动（按优先级）</option><option>Hi-Res 无损</option><option selected>杜比全景声</option><option>192K</option></select><div class="field-note" id="optAqNote">杜比全景声 · EC3 · 约 12 MB</div></div>
+        </div>
+        <div class="form-field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="switch on" id="optVideo" style="margin-right:4px">下载视频流</label><div class="field-note">下载独立的视频流（DASH）</div></div>
+        <div class="form-field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="switch on" id="optAudio">下载音频流</label><div class="field-note">下载独立音频流</div></div>
+        <div class="form-field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="switch on" id="optMerge">合并音视频</label><div class="field-note">将视频与音频合成为一个文件（关闭后将得到两个独立文件）</div></div>
+        <div class="form-field hidden" id="optKeepRow"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="switch" id="optKeep">合并后保留原始文件</label><div class="field-note">保留原视频流 / 音频流文件</div></div>
+      </div>
+      <div class="modal-page" id="opt-additional">
+        <div class="setting-row"><div class="s-info"><div class="s-title">弹幕</div><div class="s-desc">XML / ASS / JSON，样式可自定义</div></div><div class="control"><select><option>ASS</option><option>XML</option><option>JSON</option></select><input type="checkbox" class="switch on" data-extra-switch="danmaku" checked></div></div>
+        <div class="setting-row"><div class="s-info"><div class="s-title">字幕</div><div class="s-desc">多语言 / 样式 / 嵌入 MKV</div></div><div class="control"><select><option>SRT</option><option>ASS</option><option>LRC</option></select><input type="checkbox" class="switch" data-extra-switch="subtitle"></div></div>
+        <div class="setting-row"><div class="s-info"><div class="s-title">封面</div><div class="s-desc">保存为 JPG / PNG / WebP，可嵌入</div></div><div class="control"><select><option>JPG</option><option>PNG</option><option>WEBP</option></select><input type="checkbox" class="switch" data-extra-switch="cover"></div></div>
+        <div class="setting-row"><div class="s-info"><div class="s-title">章节</div><div class="s-desc">写入视频章节信息（ffmetadata）</div></div><div class="control"><input type="checkbox" class="switch" data-extra-switch="chapter"></div></div>
+        <div class="setting-row"><div class="s-info"><div class="s-title">元数据 NFO / JSON</div><div class="s-desc">供 Kodi / Jellyfin / Emby 刮削</div></div><div class="control"><input type="checkbox" class="switch" data-extra-switch="metadata"></div></div>
+      </div>
+      <div class="modal-page" id="opt-download">
+        <div class="form-field"><label>输出容器</label><div class="chip-row"><button class="btn sm active" data-container="mp4">MP4</button><button class="btn sm" data-container="mkv">MKV</button></div></div>
+        <div class="form-field"><label>命名规则</label><select><option>投稿视频默认：{leaf_title}</option><option>分P：{parent_title}/P{p}-{leaf_title}</option><option>合集：{collection_title}/…</option></select></div>
+        <div class="form-field"><label>编号方式</label><select><option>每批从 1 开始</option><option>使用解析列表序号</option><option>全局连续</option></select></div>
+        <div class="form-field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="switch" id="optAutoShow">自动显示此对话框</label></div>
+      </div>
+    </div>
+    <div class="modal-foot" style="flex-wrap:wrap">
+      <div class="preview-chips" style="flex:1;min-width:220px" id="previewChips">
+        <span class="small muted">即将下载：</span>
+      </div>
+      <div class="right"><button class="btn" data-close>取消</button><button class="btn primary" id="optConfirm">确定下载</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay center-mobile" id="ovl-dup">
+  <div class="modal sm">
+    <div class="modal-head"><div class="modal-title">检测到重复下载</div><button class="icon-btn" data-close><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <p class="small muted" style="line-height:1.7">下载列表中已存在相同内容的任务：<b id="dupTitle" style="color:var(--ink)"></b></p>
+      <div class="field-note">是否仍然继续下载？</div>
+    </div>
+    <div class="modal-foot"><div class="right"><button class="btn" data-close>跳过</button><button class="btn primary" id="dupContinue">继续下载</button></div></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovl-naming">
+  <div class="modal md">
+    <div class="modal-head"><div class="modal-title">命名规则</div><button class="icon-btn" data-close><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-field"><label>类型</label><select id="namingType"><option>投稿视频（NORMAL）</option><option>分P（PART）</option><option selected>合集（COLLECTION）</option><option>番剧（BANGUMI）</option><option>空间（SPACE）</option><option>收藏夹（FAVORITE）</option><option>音频（AUDIO）</option></select></div>
+      <div class="form-field"><label>规则模板</label><input type="text" id="namingRule" value="{collection_title}/{section_title}/{parent_title}/{leaf_title}" style="width:100%" /><div class="field-note">支持 {leaf_title} {parent_title} {section_title} {collection_title} {season_title} {number} {p} {uploader} {pub_time}…</div></div>
+      <div class="form-field"><label>预览结果</label><div class="panel" style="padding:10px 12px;background:var(--surface-2);font-family:ui-monospace,Consolas,monospace;font-size:12.5px" id="namingPreview">某合集/第1章/第1话/第1话.mp4</div></div>
+      <div class="field-grid">
+        <div class="form-field"><label>设为该类型默认</label><div class="control"><input type="checkbox" class="switch on" checked></div></div>
+        <div class="form-field"><label>添加变量</label><div class="control"><select><option>{leaf_title}</option><option>{collection_title}</option><option>{section_title}</option><option>{parent_title}</option><option>{season_title}</option><option>{episode_title}</option><option>{number}</option><option>{p}</option><option>{uploader}</option><option>{pub_time}</option></select><button class="btn sm" id="addVarBtn">插入</button></div></div>
+      </div>
+    </div>
+    <div class="modal-foot"><div class="right"><button class="btn" data-close>取消</button><button class="btn primary" data-close>保存</button></div></div>
+  </div>
+</div>
+
+<div class="toast-root" id="toastRoot"></div>
+
+<script>
+/* ================= Mock data ================= */
+const icons = {
+  check:'<svg class="ico tick" viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg>',
+  chev:'<svg class="ico chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  play:'<svg class="ico" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+  pause:'<svg class="ico" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>',
+  retry:'<svg class="ico" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.6"/><path d="M20 4v4h-4"/></svg>',
+  folder:'<svg class="ico" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>',
+  trash:'<svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  download:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 21h14"/></svg>'
+};
+const STATE = {
+  view:'parse',
+  login:false, user:{ name:'B站用户_9527', uid:'883109', face:'' },
+  selectAll:true,  // 当前“全选/取消”按钮状态
+  checked:{},       // key -> true/partial
+  collapse:{},
+  tasks:[], taskSeq:1,
+  toastSeq:1, timers:[]
+};
+const MOCK_TREE = [
+  { type:'group', num:'合集', title:'【4K HDR】世界自然奇观 第一季', badge:'', dur:'', time:'', key:'c1', open:true, children:[
+    { type:'group', num:'章节', title:'第 1 章 · 亚洲篇', badge:'', dur:'', time:'', key:'c1s1', open:true, children:[
+      { num:'1', title:'【4K 演示】绝美风景 4K60 帧 HDR', badge:'4K', dur:'12:35', time:'2026-08-20 08:00', key:'v1', checked:true },
+      { num:'2', title:'【4K 演示】城市夜景延时摄影', badge:'4K', dur:'08:12', time:'2026-08-20 08:00', key:'v2', checked:false },
+      { num:'3', title:'【4K 演示】雪山云海航拍', badge:'充电专属', badgeTone:'hot', dur:'10:47', time:'2026-08-20 08:00', key:'v3', checked:false },
+    ]},
+    { type:'group', num:'章节', title:'第 2 章 · 欧洲篇', badge:'', dur:'', time:'', key:'c1s2', open:true, children:[
+      { num:'4', title:'【4K 演示】阿尔卑斯山徒步全记录', badge:'', dur:'15:20', time:'2026-08-21 10:00', key:'v4', checked:false },
+      { num:'5', title:'【4K 演示】挪威峡湾与极光', badge:'', dur:'18:44', time:'2026-08-21 10:00', key:'v5', checked:false },
+    ]}
+  ]}
+];
+const EMPTY_TREE = [];
+
+/* Leaf list in display order */
+let leafOrder = [];
+function collectLeaves(nodes, into, collapsedSkip){
+  for(const n of nodes){
+    if(n.children){ if(!collapsedSkip || STATE.collapse[n.key]!==true) collectLeaves(n.children, into, collapsedSkip); }
+    else into.push(n);
+  }
+  return into;
+}
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+function el(tag, cls, html){ const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
+function fmtDur(sec){ if(!sec) return '—'; const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`; }
+function toast(msg, tone='ok'){
+  const t=el('div','toast '+tone, `<span class="toast-dot"></span><span>${msg}</span>`);
+  $('#toastRoot').appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity .3s, transform .3s'; t.style.opacity='0'; t.style.transform='translateY(-6px)'; setTimeout(()=>t.remove(),320); }, 2600);
+}
+
+/* ================= View / nav ================= */
+function setView(v){
+  STATE.view=v;
+  $$('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+v));
+  $$('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  $$('.tabbar-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  const titles={parse:'解析',tasks:'下载',settings:'设置'};
+  $('#topbarTitle').textContent = titles[v]||'';
+  if(v==='tasks') renderTasks();
+}
+function openMenu(id){ $$('.menu').forEach(m=>{ if(m.id!==id) m.classList.remove('open'); }); $('#'+id).classList.toggle('open'); }
+function closeMenus(){ $$('.menu').forEach(m=>m.classList.remove('open')); }
+document.addEventListener('click', e=>{ if(!e.target.closest('.dropdown')) closeMenus(); });
+function openModal(id, center){ const o=$('#'+id); o.classList.add('open'); o.classList.toggle('center-mobile', !!center); }
+function closeModal(ovl){ ovl.classList.remove('open'); }
+$$('.overlay').forEach(o=>{
+  o.addEventListener('mousedown', e=>{ if(e.target===o) closeModal(o); });
+});
+$$('[data-close]').forEach(b=> b.addEventListener('click', ()=> closeModal(b.closest('.overlay'))));
+
+/* ================= Tree render ================= */
+function rowCell(cls, html){ const c=el('div','tree-cell '+cls); c.innerHTML=html; return c; }
+function renderCheck(item){
+  const st = item.checked===true ? 'on' : (item.checked==='partial' ? 'partial' : '');
+  const ch = item.children ? '<svg class="ico chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>' : '<span style="width:16px"></span>';
+  const cb = item.children ? '' : `<span class="checkbox ${st}">${st==='on'?icons.check:''}</span>`;
+  return `<span style="display:inline-flex;align-items:center;gap:6px">${ch}${cb}</span>`;
+}
+function renderTree(){
+  const body=$('#treeBody'); body.innerHTML='';
+  const walk=(nodes, depth)=>{
+    for(const n of nodes){
+      const tr=document.createElement('div');
+      tr.className='tree-row'+(n.children?' group':'')+(depth>0?' child':'')+(STATE.collapse[n.key]?' collapsed':'');
+      tr.dataset.key=n.key; tr.dataset.kind=n.children?'group':'leaf';
+      // col1: chevron + checkbox + number
+      let left='';
+      if(n.children){
+        left='<span class="chev-holder">'+icons.chev+'</span>';
+      } else {
+        const st=n.checked===true?'on':(n.checked==='partial'?'partial':'');
+        left='<span style="width:16px;flex:none"></span><span class="checkbox '+st+'">'+(st==='on'?icons.check:'')+'</span>';
+      }
+      const numCell=document.createElement('div'); numCell.className='tree-cell';
+      numCell.innerHTML=left+' <span style="flex:none;color:var(--muted);font-size:12.5px">'+(n.num||'')+'</span>';
+      // col2 title
+      const titleCell=document.createElement('div'); titleCell.className='tree-cell title';
+      titleCell.innerHTML='<span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(n.title)+'</span>';
+      // others
+      const badge=n.badge?`<span class="badge ${n.badgeTone||''}">${esc(n.badge)}</span>`:'';
+      const cells=[
+        numCell, titleCell,
+        (()=>{const c=document.createElement('div');c.className='tree-cell muted';c.innerHTML=badge;return c;})(),
+        (()=>{const c=document.createElement('div');c.className='tree-cell muted';c.textContent=n.dur||'';return c;})(),
+        (()=>{const c=document.createElement('div');c.className='tree-cell muted col-time';c.textContent=n.time||'';return c;})()
+      ];
+      cells.forEach(c=>tr.appendChild(c));
+      if(n.children){
+        tr.addEventListener('click', e=>{ if(e.target.closest('.checkbox'))return; STATE.collapse[n.key]=!STATE.collapse[n.key]; renderTree(); });
+      } else {
+        tr.addEventListener('click', e=>{ if(e.target.closest('.checkbox'))return; toggleLeaf(n); });
+      }
+      const cb=tr.querySelector('.checkbox');
+      if(cb){ cb.addEventListener('click', e=>{ e.stopPropagation(); toggleLeaf(n); }); }
+      body.appendChild(tr);
+      if(n.children && !STATE.collapse[n.key]) walk(n.children, depth+1);
+    }
+  };
+  walk(MOCK_TREE,0);
+  updateTreeMeta();
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function setLeafChecked(item, val){
+  item.checked = val; syncParents(MOCK_TREE);
+  renderTree();
+}
+function toggleLeaf(item){
+  setLeafChecked(item, item.checked===true?false:true);
+}
+function computeParents(nodes){
+  for(const n of nodes){
+    if(!n.children) continue;
+    computeParents(n.children);
+    const leafKids=n.children.filter(c=>!c.children);
+    if(n.children.every(c=>c.children? allChecked(c) : c.checked===true)) n.checked=true;
+    else if(n.children.every(c=>c.children? noneChecked(c) : !c.checked)) n.checked=false;
+    else n.checked='partial';
+  }
+}
+function allChecked(n){ if(!n.children) return n.checked===true; return n.children.every(c=>allChecked(c)); }
+function noneChecked(n){ if(!n.children) return n.checked!==true; return n.children.every(c=>noneChecked(c)); }
+function syncParents(nodes){ computeParents(nodes); }
+function countLeaves(nodes){
+  let all=0,sel=0;
+  const w=nodes=>{ for(const n of nodes){ if(n.children) w(n.children); else { all++; if(n.checked===true) sel++; } } };
+  w(nodes); return [all,sel];
+}
+function updateTreeMeta(){
+  const [all,sel]=countLeaves(MOCK_TREE);
+  $('#parseLabel').innerHTML = '投稿视频（<b>'+sel+'</b> 项已选 · <b>'+all+'</b> 项）';
+  $('#downloadBtn').disabled = sel===0;
+  $('#previewBadge').style.display = all? 'inline-flex':'none';
+  $('#selectAllBtn').textContent = sel===all && all>0 ? '取消全选' : '全选';
+  STATE.selectAll = !(sel===all && all>0);
+}
+function treeHasData(){ return MOCK_TREE.length>0; }
+
+/* ================= Leaf helpers ================= */
+function leavesAll(){ return collectLeaves(MOCK_TREE, [], true); }
+function setAll(val){
+  const w=nodes=>{ for(const n of nodes){ if(n.children){ n.checked = val===false?false:(n.children.every(c=>c.checked===true)?true:'partial'); w(n.children);} else n.checked=val; } };
+  w(MOCK_TREE); computeParents(MOCK_TREE); renderTree(); updateTreeMeta();
+}
+function reverseSel(){
+  leavesAll().forEach(l=> l.checked = l.checked===true?false:true);
+  computeParents(MOCK_TREE); renderTree(); updateTreeMeta();
+}
+
+/* ================= Tasks mock ================= */
+function genTasks(){
+  const now=Date.now()/1000;
+  const mk=(o)=>({ id:'T'+String(++STATE.taskSeq).padStart(4,'0'), title:o.title, cover:o.cover||0, size:o.size, done:o.done||0,
+    status:o.status||'queued', quality:o.quality||'1080P', container:o.container||'MP4', group:o.group||'下载中',
+    createdAt:now-3600*o.age, completedAt:0, speed:0, paused:false, coverText:o.coverText||'' });
+  STATE.tasks=[
+    mk({title:'【4K HDR】世界自然奇观 第一季 - 第1话', status:'downloading', size:1.42e9, done:0.62e9, cover:0, quality:'4K', age:0.5, coverText:'4K' }),
+    mk({title:'【4K】城市夜景延时摄影 (P2)', status:'downloading', size:820e6, done:0.14e9, cover:1, quality:'4K', age:0.3, coverText:'夜景' }),
+    mk({title:'【1080P】雪山云海航拍 (P3)', status:'queued', size:640e6, done:0, cover:2, quality:'1080P', age:0.2, coverText:'雪山' }),
+    mk({title:'挪威峡湾与极光 (P5)', status:'paused', size:1.1e9, done:0.9e9, cover:3, quality:'1080P', age:2, coverText:'极光', paused:true }),
+    mk({title:'阿尔卑斯山徒步全记录 (P4)', status:'merging', size:0.98e9, done:0.98e9, cover:1, quality:'4K', age:1, coverText:'徒步' }),
+    mk({title:'【4K HDR】世界自然奇观 第一季 - 第2话', status:'completed', size:1.5e9, done:1.5e9, cover:0, quality:'4K', age:26, coverText:'4K' }),
+    mk({title:'【1080P】城市风光摄影技巧合集', status:'completed', size:2.3e9, done:2.3e9, cover:2, quality:'1080P', age:70, coverText:'技巧' }),
+  ];
+  $('#sideBadge').classList.add('show'); $('#sideBadge').textContent='' + STATE.tasks.filter(t=>t.status!=='completed').length;
+}
+function bytesFmt(b){ if(!b) return '0 B'; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024&&i<u.length-1){ b/=1024; i++; } return b.toFixed(i>1?1:0)+' '+u[i]; }
+function taskPrimaryBtn(t){
+  if(t.status==='downloading'||t.status==='merging') return {icon:'pause', act:'pause', title:'暂停'};
+  if(t.status==='paused') return {icon:'play', act:'resume', title:'继续'};
+  if(t.status==='queued') return {icon:'play', act:'start', title:'开始'};
+  if(t.status==='failed') return {icon:'retry', act:'retry', title:'重试'};
+  if(t.status==='completed') return {icon:'folder', act:'open', title:'打开目录'};
+  return {icon:'play', act:'start', title:'开始'};
+}
+function renderTasks(){
+  const tab=$('#taskTabs .tab.active').dataset.tasktab;
+  const list=tab==='downloading'? STATE.tasks.filter(t=>t.status!=='completed') : STATE.tasks.filter(t=>t.status==='completed');
+  $('#dlCount').textContent=STATE.tasks.filter(t=>t.status!=='completed').length;
+  $('#doneCount').textContent=STATE.tasks.filter(t=>t.status==='completed').length;
+  const wrap=$('#taskList'); wrap.innerHTML='';
+  if(!list.length){ wrap.appendChild(el('div','empty-list','暂无'+(tab==='downloading'?'进行中':'已完成')+'的下载任务')); return; }
+  list.forEach(t=>{
+    const card=el('div','task-card '+(t.status==='paused'?'paused':t.status==='completed'?'done':(t.status==='failed'?'error':'')));
+    const pct=Math.min(100, Math.round(t.done/t.size*100));
+    const pb=taskPrimaryBtn(t);
+    card.innerHTML=`
+      <div class="cover cover-${t.cover}"><span class="cover-title">${esc(t.coverText||t.title)}</span></div>
+      <div class="task-main">
+        <div class="task-title">${esc(t.title)}</div>
+        <div class="task-meta"><span>${t.quality} · ${t.container}</span><span class="task-size">${bytesFmt(t.done)} / ${bytesFmt(t.size)}</span></div>
+      </div>
+      <div class="task-right">
+        <div class="progress-track"><div class="progress-bar" style="width:${t.status==='merging'?100:pct}%"></div></div>
+        <div class="task-status-row">
+          <span class="status-chip ${t.status}">${statusText(t)}</span>
+          <span class="task-actions">
+            <button class="icon-btn-round" data-taskact="${pb.act}" title="${pb.title}">${icons[pb.icon]}</button>
+            <button class="icon-btn-round" data-taskact="remove" title="删除">${icons.trash}</button>
+          </span>
+        </div>
+      </div>`;
+    card.querySelector('[data-taskact="remove"]').addEventListener('click', ()=>{ removeTask(t); });
+    const actBtn=card.querySelector('[data-taskact]');
+    actBtn.addEventListener('click', ()=> actTask(t, pb.act));
+    wrap.appendChild(card);
+  });
+}
+function statusText(t){
+  switch(t.status){
+    case 'queued': return '排队中'; case 'parsing': return '解析中';
+    case 'downloading': return '下载中 ' + bytesFmt(t.speed)+'/s'; case 'paused': return '已暂停';
+    case 'merging': return '合并中 ' + Math.round(t.done/t.size*100) + '%';
+    case 'completed': return '已完成'; case 'failed': return '下载失败'; case 'cancelled': return '已取消';
+  }
+}
+function actTask(t, act){
+  if(act==='pause'){ t.status='paused'; toast('已暂停：'+t.title); }
+  else if(act==='resume'||act==='start'){ t.status='queued'; toast('已加入队列：'+t.title); scheduleStart(t); }
+  else if(act==='retry'){ t.status='queued'; toast('已重新加入队列：'+t.title); scheduleStart(t); }
+  else if(act==='open'){ toast('演示：打开产物目录'); }
+  renderTasks();
+}
+function scheduleStart(t){
+  setTimeout(()=>{ if(STATE.tasks.includes(t) && (t.status==='queued')){ t.status='downloading'; t.speed=6.2e6; toast('开始下载：'+t.title); renderTasks(); simProgress(t); } }, 700);
+}
+function simProgress(t){
+  const iv=setInterval(()=>{
+    if(t.status!=='downloading'){ clearInterval(iv); return; }
+    t.done=Math.min(t.size, t.done + t.speed*0.8);
+    const pct=t.done/t.size;
+    t.speed=Math.max(2e5, 6.2e6 + (Math.random()-.5)*1.6e6);
+    if(pct>=1){ clearInterval(iv); t.status='merging'; t.done=t.size; toast('合并中：'+t.title); renderTasks();
+      setTimeout(()=>{ if(STATE.tasks.includes(t)){ t.status='completed'; t.completedAt=Date.now()/1000; toast('下载完成：'+t.title); renderTasks(); } }, 2200);
+    }
+    renderTasks();
+  }, 900);
+}
+function removeTask(t){
+  STATE.tasks=STATE.tasks.filter(x=>x!==t);
+  renderTasks(); toast('已删除任务','err');
+}
+function addMockTask(title, quality, coverIdx){
+  const t={ id:'T'+String(++STATE.taskSeq).padStart(4,'0'), title, size:720e6+Math.random()*1e9, done:0, status:'queued', quality, cover:coverIdx||0, createdAt:Date.now()/1000, speed:0, coverText:(title.match(/(.{0,8})/)?.[1]||'') };
+  STATE.tasks.unshift(t); renderTasks(); toast('已加入下载队列：'+title);
+  scheduleStart(t);
+}
+
+/* ================= Modal logic ================= */
+const extraState={ video:true, audio:true, merge:true, keep:false, danmaku:true, subtitle:false, cover:false, chapter:false, metadata:false };
+function updateExtraPreview(){
+  const chips=[
+    ['video','Video','tag video'],['audio','Audio','tag audio'],['danmaku','弹幕','tag danmaku'],['subtitle','字幕','tag subtitle'],
+    ['cover','封面','tag cover'],['chapter','章节','tag chapter'],['metadata','NFO','tag metadata']].filter(x=>extraState[x[0]]);
+  const host=$('#previewChips'); host.innerHTML='<span class="small muted">即将下载：</span>';
+  if(!chips.length){ host.innerHTML+='<span class="tag none">未选择任何内容</span>'; }
+  else chips.forEach(c=>{ host.innerHTML+=`<span class="${c[2]}">${c[1]}</span>`; });
+}
+function initOptionsModal(){
+  // bind opt switches
+  const map={ video:['optVideo'], audio:['optAudio'], merge:['optMerge'], keep:['optKeep'] };
+  for(const [k,ids] of Object.entries(map)){ const el=$('#'+ids[0]); el.checked=extraState[k]; el.addEventListener('change',()=>{ extraState[k]=el.checked; if(k==='merge'&&!el.checked){ extraState.keep=false; $('#optKeep').checked=false; $('#optKeepRow').classList.add('hidden');} else if(k==='merge'&&el.checked){ $('#optKeepRow').classList.remove('hidden'); } if(k==='video'||k==='audio'){ if(!extraState.video||!extraState.audio){ $('#optMerge').checked=false; extraState.merge=false; $('#optKeepRow').classList.add('hidden'); } else { $('#optMerge').checked=extraState.merge; } } updateExtraPreview(); }); }
+  const contBtns=$$('#opt-download [data-container]');
+  contBtns.forEach(b=> b.addEventListener('click',()=>{ contBtns.forEach(x=>x.classList.remove('active')); b.classList.add('active'); }));
+  $$('#opt-additional [data-extra-switch]').forEach(b=> b.addEventListener('change',()=>{ extraState[b.dataset.extraSwitch]=b.checked; updateExtraPreview(); }));
+  // tabs
+  $$('#ovl-options .tabs-nav .tab').forEach(t=> t.addEventListener('click',()=>{
+    $$('#ovl-options .tabs-nav .tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+    $$('#ovl-options .modal-page').forEach(p=>p.classList.remove('active'));
+    $('#opt-'+t.dataset.optpage).classList.add('active');
+  }));
+  updateExtraPreview();
+}
+function fillOptionsFromSelection(){
+  // 更新来源文本为选中叶子标题（演示）
+  const leaves=leavesAll(); const first=leaves[0];
+  if(first){ $('#optSourceText').textContent='#1 · '+first.title; }
+}
+function openDownloadOptions(){
+  fillOptionsFromSelection();
+  openModal('ovl-options');
+}
+
+/* ================= Login / user ================= */
+function makeFakeQr(){ const g=$('#qrGrid'); g.innerHTML=''; for(let i=0;i<81;i++) g.innerHTML+='<i style="'+(Math.random()>.52?'opacity:.9':'opacity:.15')+'"></i>'; }
+function setLoggedIn(name){
+  STATE.login=true; if(name) STATE.user.name=name;
+  const side=$('#loginSide'); side.innerHTML=`<span class="avatar" style="background:linear-gradient(135deg,#5f7dff,#8e7cff)">${esc(STATE.user.name[0])}</span><span class="nav-label">${esc(STATE.user.name)}</span>`;
+  toast('已登录：'+STATE.user.name);
+  closeModal($('#ovl-login'));
+}
+function openLogin(){ if(STATE.login){ toast('演示：已登录，显示用户卡片'); return; } makeFakeQr(); openModal('ovl-login'); }
+
+/* ================= Settings dialogs (简单演示) ================= */
+let demoTasksStarted=false;
+
+/* ================= Init ================= */
+function bindGlobal(){
+  // nav
+  $$('.nav-item[data-view], .tabbar-item[data-view]').forEach(b=> b.addEventListener('click',()=> setView(b.dataset.view)));
+  $$('[data-action="login"]').forEach(b=> b.addEventListener('click', openLogin));
+  $$('[data-action="about"]').forEach(b=> b.addEventListener('click',()=> openModal('ovl-about')));
+  $$('[data-action="theme"]').forEach(b=> b.addEventListener('click', toggleTheme));
+  // parse
+  $('#parseBtn').addEventListener('click', (e)=>{ e.stopPropagation(); openMenu('parseMenu'); });
+  $('#urlPasteBtn').addEventListener('click', ()=>{ $('#urlInput').value='https://www.bilibili.com/video/BV1GJ411x7h7'; doParse(); });
+  $('#urlInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doParse(); });
+  $('#parseMenu').querySelector('[data-action="batchParse"]').addEventListener('click', ()=>{ closeMenus(); toast('演示：批量解析（粘贴多行链接）'); });
+  $$('[data-action="batchParse"]').forEach(b=> b.addEventListener('click', ()=>{ if(b.id==='parseMenu')return; toast('演示：批量解析'); }));
+  $$('[data-action="loadDemo"]').forEach(b=> b.addEventListener('click', loadDemo));
+  $$('[data-action="search"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：搜索当前解析列表'); }));
+  $$('[data-action="parseHistory"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：解析历史（最近 100 条）'); }));
+  $$('[data-action="batchSelect"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：按行号批量选择，如 1,3,5-10'); }));
+  $$('[data-action="columnsDialog"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：列显隐与排序'); }));
+  $$('[data-action="namingDialog"]').forEach(b=> b.addEventListener('click',()=>{ openModal('ovl-naming'); }));
+  $$('[data-action="cdnDialog"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：CDN 节点列表（大陆/海外）'); }));
+  $$('[data-action="uaDialog"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：自定义 User-Agent'); }));
+  // select/reverse
+  $('#selectAllBtn').addEventListener('click', ()=> setAll(!STATE.selectAll));
+  $('#reverseBtn').addEventListener('click', reverseSel);
+  // pager mock
+  $$('#pager [data-page]').forEach(b=> b.addEventListener('click', ()=>{ const d=b.dataset.page; toast('演示：切换解析页码'); }));
+  // download buttons
+  $('#downloadBtn').addEventListener('click', doDownloadSelected);
+  $('#dlOptionsBtn').addEventListener('click', openDownloadOptions);
+  // options modal confirm
+  $('#optConfirm').addEventListener('click', ()=>{ closeModal($('#ovl-options')); doDownloadSelected(true); });
+  $('#dupContinue').addEventListener('click', ()=>{ closeModal($('#ovl-dup')); const t=$('#dupTitle').textContent; toast('已继续下载：'+t); addMockTask(t,'1080P',1); });
+  // tasks tabs + batch
+  $$('#taskTabs .tab').forEach(t=> t.addEventListener('click',()=>{ $$('#taskTabs .tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); renderTasks(); }));
+
+  $$('[data-action="startAll"]').forEach(b=> b.addEventListener('click',()=>{ const q=STATE.tasks.filter(t=>t.status==='paused'||t.status==='queued'||t.status==='failed'); q.forEach(t=>{ t.status='queued'; scheduleStart(t); }); renderTasks(); toast('已全部开始'); }));
+  $$('[data-action="pauseAll"]').forEach(b=> b.addEventListener('click',()=>{ STATE.tasks.forEach(t=>{ if(t.status==='downloading'){ t.status='paused'; } }); renderTasks(); toast('已全部暂停'); }));
+  $$('[data-action="clearDone"]').forEach(b=> b.addEventListener('click',()=>{ STATE.tasks=STATE.tasks.filter(t=>t.status!=='completed'); renderTasks(); toast('已清空已完成任务'); }));
+  $$('[data-action="sortTasks"]').forEach(b=> b.addEventListener('click',()=>{ toast('演示：排序（创建时间/标题/大小/进度）'); }));
+  // settings: sliders / theme / switches
+  $$('input[type=range][data-val]').forEach(r=>{ const label=$('#'+r.dataset.val); r.addEventListener('input',()=>{ label.textContent=r.value; }); });
+  $('#setTheme').addEventListener('change', ()=> applyTheme($('#setTheme').value));
+  $('#setAccent').addEventListener('input', ()=> { document.documentElement.style.setProperty('--accent',$('#setAccent').value); document.documentElement.style.setProperty('--accent-strong', $('#setAccent').value+'dd'); });
+  $('#setMotion').addEventListener('change', e=>{ document.documentElement.style.setProperty('--dur', e.target.value==='reduced' ? '.01s':'.18s'); toast('已更新动效强度'); });
+  $('#speedLimitSwitch').addEventListener('change', e=>{ $('#speedLimitVal').disabled=!e.target.checked; });
+  // mock QR
+  $$('[data-action=simQr]').forEach(b=> b.addEventListener('click', ()=>{ $('#qrStatus').textContent='已扫码，请在手机上确认…'; setTimeout(()=>{ $('#qrStatus').textContent='登录成功！'; setLoggedIn('B站用户_9527'); }, 900); }));
+  $$('[data-action=simCookieLogin]').forEach(b=> b.addEventListener('click', ()=>{ if(!$('#cookieArea').value.trim()){ toast('请先粘贴 Cookie（演示可直接点确定）','err'); } setLoggedIn('Cookie用户_8848'); }));
+}
+function toggleTheme(){ const cur=document.documentElement.dataset.theme==='dark'?'light':'dark'; document.documentElement.dataset.theme=cur; $('#setTheme').value=cur; }
+function applyTheme(v){ if(v==='system'){ v=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'; } document.documentElement.dataset.theme=v; }
+function loadDemo(){
+  $('#parseEmpty').classList.add('hidden');
+  $('#treeWrap').classList.remove('hidden');
+  MOCK_TREE.length=0; MOCK_TREE.push(...JSON.parse(JSON.stringify([
+    { type:'group', num:'合集', title:'【4K HDR】世界自然奇观 第一季', badge:'', dur:'', time:'', key:'c1', open:true, children:[
+      { type:'group', num:'章节', title:'第 1 章 · 亚洲篇', key:'c1s1', children:[
+        { num:'1', title:'【4K 演示】绝美风景 4K60 帧 HDR', badge:'4K', dur:'12:35', time:'2026-08-20 08:00', key:'v1', checked:true },
+        { num:'2', title:'【4K 演示】城市夜景延时摄影', badge:'', dur:'08:12', time:'2026-08-20 08:00', key:'v2' },
+        { num:'3', title:'【4K 演示】雪山云海航拍', badge:'充电专属', badgeTone:'hot', dur:'10:47', time:'2026-08-20 08:00', key:'v3' },
+      ]},
+      { type:'group', num:'章节', title:'第 2 章 · 欧洲篇', key:'c1s2', children:[
+        { num:'4', title:'【4K 演示】阿尔卑斯山徒步全记录', badge:'', dur:'15:20', time:'2026-08-21 10:00', key:'v4' },
+        { num:'5', title:'【4K 演示】挪威峡湾与极光', badge:'', dur:'18:44', time:'2026-08-21 10:00', key:'v5' },
+      ]}
+    ]}
+  ])));
+  renderTree();
+  toast('已加载演示解析结果');
+}
+function doParse(){
+  const v=$('#urlInput').value.trim();
+  if(!v){ toast('请输入链接','err'); return; }
+  loadDemo();
+  $('#parseLabel').textContent='解析中…';
+  setTimeout(()=>{ updateTreeMeta(); }, 60);
+}
+function doDownloadSelected(force){
+  const leaves=leavesAll().filter(l=>l.checked===true);
+  if(!leaves.length){ toast('请先勾选要下载的条目','err'); return; }
+  const t=leaves[0].title;
+  if(!force && STATE.tasks.some(x=>x.title===t)){
+    $('#dupTitle').textContent=t; openModal('ovl-dup'); return;
+  }
+  const title=leaves.length===1?t:(t+' 等 '+leaves.length+' 项');
+  addMockTask(title, '4K', 0);
+}
+function init(){
+  bindGlobal();
+  initOptionsModal();
+  // 打开即展示演示树：先把第一片叶子设为已勾选，模拟“按条件自动勾选”
+  const firstLeaf = leavesAll()[0];
+  if(firstLeaf) firstLeaf.checked = true;
+  syncParents(MOCK_TREE);
+  renderTree();
+  genTasks();
+  renderTasks();
+}
+init();
+</script>
+</body>
+</html>
