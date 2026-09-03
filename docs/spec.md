@@ -244,7 +244,7 @@ packages/engine（无 UI 依赖）
 
 每期结束做一次 spec 对齐检查：对照 §4 勾选已满足需求，未满足项进入下期。
 
-## 10. 开放决策清单（实施前确认）
+## 10. 已确认决策（2026-09-03）
 
 1. 短信登录：默认不纳入（风控/成本），扫码+Cookie 覆盖主要场景。
 2. Web 访问保护：默认仅内网/网关；是否要"轻量访问口令"待定。
@@ -256,3 +256,4 @@ packages/engine（无 UI 依赖）
 
 - 原版项目 README/CHANGELOG（特性与 v2.15.0 修复项即本规格的验收参照）
 - `docs/design.md`、`docs/superpowers/plans/2026-09-03-port-bili23-to-ts-web.md`
+
