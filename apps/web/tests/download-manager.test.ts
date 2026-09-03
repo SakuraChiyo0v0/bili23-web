@@ -76,7 +76,7 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
 });
 
 import { TaskStore, parseUrl, BiliError } from "@bili23-web/engine";
-import { DownloadManager } from "../src/server/download-manager.js";
+import { DownloadManager, normalizeExtrasStyles } from "../src/server/download-manager.js";
 import type { DownloadManager as DownloadManagerType } from "../src/server/download-manager.js";
 import type { TaskSummary } from "../src/server/download-manager.js";
 
@@ -526,5 +526,25 @@ describe("DownloadManager 高级默认档位兜底（advanced.default*）", () =
       h.state.downloads.length = 0;
       h.state.streamOpts = [];
     }
+  });
+});
+
+describe("normalizeExtrasStyles 空 style 兜底", () => {
+  it("弹幕/字幕启用但 style 传空对象时回填默认样式", () => {
+    const out = normalizeExtrasStyles({
+      danmaku: { enabled: true, format: "ass", style: {}, embed: false, deleteAfterEmbed: false },
+      subtitle: { enabled: true, format: "ass", style: {}, language: { downloadSpecified: false, specifiedLanguages: [] }, embed: false, deleteAfterEmbed: false },
+    } as never);
+    expect(Object.keys((out.danmaku!.style ?? {}) as object).length).toBeGreaterThan(0);
+    expect(Object.keys((out.subtitle!.style ?? {}) as object).length).toBeGreaterThan(0);
+  });
+
+  it("style 已配置或未启用时不覆盖", () => {
+    const out = normalizeExtrasStyles({
+      danmaku: { enabled: true, format: "xml", style: { font: { name: "自定义" } }, embed: false, deleteAfterEmbed: false },
+      subtitle: { enabled: false, format: "ass", style: {}, language: { downloadSpecified: false, specifiedLanguages: [] }, embed: false, deleteAfterEmbed: false },
+    } as never);
+    expect((out.danmaku!.style as { font?: { name?: string } }).font?.name).toBe("自定义");
+    expect((out.subtitle!.style as object)).toEqual({});
   });
 });

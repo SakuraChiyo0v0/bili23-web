@@ -37,6 +37,8 @@ import type {
 } from "@bili23-web/engine";
 import {
   DEFAULT_EXTRAS_OPTIONS,
+  DEFAULT_DANMAKU_STYLE,
+  DEFAULT_SUBTITLE_STYLE,
   DEFAULT_NAMING_RULES,
   NumberingAllocator,
   VIDEO_CODEC_STR,
@@ -353,6 +355,17 @@ export interface AuthStatus {
   loggedIn: boolean;
   /** 脱敏后的 SESSDATA 预览（如 "abc…1234"），便于 UI 提示已登录 */
   preview: string;
+}
+
+/** 附加内容样式兜底：前端可能传空 style，引擎需要完整 DanmakuStyle/SubtitleStyle 才能渲染 ASS */
+export function normalizeExtrasStyles(extras: ExtrasOptions): ExtrasOptions {
+  if (extras.danmaku?.enabled && (!extras.danmaku.style || Object.keys(extras.danmaku.style).length === 0)) {
+    extras = { ...extras, danmaku: { ...extras.danmaku, style: DEFAULT_DANMAKU_STYLE } };
+  }
+  if (extras.subtitle?.enabled && (!extras.subtitle.style || Object.keys(extras.subtitle.style).length === 0)) {
+    extras = { ...extras, subtitle: { ...extras.subtitle, style: DEFAULT_SUBTITLE_STYLE } };
+  }
+  return extras;
 }
 
 export class DownloadManager {
@@ -797,7 +810,7 @@ export class DownloadManager {
         ...(options.audioQualityId === undefined && cfg.advanced.defaultAudioQualityId !== undefined
           ? { audioQualityId: cfg.advanced.defaultAudioQualityId }
           : {}),
-        extras: deepMerge(cfg.additional, options.extras),
+        extras: normalizeExtrasStyles(deepMerge(cfg.additional, options.extras)),
         naming: { conventionType, rule, number },
       };
       const task = new ManagedTask(item, resolved);
@@ -1142,7 +1155,7 @@ export class DownloadManager {
       const tempOut = join(taskDir, "output_" + task.id + "." + outExt);
       const labels = this.#qualityLabels(resolved);
       const target = this.#outputTarget(task, labels);
-      const extrasOpt = task.options.extras ?? DEFAULT_EXTRAS_OPTIONS;
+      const extrasOpt = normalizeExtrasStyles(task.options.extras ?? DEFAULT_EXTRAS_OPTIONS);
       const gathered = await this.#gatherExtraInputs(task, taskDir, info, extrasOpt, container);
 
       // 合并/转封装（附加内容随 ffmpeg 一并内嵌）
