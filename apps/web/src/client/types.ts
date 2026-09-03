@@ -90,6 +90,8 @@ export interface DownloadOptionsDTO {
   videoCodecId?: number;
   audioQualityId?: number;
   container?: "mp4" | "mkv";
+  /** 附加内容（可选；缺省由服务端与全局默认合并） */
+  extras?: ExtrasOptionsDTO;
 }
 
 export interface DownloadResponseDTO {
@@ -125,4 +127,111 @@ export function formatDuration(seconds: number): string {
   const sec = s % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+// ==================== 附加内容 / 全局设置（与 server config JSON 对应） ====================
+
+export type DanmakuFormatDTO = "xml" | "ass" | "json";
+export type SubtitleFormatDTO = "srt" | "lrc" | "txt" | "ass" | "json";
+export type CoverFormatDTO = "jpg" | "png" | "avif" | "webp";
+export type MetadataFormatDTO = "nfo" | "json";
+
+export interface DanmakuFontDTO {
+  name?: string;
+  size?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+}
+
+export interface DanmakuStyleDTO {
+  font?: DanmakuFontDTO;
+  border?: { border?: number; shadow?: number };
+  advanced?: {
+    displayArea?: number;
+    opacity?: number;
+    scrollDuration?: number;
+    staticDuration?: number;
+    minimumGap?: number;
+  };
+  resolution?: { width?: number; height?: number };
+}
+
+export interface SubtitleStyleDTO {
+  font?: DanmakuFontDTO;
+  border?: { border?: number; shadow?: number };
+  color?: { primary?: string; secondary?: string; border?: string; shadow?: string };
+  margin?: { left?: number; right?: number; vertical?: number };
+  resolution?: { width?: number; height?: number };
+  alignment?: number;
+}
+
+export interface DanmakuOptionsDTO {
+  enabled?: boolean;
+  format?: DanmakuFormatDTO;
+  embed?: boolean;
+  deleteAfterEmbed?: boolean;
+  style?: DanmakuStyleDTO;
+}
+
+export interface SubtitleLanguageSelectionDTO {
+  downloadSpecified?: boolean;
+  specifiedLanguages?: string[];
+}
+
+export interface SubtitleOptionsDTO {
+  enabled?: boolean;
+  format?: SubtitleFormatDTO;
+  language?: SubtitleLanguageSelectionDTO;
+  embed?: boolean;
+  deleteAfterEmbed?: boolean;
+  style?: SubtitleStyleDTO;
+}
+
+export interface CoverOptionsDTO {
+  enabled?: boolean;
+  format?: CoverFormatDTO;
+  attach?: boolean;
+  deleteAfterAttach?: boolean;
+}
+
+export interface ChapterOptionsDTO {
+  embed?: boolean;
+}
+
+export interface MetadataOptionsDTO {
+  enabled?: boolean;
+  format?: MetadataFormatDTO;
+}
+
+/** 附加内容（与引擎 ExtrasOptions 同构；所有字段可选以支持部分覆盖） */
+export interface ExtrasOptionsDTO {
+  danmaku?: DanmakuOptionsDTO;
+  subtitle?: SubtitleOptionsDTO;
+  cover?: CoverOptionsDTO;
+  chapter?: ChapterOptionsDTO;
+  metadata?: MetadataOptionsDTO;
+}
+
+export interface NamingRuleDTO {
+  id: string;
+  name: string;
+  /** 归属命名分类（ConventionType 数值，见命名类型常量） */
+  type: number;
+  /** 模板，可含 "/" 生成多级目录；支持 {var} / {var:%Y...} / {var:02d} */
+  rule: string;
+  default?: boolean;
+}
+
+export interface FileNamingConfigDTO {
+  rules?: NamingRuleDTO[];
+  /** 编号模式：0=指定起始 1=解析列表序号 2=连续编号 */
+  numberingType?: number;
+  startingNumber?: number;
+}
+
+export interface AppConfigDTO {
+  additional?: ExtrasOptionsDTO;
+  fileNaming?: FileNamingConfigDTO;
 }

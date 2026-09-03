@@ -151,6 +151,9 @@ export class BangumiParser implements Parser {
         items.push({
           id: `bangumi:ep${ep.ep_id}`,
           type: "bangumi",
+          ...(result.season_id !== undefined ? { seasonId: result.season_id } : {}),
+          ...(result.series?.series_title ? { seriesTitle: result.series.series_title } : {}),
+          ...(section.title ? { sectionTitle: section.title } : {}),
           aid: ep.aid ?? 0,
           bvid: ep.bvid,
           cid: ep.cid,
@@ -172,3 +175,4 @@ export class BangumiParser implements Parser {
     return { type: "bangumi", title: seasonTitle, items };
   }
 }
+

@@ -87,7 +87,13 @@ export class WatchLaterParser implements Parser {
 
     const items: MediaItem[] = [];
     const videoRows = rows.filter((r) => r.bvid && !r.bangumi).map((r) => ({ bvid: r.bvid as string }));
-    items.push(...(await expandVideoRows(ctx, videoRows)));
+    items.push(
+      ...(await expandVideoRows(ctx, videoRows)).map((item) => ({
+        ...item,
+        containerType: "watch_later" as const,
+        containerTitle: "稍后再看",
+      })),
+    );
     // bangumi 行：桌面按 BANGUMI 二次解析到整季；Web 收窄为"该集"单叶（pgc flavor 用 bvid+cid）
     for (const row of rows) {
       if (!row.bangumi || !row.bvid || !row.cid) continue;

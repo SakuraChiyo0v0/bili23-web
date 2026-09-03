@@ -22,7 +22,7 @@ export { HttpClient } from "./api/http.js";
 export type { HttpClientOptions, HttpRequestOptions, HttpMethod } from "./api/http.js";
 export { getMixinKey, wbiSign, pyQuotePlus, MIXIN_KEY_ENC_TAB } from "./api/wbi.js";
 export type { WbiParams } from "./api/wbi.js";
-export type { MediaItem, ItemKind } from "./types.js";
+export type { MediaItem, ItemKind, ContainerType } from "./types.js";
 export { parseUrl, getParser } from "./parser/index.js";
 export { VideoParser, API_BASE as BILI_API_BASE } from "./parser/video.js";
 export { SpaceParser, resetSpaceCache } from "./parser/space.js";
@@ -81,7 +81,8 @@ export type {
 
 export { runFfmpeg } from "./ffmpeg/runner.js";
 export type { FfmpegRunOptions, FfmpegRunResult } from "./ffmpeg/runner.js";
-export { buildMergeAudioVideo, buildRemux, buildConcatParts } from "./ffmpeg/command.js";
+export { buildMergeAudioVideo, buildRemux, buildConcatParts, buildMergeAudioVideoEx, buildConcatPartsEx } from "./ffmpeg/command.js";
+export type { MergeExtras, SubtitleTrackSpec } from "./ffmpeg/command.js";
 export { mergeAudioVideo, remuxMedia, concatMediaParts, probeMedia } from "./ffmpeg/merge.js";
 export type { MergeOptions, MergeResult, ProbeInfo, ProbeStream } from "./ffmpeg/merge.js";
 
@@ -91,3 +92,85 @@ export { TaskStore } from "./store/task-store.js";
 export type { TaskRecord } from "./store/task-store.js";
 export { HistoryService } from "./store/history.js";
 export type { HistoryEntry } from "./store/history.js";
+export {
+  ConventionType,
+  DEFAULT_NAMING_RULES,
+  variablesFor,
+  BASE_VARIABLES,
+  ID_VARIABLES,
+  TYPE_VARIABLES,
+  DATETIME_VARIABLES,
+} from "./naming/variables.js";
+export type { NamingRule, NamingVariable, ConventionTypeId } from "./naming/variables.js";
+export { formatFileName, normalizePath, sanitizeComponent, strftime, validateRule } from "./naming/formatter.js";
+export { buildNamingVariables, resolveConventionType } from "./naming/context.js";
+export type { NamingVariables, NamingQuality } from "./naming/context.js";
+export { NumberingAllocator, NumberingType, allocNumber } from "./naming/numbering.js";
+export type { NumberingTypeId } from "./naming/numbering.js";
+
+// ---------- 附加内容（extras）----------
+export type {
+  DanmakuFormat,
+  SubtitleFormat,
+  CoverFormat,
+  MetadataFormat,
+  DanmakuStyle,
+  SubtitleStyle,
+  SubtitleLanguageSelection,
+  DanmakuOptions,
+  SubtitleOptions,
+  CoverOptions,
+  ChapterOptions,
+  MetadataOptions,
+  ExtrasOptions,
+  ExtrasContext,
+  ExtrasTarget,
+  DanmakuEntry,
+  SubtitleInfo,
+  SubtitleJson,
+  PlayerInfo,
+  MetadataInput,
+  NfoOutput,
+} from "./extras/types.js";
+export {
+  DEFAULT_DANMAKU_STYLE,
+  DEFAULT_SUBTITLE_STYLE,
+  DEFAULT_SUBTITLE_LANGUAGE,
+  DEFAULT_EXTRAS_OPTIONS,
+  EXTRA_QUALIFIER,
+} from "./extras/types.js";
+export {
+  fetchDanmakuXml,
+  fetchPlayerInfo,
+  fetchSubtitleJson,
+  fetchCoverBytes,
+  fetchVideoTags,
+  fetchSubtitlesData,
+  filterSubtitleInfos,
+  coverDownloadUrl,
+  resolveSubtitleUrl,
+} from "./extras/fetch.js";
+export type { SubtitleDataEntry } from "./extras/fetch.js";
+export { parseDanmakuXml, renderDanmakuXml, danmakuToXml, escapeXmlText } from "./extras/danmaku-xml.js";
+export { danmakuToAss, measureTextWidth, buildDanmakuStyleLine } from "./extras/danmaku-ass.js";
+export { danmakuToJson } from "./extras/danmaku-json.js";
+export { toSubtitleSrt } from "./extras/subtitle-srt.js";
+export { toSubtitleLrc } from "./extras/subtitle-lrc.js";
+export { toSubtitleTxt } from "./extras/subtitle-txt.js";
+export { toSubtitleAss, toIso639_2, subtitleTrackTitle, buildSubtitleStyleLine } from "./extras/subtitle-ass.js";
+export { toSubtitleJson } from "./extras/subtitle-json.js";
+export { buildMetadataNfo } from "./extras/metadata-nfo.js";
+export { buildMetadataJson } from "./extras/metadata-json.js";
+export { buildChapterFfmetadata, chapterFileName, escapeFfmetadataValue } from "./extras/chapter.js";
+export type { ViewPoint } from "./extras/chapter.js";
+export {
+  coverFileName,
+  buildCoverConvertArgs,
+  buildAttachCoverToMedia,
+} from "./extras/cover.js";
+export {
+  formatSrtTime,
+  formatAssTimeByMs,
+  formatAssTimeBySeconds,
+  formatDateYmd,
+} from "./extras/time.js";

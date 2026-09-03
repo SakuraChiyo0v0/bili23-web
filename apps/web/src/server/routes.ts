@@ -3,6 +3,9 @@ import { streamSSE } from "hono/streaming";
 import { BiliError } from "@bili23-web/engine";
 import type { ParseResult } from "@bili23-web/engine";
 import type {
+  AppConfig,
+} from "./config.js";
+import type {
   DownloadOptions,
   FileEntry,
   MediaOptionSummary,
@@ -33,6 +36,8 @@ export interface ApiDeps {
   subscribeTask(id: string, listener: (summary: TaskSummary) => void): (() => void) | undefined;
   cancelTask(id: string): void;
   listFiles(): Promise<FileEntry[]>;
+  getConfig?(): Promise<AppConfig>;
+  updateConfig?(patch: Partial<AppConfig>): Promise<AppConfig>;
 }
 
 export type ApiErrorStatus = 400 | 401 | 404 | 409 | 500 | 502;
@@ -135,4 +140,25 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
   });
 
   app.get("/api/files", async (c) => c.json({ files: await getManager().listFiles() }));
+
+  // 全局设置（P3：附加内容默认 + 文件命名/编号）
+  app.get("/api/config", async (c) => {
+    const manager = getManager();
+    if (!manager.getConfig) return c.json({ error: { code: "NOT_FOUND", message: "配置接口不可用" } }, 404);
+    return c.json({ config: await manager.getConfig() });
+  });
+
+  app.put("/api/config", async (c) => {
+    const manager = getManager();
+    if (!manager.updateConfig) return c.json({ error: { code: "NOT_FOUND", message: "配置接口不可用" } }, 404);
+    try {
+      const body = (await c.req.json()) as { config?: Partial<AppConfig> };
+      const config = await manager.updateConfig(body.config ?? {});
+      return c.json({ config });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: { code: "INVALID_CONFIG", message } }, 400);
+    }
+  });
 }
+

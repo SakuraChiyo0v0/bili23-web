@@ -87,7 +87,11 @@ export class HistoryParser implements Parser {
       r.history && r.history.business === "archive" && r.history.bvid ? [{ bvid: r.history.bvid }] : [],
     );
 
-    const items = await expandVideoRows(ctx, videoRows);
+    const items = (await expandVideoRows(ctx, videoRows)).map((item) => ({
+      ...item,
+      containerType: "history" as const,
+      containerTitle: "历史记录",
+    }));
 
     return { type: "history", items, ...(keyword ? { title: `搜索“${keyword}”` } : {}) };
   }

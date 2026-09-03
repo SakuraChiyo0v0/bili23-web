@@ -101,13 +101,31 @@ export class FavlistParser implements Parser {
 
     const folderTitle = data.info?.title ?? "";
     const medias = data.medias ?? [];
-    // 视频行平铺分P；番剧/影视（ogv）行与无 bvid 行跳过（见文件头注释）
+    const folderOwner = data.info?.upper;
+    // 视频行平铺分P；番剧/影视（ogv）行与无 bvid 行跳过（见文件头注释）。
+    // 收藏夹命名需要整夹上下文（收藏夹名/主人/收藏时间），在此一并落到每个叶子上
+    const favtimeByAid = new Map<number, number>();
     const videoRows = medias
-      .filter((m) => !m.ogv && m.bvid)
-      .map((m) => ({ bvid: m.bvid as string }));
-    const items: MediaItem[] = await expandVideoRows(ctx, videoRows);
+      .filter((m) => !m.ogv && m.bvid && m.id !== undefined)
+      .map((m) => {
+        if (m.fav_time) favtimeByAid.set(m.id, m.fav_time);
+        return { bvid: m.bvid as string };
+      });
+    const items: MediaItem[] = (await expandVideoRows(ctx, videoRows)).map((item) => ({
+      ...item,
+      containerType: "favlist" as const,
+      ...(data.info?.id !== undefined ? { favoritesId: data.info.id } : {}),
+      ...(folderTitle ? { favoritesName: folderTitle } : {}),
+      ...(folderOwner?.mid !== undefined && folderOwner.mid
+        ? { favoritesOwner: { mid: folderOwner.mid, name: folderOwner.name ?? "" } }
+        : {}),
+      ...(item.aid !== undefined && favtimeByAid.has(item.aid)
+        ? { favtime: favtimeByAid.get(item.aid)! }
+        : {}),
+    }));
 
     const title = keyword ? `${folderTitle} - 搜索“${keyword}”` : folderTitle;
     return { type: "favlist", title, items };
   }
 }
+

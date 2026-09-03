@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { ParseView } from "./ParseView.js";
 import { DownloadView } from "./DownloadView.js";
+import { SettingsView } from "./SettingsView.js";
 
-type Tab = "parse" | "download";
+type Tab = "parse" | "download" | "settings";
 
 const NAV: Array<{ id: Tab; label: string }> = [
   { id: "parse", label: "解析" },
   { id: "download", label: "下载" },
+  { id: "settings", label: "设置" },
 ];
 
 export function App() {
@@ -66,8 +68,10 @@ export function App() {
       <main style={{ flex: 1, padding: 24, minWidth: 0 }}>
         {tab === "parse" ? (
           <ParseView onCreated={() => setDownloadKey((k) => k + 1)} onGoDownload={goDownload} />
-        ) : (
+        ) : tab === "download" ? (
           <DownloadView refreshKey={downloadKey} />
+        ) : (
+          <SettingsView />
         )}
       </main>
     </div>

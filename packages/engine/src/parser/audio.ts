@@ -96,8 +96,8 @@ export class AudioParser implements Parser {
         sid,
         page: items.length + 1,
         title: song.title ?? "",
-        // 单曲整段即一首歌：groupTitle 与标题一致（对齐单P视频习惯）；歌单用歌单名
-        groupTitle: containerTitle || song.title || "",
+        // 歌单用歌单名做父级目录；单曲无父级（默认规则 {parent_title}/... 的空段会被归一化丢弃）
+        groupTitle: containerTitle || "",
         duration: song.duration ?? 0,
         badge: "",
         cover: song.cover ?? "",
@@ -113,3 +113,4 @@ export class AudioParser implements Parser {
     return { type: "audio", title: containerTitle, items };
   }
 }
+

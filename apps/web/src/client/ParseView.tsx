@@ -1,9 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import type {
+  CoverFormatDTO,
+  DanmakuFormatDTO,
   DownloadOptionsDTO,
+  ExtrasOptionsDTO,
   MediaItemDTO,
   MediaOptionSummaryDTO,
+  MetadataFormatDTO,
   ParseResultDTO,
+  SubtitleFormatDTO,
 } from "./types.js";
 import { formatDuration } from "./types.js";
 
@@ -25,6 +30,8 @@ interface Props {
   onGoDownload: () => void;
 }
 
+const BATCH_BUSY = "__batch__";
+
 export function ParseView({ onCreated, onGoDownload }: Props) {
   const [urlText, setUrlText] = useState("");
   const [parsing, setParsing] = useState(false);
@@ -32,6 +39,7 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
   const [results, setResults] = useState<ParseResultDTO[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [keyword, setKeyword] = useState("");
   const [options, setOptions] = useState<Record<string, MediaOptionSummaryDTO>>({});
   const [rowSel, setRowSel] = useState<Record<string, DownloadOptionsDTO>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,6 +51,24 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
   }, [results]);
 
   const selectedItems = useMemo(() => items.filter((i) => checked.has(i.id)), [items, checked]);
+
+  /** 关键词筛选：按 title / groupTitle / owner.name 包含匹配 */
+  const visibleItems = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return items;
+    return items.filter(
+      (it) =>
+        it.title.toLowerCase().includes(kw) ||
+        it.groupTitle.toLowerCase().includes(kw) ||
+        it.owner.name.toLowerCase().includes(kw),
+    );
+  }, [items, keyword]);
+
+  /** 批量下载范围 = 当前筛选结果中仍勾选的条目 */
+  const visibleSelected = useMemo(
+    () => visibleItems.filter((i) => checked.has(i.id)),
+    [visibleItems, checked],
+  );
 
   const parse = useCallback(async () => {
     setError("");
@@ -68,18 +94,21 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
     }
   }, [urlText]);
 
-  const loadOptions = useCallback(async (item: MediaItemDTO) => {
-    setExpanded(item.id);
-    if (options[item.id]) return;
-    try {
-      const summary = await fetch(`/api/media/${encodeURIComponent(item.id)}`).then((r) => r.json());
-      if (summary && !summary.error) {
-        setOptions((prev) => ({ ...prev, [item.id]: summary as MediaOptionSummaryDTO }));
+  const loadOptions = useCallback(
+    async (item: MediaItemDTO) => {
+      setExpanded(item.id);
+      if (options[item.id]) return;
+      try {
+        const summary = await fetch(`/api/media/${encodeURIComponent(item.id)}`).then((r) => r.json());
+        if (summary && !summary.error) {
+          setOptions((prev) => ({ ...prev, [item.id]: summary as MediaOptionSummaryDTO }));
+        }
+      } catch {
+        // 选项加载失败仅静默
       }
-    } catch {
-      // 选项加载失败仅静默
-    }
-  }, [options]);
+    },
+    [options],
+  );
 
   const startDownload = useCallback(
     async (itemIds: string[], opts: DownloadOptionsDTO) => {
@@ -101,6 +130,48 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
     [onCreated, onGoDownload],
   );
 
+  /** 批量下载：逐条使用该行的独立选项创建；行无独立选项则传默认（不带 extras） */
+  const startBatch = useCallback(async () => {
+    if (visibleSelected.length === 0 || busy !== null) return;
+    setBusy(BATCH_BUSY);
+    setError("");
+    let created = 0;
+    let duplicates = 0;
+    try {
+      for (const item of visibleSelected) {
+        const res = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemIds: [item.id],
+            options: rowSel[item.id] ?? {},
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: { code?: string; message?: string };
+        };
+        if (!res.ok) {
+          if (json.error?.code === "DUPLICATE") {
+            duplicates += 1;
+            continue;
+          }
+          throw new Error(json.error?.message ?? `请求失败（HTTP ${res.status}）`);
+        }
+        created += 1;
+      }
+      if (created > 0) {
+        onCreated();
+        onGoDownload();
+      } else if (duplicates > 0) {
+        setError("所选内容均已下载过（重复项已跳过）");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }, [visibleSelected, rowSel, busy, onCreated, onGoDownload]);
+
   const toggle = useCallback((id: string) => {
     setChecked((prev) => {
       const next = new Set(prev);
@@ -110,10 +181,26 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
     });
   }, []);
 
+  const setAllVisible = useCallback(
+    (on: boolean) => {
+      setChecked((prev) => {
+        const next = new Set(prev);
+        for (const it of visibleItems) {
+          if (on) next.add(it.id);
+          else next.delete(it.id);
+        }
+        return next;
+      });
+    },
+    [visibleItems],
+  );
+
   const summary = (itemId: string): MediaOptionSummaryDTO | undefined => options[itemId];
   const sel = (itemId: string): DownloadOptionsDTO => rowSel[itemId] ?? {};
   const setSel = (itemId: string, patch: DownloadOptionsDTO): void =>
     setRowSel((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
+
+  const hiddenChecked = selectedItems.length - visibleSelected.length;
 
   return (
     <div>
@@ -136,6 +223,7 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
             setChecked(new Set());
             setOptions({});
             setExpanded(null);
+            setKeyword("");
           }}
         >
           清空
@@ -145,19 +233,35 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
 
       {items.length > 0 && (
         <div>
-          <p>
-            共 {items.length} 个条目，已选 {selectedItems.length} 个。
+          <input
+            type="search"
+            placeholder="关键词筛选（标题 / 分组 / UP 主）"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", margin: "4px 0" }}
+          />
+          <p style={{ margin: "6px 0" }}>
+            匹配 {visibleItems.length} / 共 {items.length}，已选 {visibleSelected.length} 项
+            {hiddenChecked > 0 ? `（另有 ${hiddenChecked} 项被筛选隐藏，不计入批量下载）` : ""}
           </p>
-          {selectedItems.length > 1 && (
+          <div style={{ marginBottom: 10 }}>
+            <button disabled={visibleItems.length === 0} onClick={() => setAllVisible(true)}>
+              全选
+            </button>{" "}
+            <button disabled={visibleItems.length === 0} onClick={() => setAllVisible(false)}>
+              全不选
+            </button>{" "}
             <button
-              disabled={busy !== null}
-              onClick={() => void startDownload(selectedItems.map((i) => i.id), {})}
+              disabled={busy !== null || visibleSelected.length === 0}
+              onClick={() => void startBatch()}
             >
-              批量下载所选 {selectedItems.length} 项（自动画质）
+              {busy === BATCH_BUSY
+                ? "创建中…"
+                : `批量下载所选 ${visibleSelected.length} 项`}
             </button>
-          )}
+          </div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <li key={item.id} style={{ border: "1px solid #ddd", borderRadius: 8, marginBottom: 8, padding: 8 }}>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <input type="checkbox" checked={checked.has(item.id)} onChange={() => toggle(item.id)} />
@@ -183,7 +287,7 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
                     item={item}
                     summary={summary(item.id)}
                     value={sel(item.id)}
-                    busy={busy === item.id}
+                    busy={busy !== null}
                     onChange={(patch) => setSel(item.id, patch)}
                     onDownload={() => void startDownload([item.id], sel(item.id))}
                   />
@@ -212,70 +316,177 @@ function OptionPanel(props: {
     summary?.qualities[0]?.codecs ??
     [];
   const audioId = value.audioQualityId ?? 0;
+  const patchExtras = (patch: ExtrasOptionsDTO): void => {
+    onChange({ extras: { ...(value.extras ?? {}), ...patch } });
+  };
   return (
     <div style={{ marginTop: 8, padding: 10, background: "#f6f8fa", borderRadius: 6 }}>
       {!summary ? (
         <p style={{ color: "#888", margin: 0 }}>加载可选画质中…</p>
       ) : (
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "end" }}>
-          <label>
-            画质
-            <select
-              value={quality}
-              onChange={(e) => onChange({ videoQualityId: Number(e.target.value), videoCodecId: 20 })}
-            >
-              <option value={200}>自动</option>
-              {summary.qualities.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            编码
-            <select
-              value={value.videoCodecId ?? 20}
-              onChange={(e) => onChange({ videoCodecId: Number(e.target.value) })}
-            >
-              <option value={20}>自动</option>
-              {codecs.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {summary.audioQualities.length > 0 && (
+        <>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "end" }}>
             <label>
-              音质
-              <select value={audioId} onChange={(e) => onChange({ audioQualityId: Number(e.target.value) })}>
-                <option value={0}>自动</option>
-                {summary.audioQualities.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label}
+              画质
+              <select
+                value={quality}
+                onChange={(e) => onChange({ videoQualityId: Number(e.target.value), videoCodecId: 20 })}
+              >
+                <option value={200}>自动</option>
+                {summary.qualities.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.label}
                   </option>
                 ))}
               </select>
             </label>
-          )}
-          <label>
-            容器
-            <select
-              value={value.container ?? "mp4"}
-              onChange={(e) => onChange({ container: e.target.value as "mp4" | "mkv" })}
-            >
-              <option value="mp4">MP4</option>
-              <option value="mkv">MKV</option>
-            </select>
-          </label>
-          <button disabled={busy} onClick={onDownload}>
-            {busy ? "创建中…" : `下载「${item.title}」`}
-          </button>
-        </div>
+            <label>
+              编码
+              <select
+                value={value.videoCodecId ?? 20}
+                onChange={(e) => onChange({ videoCodecId: Number(e.target.value) })}
+              >
+                <option value={20}>自动</option>
+                {codecs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {summary.audioQualities.length > 0 && (
+              <label>
+                音质
+                <select value={audioId} onChange={(e) => onChange({ audioQualityId: Number(e.target.value) })}>
+                  <option value={0}>自动</option>
+                  {summary.audioQualities.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              容器
+              <select
+                value={value.container ?? "mp4"}
+                onChange={(e) => onChange({ container: e.target.value as "mp4" | "mkv" })}
+              >
+                <option value="mp4">MP4</option>
+                <option value="mkv">MKV</option>
+              </select>
+            </label>
+            <button disabled={busy} onClick={onDownload}>
+              {busy ? "创建中…" : `下载「${item.title}」`}
+            </button>
+          </div>
+          <div style={{ marginTop: 10, borderTop: "1px solid #e5e5e5", paddingTop: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>
+              附加内容（仅本次下载；不勾选时沿用全局设置）
+            </div>
+            <ExtrasEditor value={value.extras ?? {}} onChange={patchExtras} />
+          </div>
+        </>
       )}
     </div>
   );
 }
 
+const DANMAKU_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "xml", label: "XML" },
+  { value: "ass", label: "ASS" },
+  { value: "json", label: "JSON" },
+];
 
+const SUBTITLE_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "srt", label: "SRT" },
+  { value: "lrc", label: "LRC" },
+  { value: "txt", label: "TXT" },
+  { value: "ass", label: "ASS" },
+  { value: "json", label: "JSON" },
+];
+
+const COVER_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "jpg", label: "JPG" },
+  { value: "png", label: "PNG" },
+  { value: "avif", label: "AVIF" },
+  { value: "webp", label: "WEBP" },
+];
+
+const METADATA_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "nfo", label: "NFO" },
+  { value: "json", label: "JSON" },
+];
+
+function ExtrasEditor(props: { value: ExtrasOptionsDTO; onChange: (patch: ExtrasOptionsDTO) => void }) {
+  const { value, onChange } = props;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <ExtraRow
+        label="弹幕"
+        enabled={value.danmaku?.enabled}
+        format={value.danmaku?.format}
+        formats={DANMAKU_FORMAT_OPTIONS}
+        onEnabled={(v) => onChange({ danmaku: { ...value.danmaku, enabled: v } })}
+        onFormat={(v) => onChange({ danmaku: { ...value.danmaku, format: v as DanmakuFormatDTO } })}
+      />
+      <ExtraRow
+        label="字幕"
+        enabled={value.subtitle?.enabled}
+        format={value.subtitle?.format}
+        formats={SUBTITLE_FORMAT_OPTIONS}
+        onEnabled={(v) => onChange({ subtitle: { ...value.subtitle, enabled: v } })}
+        onFormat={(v) => onChange({ subtitle: { ...value.subtitle, format: v as SubtitleFormatDTO } })}
+      />
+      <ExtraRow
+        label="封面"
+        enabled={value.cover?.enabled}
+        format={value.cover?.format}
+        formats={COVER_FORMAT_OPTIONS}
+        onEnabled={(v) => onChange({ cover: { ...value.cover, enabled: v } })}
+        onFormat={(v) => onChange({ cover: { ...value.cover, format: v as CoverFormatDTO } })}
+      />
+      <ExtraRow
+        label="元数据"
+        enabled={value.metadata?.enabled}
+        format={value.metadata?.format}
+        formats={METADATA_FORMAT_OPTIONS}
+        onEnabled={(v) => onChange({ metadata: { ...value.metadata, enabled: v } })}
+        onFormat={(v) => onChange({ metadata: { ...value.metadata, format: v as MetadataFormatDTO } })}
+      />
+    </div>
+  );
+}
+
+function ExtraRow(props: {
+  label: string;
+  enabled: boolean | undefined;
+  format: string | undefined;
+  formats: Array<{ value: string; label: string }>;
+  onEnabled: (enabled: boolean) => void;
+  onFormat: (format: string) => void;
+}) {
+  const { label, enabled, format, formats, onEnabled, onFormat } = props;
+  return (
+    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 150 }}>
+        <input type="checkbox" checked={enabled ?? false} onChange={(e) => onEnabled(e.target.checked)} />
+        {label}
+      </label>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        格式
+        <select value={format ?? ""} onChange={(e) => onFormat(e.target.value)}>
+          <option value="" disabled>
+            默认
+          </option>
+          {formats.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}

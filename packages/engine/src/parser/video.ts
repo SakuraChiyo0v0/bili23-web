@@ -87,6 +87,7 @@ function buildItems(data: NonNullable<ViewResponse["data"]>): MediaItem[] {
       bvid: data.bvid,
       cid: s.cid,
       page,
+      partCount: pages && pages.length > 0 ? pages.length : 1,
       title: s.part,
       groupTitle: mainTitle,
       duration: s.duration,

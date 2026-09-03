@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync } from "node:fs";
 import { mkdir, readdir, rm, rename, stat, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import {
   BiliError,
   DownloadAbortedError,
@@ -30,6 +31,51 @@ import type {
   StreamOptions,
   VideoMediaInfo,
 } from "@bili23-web/engine";
+import {
+  DEFAULT_EXTRAS_OPTIONS,
+  DEFAULT_NAMING_RULES,
+  NumberingAllocator,
+  VIDEO_CODEC_STR,
+  parseDanmakuXml,
+  danmakuToAss,
+  danmakuToJson,
+  danmakuToXml,
+  toSubtitleSrt,
+  toSubtitleLrc,
+  toSubtitleTxt,
+  toSubtitleAss,
+  toSubtitleJson,
+  subtitleTrackTitle,
+  toIso639_2,
+  fetchDanmakuXml,
+  fetchPlayerInfo,
+  fetchSubtitlesData,
+  fetchCoverBytes,
+  fetchVideoTags,
+  buildChapterFfmetadata,
+  chapterFileName,
+  buildMetadataJson,
+  buildMetadataNfo,
+  formatFileName,
+  buildNamingVariables,
+  resolveConventionType,
+  type ExtrasOptions,
+  type DanmakuFormat,
+  type SubtitleFormat,
+  type CoverFormat,
+  type MetadataFormat,
+  type PlayerInfo,
+  type SubtitleDataEntry,
+  type SubtitleTrackSpec,
+  type SubtitleJson,
+  type SubtitleStyle,
+  type MetadataInput,
+  type NamingRule,
+  type NamingQuality,
+  type NumberingTypeId,
+} from "@bili23-web/engine";
+import { ConfigStore, deepMerge } from "./config.js";
+import type { AppConfig } from "./config.js";
 
 /**
  * 服务端下载任务管理器（进程内队列 + SQLite 持久化 + SSE 订阅）。
@@ -53,6 +99,10 @@ export interface DownloadOptions {
   audioQualityId?: number;
   /** 输出容器，默认 mp4 */
   container?: "mp4" | "mkv";
+  /** 附加内容快照（组缺省由服务端全局附加配置补齐后固化，R-208） */
+  extras?: ExtrasOptions;
+  /** 命名/编号快照（创建任务时按命名规则 + 编号模式固化） */
+  naming?: { conventionType: number; rule: string; number: number | "" };
 }
 
 export interface TaskSummary {
@@ -120,6 +170,14 @@ interface MergePlan {
   videoKey: string;
   audioKey?: string;
   partKeys: string[];
+}
+
+/** 附加内容收集结果（P3）：merge=内嵌参数（相对 taskDir），独立文件内容随后落盘 */
+interface GatheredExtras {
+  merge?: { subtitleTracks?: SubtitleTrackSpec[]; coverPath?: string; chapterPath?: string };
+  danmaku?: { format: DanmakuFormat; contents: string; skipFile: boolean };
+  subtitles?: Array<{ format: SubtitleFormat; language: string; languageDoc: string; contents: string; skipFile: boolean }>;
+  cover?: { format: CoverFormat; bytes: Uint8Array; skipFile: boolean };
 }
 
 class ManagedTask {
@@ -202,17 +260,22 @@ export class DownloadManager {
   #tmpDir: string;
   #tasks = new Map<string, ManagedTask>();
   #items = new Map<string, MediaItem>();
+  #configStore: ConfigStore;
+  #configReady: Promise<void>;
 
   constructor(opts: { dataDir: string; downloadDir?: string }) {
     this.#http = new HttpClient();
     this.#sessionReady = ensureAnonymousSession(this.ctx);
     this.#rootDir = opts.downloadDir ?? join(opts.dataDir, "downloads");
     this.#tmpDir = join(this.#rootDir, ".tmp");
-    void mkdir(opts.dataDir, { recursive: true });
-    void mkdir(this.#rootDir, { recursive: true });
-    void mkdir(this.#tmpDir, { recursive: true });
+    // 同步建目录：TaskStore/ConfigStore 打开 SQLite 前目录必须已存在
+    mkdirSync(opts.dataDir, { recursive: true });
+    mkdirSync(this.#rootDir, { recursive: true });
+    mkdirSync(this.#tmpDir, { recursive: true });
     this.#store = new TaskStore(join(opts.dataDir, "task.db"));
     this.#history = new HistoryService(this.#store);
+    this.#configStore = new ConfigStore(join(opts.dataDir, "config.json"));
+    this.#configReady = this.#configStore.load();
   }
 
   get ctx(): ParseContext {
@@ -221,6 +284,18 @@ export class DownloadManager {
 
   close(): void {
     this.#store.close();
+  }
+
+  // ---------- 全局设置（附加内容默认值 / 命名规则 / 编号）----------
+
+  async getConfig(): Promise<AppConfig> {
+    await this.#configReady;
+    return this.#configStore.get();
+  }
+
+  async updateConfig(patch: Partial<AppConfig>): Promise<AppConfig> {
+    await this.#configReady;
+    return this.#configStore.update(patch);
   }
 
   // ---------- 解析会话 ----------
@@ -324,11 +399,27 @@ export class DownloadManager {
     }
 
     const created: ManagedTask[] = [];
-    for (const { item, hash } of items) {
-      const task = new ManagedTask(item, options);
+    const cfg = await this.#configReady.then(() => this.#configStore.get());
+    const numberingType = cfg.fileNaming.numberingType;
+    // USE_PARSE_LIST：序号 = 本次勾选条目在批量创建时的顺序（1 起），见 P3 计划差异记录
+    const allocator = new NumberingAllocator(numberingType as NumberingTypeId, cfg.fileNaming.startingNumber);
+    for (const [index, entry] of items.entries()) {
+      const { item, hash } = entry;
+      const conventionType = resolveConventionType(item);
+      const rule =
+        this.#findRule(cfg.fileNaming.rules, conventionType)?.rule ??
+        this.#findRule(DEFAULT_NAMING_RULES, conventionType)?.rule ??
+        "{leaf_title}";
+      const number = allocator.alloc(numberingType === 1 ? index + 1 : undefined);
+      const resolved: DownloadOptions = {
+        ...options,
+        extras: deepMerge(cfg.additional, options.extras),
+        naming: { conventionType, rule, number },
+      };
+      const task = new ManagedTask(item, resolved);
       task.duplicate = duplicates.some((d) => d.itemId === item.id);
       this.#tasks.set(task.id, task);
-      const snapshot: TaskSnapshot = { item, options, status: task.status, files: {} };
+      const snapshot: TaskSnapshot = { item, options: resolved, status: task.status, files: {} };
       this.#store.upsertActive({
         taskId: task.id,
         hashId: hash,
@@ -418,25 +509,32 @@ export class DownloadManager {
         });
       }
 
-      // 合并/转封装
-      task.update({ status: "merging" });
-      this.#persist(task, { status: "merging" });
+      // 命名目标 + 附加内容（弹幕/字幕/封面/章节先取回；embed 源写入 taskDir 供 ffmpeg 内嵌）
       const container = task.options.container ?? "mp4";
       // audio(m4a)/lesson(mp4) 属单文件直链：下载件即成品，仅改名不再过 ffmpeg；
       // 输出扩展名以接口语义为准，忽略用户容器选择（桌面同样保持 m4a/mp4 直出）
       const outExt = info.singleFileExt ?? container;
       const tempOut = join(taskDir, `output_${task.id}.${outExt}`);
+      const labels = this.#qualityLabels(resolved);
+      const target = this.#outputTarget(task, labels);
+      const extrasOpt = task.options.extras ?? DEFAULT_EXTRAS_OPTIONS;
+      const gathered = await this.#gatherExtraInputs(task, taskDir, info, extrasOpt, container);
+
+      // 合并/转封装（附加内容随 ffmpeg 一并内嵌）
+      task.update({ status: "merging" });
+      this.#persist(task, { status: "merging" });
       if (info.singleFileExt) {
         const part = files[0];
         if (!part) throw new BiliError("DOWNLOAD_FAILED", "缺少单文件直链");
         await rename(join(taskDir, part.fileName), tempOut);
       } else {
-        await this.#merge(task, taskDir, mergePlan, files, tempOut, container);
+        await this.#merge(task, taskDir, mergePlan, files, tempOut, container, gathered.merge);
       }
 
-      // 落盘到最终目录
-      const finalPath = await this.#placeOutput(task, tempOut, outExt);
+      // 落盘到最终目录（按命名规则 folder/stem，冲突自动改名）
+      const finalPath = await this.#placeOutput(task, tempOut, target.dir, target.stem, outExt);
       await probeMedia(finalPath); // 校验产物可读（ffprobe）
+      await this.#writeStandaloneExtras(task, finalPath, extrasOpt, gathered);
       task.update({ status: "completed", progress: 100, outputPath: finalPath });
       await rm(taskDir, { recursive: true, force: true });
 
@@ -526,6 +624,7 @@ export class DownloadManager {
     files: PlannedFile[],
     tempOut: string,
     container: "mp4" | "mkv",
+    embed?: { subtitleTracks?: SubtitleTrackSpec[]; coverPath?: string; chapterPath?: string },
   ): Promise<void> {
     const byKey = new Map(files.map((f) => [f.key, f]));
     if (plan.kind === "dash") {
@@ -535,7 +634,12 @@ export class DownloadManager {
       const videoPath = join(taskDir, video.fileName);
       const audioPath = audio ? join(taskDir, audio.fileName) : undefined;
       if (audioPath) {
-        await mergeAudioVideo(videoPath, audioPath, tempOut, { container, signal: task.signal });
+        await mergeAudioVideo(videoPath, audioPath, tempOut, {
+          container,
+          signal: task.signal,
+          cwd: taskDir,
+          ...embed,
+        });
       } else {
         await remuxMedia(videoPath, tempOut, { container, signal: task.signal });
       }
@@ -548,17 +652,276 @@ export class DownloadManager {
       .filter((n): n is string => Boolean(n))
       .map((n) => `file '${n.replace(/'/g, "'\\''")}'`);
     await writeFile(listPath, lines.join("\n") + "\n", "utf8");
-    await concatMediaParts(listPath, tempOut, { container, signal: task.signal, cwd: taskDir });
+    await concatMediaParts(listPath, tempOut, {
+      container,
+      signal: task.signal,
+      cwd: taskDir,
+      ...embed,
+    });
   }
 
-  async #placeOutput(task: ManagedTask, tempOut: string, ext: string): Promise<string> {
-    const folder = sanitizeFileName(task.item.groupTitle || task.item.title);
-    const dir = join(this.#rootDir, folder);
+  async #placeOutput(
+    task: ManagedTask,
+    tempOut: string,
+    dir: string,
+    stem: string,
+    ext: string,
+  ): Promise<string> {
     await mkdir(dir, { recursive: true });
-    const base = sanitizeFileName(task.item.title);
-    const unique = await this.#uniquePath(join(dir, `${base}.${ext}`));
+    const unique = await this.#uniquePath(join(dir, `${stem}.${ext}`));
     await rename(tempOut, unique);
     return unique;
+  }
+
+  // ---------- P3：命名与附加内容管线 ----------
+
+  /** 从命名规则列表取指定分类的规则（默认优先） */
+  #findRule(rules: NamingRule[], type: number): NamingRule | undefined {
+    return rules.find((r) => r.type === type && r.default === true) ?? rules.find((r) => r.type === type);
+  }
+
+  /** 档位展示标签（命名变量 video_quality/audio_quality/video_codec） */
+  #qualityLabels(resolved: ResolvedStreams): NamingQuality {
+    return {
+      videoQuality: videoQualityLabel(resolved.videoQualityId),
+      audioQuality: resolved.audioQualityId > 0 ? audioQualityLabel(resolved.audioQualityId) : "",
+      videoCodec: resolved.audioQualityId > 0 ? (VIDEO_CODEC_STR[resolved.videoCodecId] ?? "") : "",
+    };
+  }
+
+  /** 由命名快照算出最终输出目标（dir 目录 + stem 主名，不含扩展名） */
+  #outputTarget(task: ManagedTask, labels: NamingQuality): { dir: string; stem: string } {
+    const naming = task.options.naming;
+    const rule = naming && naming.rule.length > 0 ? naming.rule : "{leaf_title}";
+    const vars = buildNamingVariables(task.item, labels, naming?.number ?? "", task.createdAt);
+    const rel = formatFileName(rule, vars);
+    const idx = Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\"));
+    const folder = idx >= 0 ? rel.slice(0, idx) : "";
+    const stem = idx >= 0 ? rel.slice(idx + 1) : rel;
+    return { dir: folder ? join(this.#rootDir, folder) : this.#rootDir, stem };
+  }
+
+  /** 弹幕/字幕正文转换（按所选格式） */
+  #convertSubtitleText(data: SubtitleJson, format: SubtitleFormat, style: SubtitleStyle): string {
+    switch (format) {
+      case "srt":
+        return toSubtitleSrt(data);
+      case "lrc":
+        return toSubtitleLrc(data);
+      case "txt":
+        return toSubtitleTxt(data);
+      case "json":
+        return toSubtitleJson(data);
+      case "ass":
+      default:
+        return toSubtitleAss(data, "subtitle", style);
+    }
+  }
+
+  /**
+   * 取回附加内容：写 embed 源文件到 taskDir，返回合并内嵌参数与待落盘的独立文件内容。
+   * 弹幕/字幕仅 cid 类型（video/bangumi/cheese）可用；元数据与封面视条目字段而定。
+   */
+  async #gatherExtraInputs(
+    task: ManagedTask,
+    taskDir: string,
+    info: VideoMediaInfo,
+    opts: ExtrasOptions,
+    container: "mp4" | "mkv",
+  ): Promise<GatheredExtras> {
+    const item = task.item;
+    const cid = item.cid;
+    const hasMerge = !info.singleFileExt;
+    const canEmbedAss = hasMerge && container === "mkv";
+    const merge: NonNullable<GatheredExtras["merge"]> = {};
+    const out: GatheredExtras = {};
+    let playerInfo: PlayerInfo | undefined;
+
+    // 弹幕
+    if (opts.danmaku?.enabled && cid !== undefined) {
+      const xml = await fetchDanmakuXml(this.ctx, cid);
+      const entries = parseDanmakuXml(xml);
+      const format = opts.danmaku.format;
+      let contents: string;
+      if (format === "xml") contents = danmakuToXml(entries, cid);
+      else if (format === "json") contents = danmakuToJson(entries);
+      else contents = danmakuToAss(entries, item.groupTitle || item.title, opts.danmaku.style);
+      let skipFile = false;
+      if (format === "ass" && opts.danmaku.embed === true && canEmbedAss) {
+        const file = "embed-danmaku.ass";
+        await writeFile(join(taskDir, file), contents, "utf8");
+        merge.subtitleTracks ??= [];
+        merge.subtitleTracks.push({ file, title: "弹幕", kind: "danmaku" });
+        skipFile = opts.danmaku.deleteAfterEmbed === true;
+      }
+      out.danmaku = { format, contents, skipFile };
+    }
+
+    // 字幕 + 章节：播放器信息（player/v2）一次请求
+    const wantPlayer = (opts.subtitle?.enabled === true || opts.chapter?.embed === true) && cid !== undefined;
+    if (wantPlayer) {
+      playerInfo = await this.#fetchPlayerInfo(task);
+    }
+    if (opts.subtitle?.enabled && cid !== undefined) {
+      const infos = playerInfo?.subtitle?.subtitles ?? [];
+      const entries = await fetchSubtitlesData(this.ctx, infos, opts.subtitle.language);
+      const format = opts.subtitle.format;
+      const embed = format === "ass" && opts.subtitle.embed === true && canEmbedAss;
+      const list: NonNullable<GatheredExtras["subtitles"]> = [];
+      for (const [index, entry] of entries.entries()) {
+        const contents = this.#convertSubtitleText(entry.data, format, opts.subtitle.style);
+        let skipFile = false;
+        if (embed) {
+          const file = `embed-subtitle-${index}.ass`;
+          await writeFile(join(taskDir, file), contents, "utf8");
+          merge.subtitleTracks ??= [];
+          {
+            const lang = toIso639_2(entry.language);
+            merge.subtitleTracks.push({
+              file,
+              title: subtitleTrackTitle(entry.language, entry.languageDoc),
+              kind: "subtitle",
+              ...(lang ? { language: lang } : {}),
+            });
+          }
+          skipFile = opts.subtitle.deleteAfterEmbed === true;
+        }
+        list.push({
+          format,
+          language: entry.language,
+          languageDoc: entry.languageDoc,
+          contents,
+          skipFile,
+        });
+      }
+      out.subtitles = list;
+    }
+
+    // 章节（view_points → ffmetadata 中间文件）
+    if (opts.chapter?.embed === true && hasMerge) {
+      const points = playerInfo?.view_points;
+      if (points && points.length > 0) {
+        const fileName = chapterFileName(task.id);
+        await writeFile(
+          join(taskDir, fileName),
+          buildChapterFfmetadata(points, item.duration || 0),
+          "utf8",
+        );
+        merge.chapterPath = fileName;
+      }
+    }
+
+    // 封面
+    if (opts.cover?.enabled && item.cover) {
+      const format = opts.cover.format;
+      const bytes = await fetchCoverBytes(this.ctx, item.cover, format);
+      let skipFile = false;
+      const attach = opts.cover.attach === true && hasMerge && format !== "avif";
+      if (attach) {
+        const fileName = `cover.${format}`;
+        await writeFile(join(taskDir, fileName), Buffer.from(bytes));
+        merge.coverPath = fileName;
+        skipFile = opts.cover.deleteAfterAttach === true;
+      }
+      out.cover = { format, bytes, skipFile };
+    }
+
+    if (Object.keys(merge).length > 0) out.merge = merge;
+    return out;
+  }
+
+  /** 播放器信息（校验 cid 后用 {cid,bvid?,aid?} 调用，满足 exactOptionalPropertyTypes） */
+  async #fetchPlayerInfo(task: ManagedTask): Promise<PlayerInfo> {
+    const item = task.item;
+    const cid = item.cid;
+    if (cid === undefined) {
+      throw new BiliError("INVALID_URL", "条目缺少 cid，无法获取播放器信息");
+    }
+    return fetchPlayerInfo(this.ctx, {
+      cid,
+      ...(item.bvid !== undefined ? { bvid: item.bvid } : {}),
+      ...(item.aid !== undefined ? { aid: item.aid } : {}),
+    });
+  }
+
+  /** 落盘独立附加文件（与主文件同目录/同 stem；embed 且删除的跳过） */
+  async #writeStandaloneExtras(
+    task: ManagedTask,
+    finalPath: string,
+    opts: ExtrasOptions,
+    gathered: GatheredExtras,
+  ): Promise<void> {
+    const dir = dirname(finalPath);
+    const base = basename(finalPath);
+    const dot = base.lastIndexOf(".");
+    const stem = dot > 0 ? base.slice(0, dot) : base;
+    const safe = (s: string): string => (s || "_").replace(/[\\/:*?"<>|\r\n\t]/g, "_").slice(0, 200);
+
+    const tryWrite = async (label: string, run: () => Promise<void>): Promise<void> => {
+      try {
+        await run();
+      } catch (err) {
+        console.warn(`[bili23-web] 附加内容 ${label} 写入失败（不影响主文件）:`, err instanceof Error ? err.message : err);
+      }
+    };
+
+    if (gathered.danmaku && !gathered.danmaku.skipFile) {
+      await tryWrite("弹幕", () =>
+        writeFile(join(dir, `${safe(stem)}.Danmaku.${gathered.danmaku!.format}`), gathered.danmaku!.contents, "utf8"),
+      );
+    }
+    for (const sub of gathered.subtitles ?? []) {
+      if (sub.skipFile) continue;
+      await tryWrite("字幕", () =>
+        writeFile(join(dir, `${safe(stem)}.Subtitles.${safe(sub.language)}.${sub.format}`), sub.contents, "utf8"),
+      );
+    }
+    if (gathered.cover && !gathered.cover.skipFile) {
+      await tryWrite("封面", () =>
+        writeFile(join(dir, `${safe(stem)}.${gathered.cover!.format}`), Buffer.from(gathered.cover!.bytes)),
+      );
+    }
+
+    // 元数据（NFO/JSON）
+    if (opts.metadata?.enabled) {
+      const item = task.item;
+      const kind = item.type === "bangumi" || item.type === "cheese" || item.type === "lesson" ? item.type : "video";
+      const input: MetadataInput = {
+        kind,
+        showTitle: item.title,
+        description: item.desc,
+        durationSec: item.duration,
+        pubtime: item.pubtime,
+        cover: item.cover,
+        owner: item.owner,
+        ...(item.bvid !== undefined ? { bvid: item.bvid } : {}),
+        ...(item.seasonId !== undefined ? { seasonId: item.seasonId } : {}),
+        ...(item.epId !== undefined ? { epId: item.epId } : {}),
+        ...(item.episodeNumber !== undefined ? { episodeNumber: item.episodeNumber } : { episodeNumber: item.page }),
+        ...(item.seasonTitle !== undefined ? { seasonTitle: item.seasonTitle } : {}),
+      };
+      if (kind === "video" && item.bvid) {
+        try {
+          input.tags = await fetchVideoTags(this.ctx, item.bvid);
+        } catch {
+          input.tags = [];
+        }
+      }
+      if (opts.metadata.format === "nfo") {
+        const includeTvshow = !existsSync(join(dir, "tvshow.nfo"));
+        for (const output of buildMetadataNfo(input, safe(stem), includeTvshow)) {
+          await tryWrite("NFO", () => {
+            const suffix = output.qualifier.length > 0 ? `.${output.qualifier.join(".")}` : "";
+            const name = output.name === "tvshow" ? "tvshow.nfo" : `${output.name}${suffix}.nfo`;
+            return writeFile(join(dir, name), output.contents, "utf8");
+          });
+        }
+      } else {
+        await tryWrite("元数据 JSON", () =>
+          writeFile(join(dir, `${safe(stem)}.Metadata.json`), buildMetadataJson(input), "utf8"),
+        );
+      }
+    }
   }
 
   async #uniquePath(path: string): Promise<string> {
@@ -650,3 +1013,4 @@ export class DownloadManager {
     this.#store.upsertActive({ taskId: task.id, hashId: hash, title: task.item.title, data });
   }
 }
+

@@ -101,10 +101,9 @@ export class SpaceParser implements Parser {
     const vlist = data.list?.vlist ?? [];
     const uname = await this.#fetchUname(ctx, mid);
 
-    const items = await expandVideoRows(
-      ctx,
-      vlist.map((row) => ({ bvid: row.bvid, badge: spaceRowBadge(row) })),
-    );
+    const items = (
+      await expandVideoRows(ctx, vlist.map((row) => ({ bvid: row.bvid, badge: spaceRowBadge(row) })))
+    ).map((item) => ({ ...item, containerType: "space" as const }));
 
     const title = keyword ? `${uname} - 搜索“${keyword}”` : uname;
     return { type: "space", title, items };
