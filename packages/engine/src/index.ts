@@ -21,3 +21,7 @@ export { HttpClient } from "./api/http.js";
 export type { HttpClientOptions, HttpRequestOptions, HttpMethod } from "./api/http.js";
 export { getMixinKey, wbiSign, pyQuotePlus, MIXIN_KEY_ENC_TAB } from "./api/wbi.js";
 export type { WbiParams } from "./api/wbi.js";
+export type { MediaItem } from "./types.js";
+export { parseUrl, getParser } from "./parser/index.js";
+export { VideoParser, API_BASE as BILI_API_BASE } from "./parser/video.js";
+export type { Parser, ParseContext, ParseOptions, ParseResult } from "./parser/types.js";

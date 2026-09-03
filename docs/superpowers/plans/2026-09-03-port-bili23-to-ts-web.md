@@ -124,6 +124,8 @@
 - Produces: `interface MediaItem { bvid; aid; cid; title; page; duration; ... }`；`parseVideo(url): Promise<MediaItem[]>`（多 P → 多条）
 - 数据源：`/x/web-interface/view`（含 pages）；登录态高画质相关参数
 
+- [x] Task 1.2 已完成：VideoParser + parseUrl 分发（types.ts/parser/*），10 个单测 + 真实接口冒烟（BV1GJ411x7h7）通过
+
 ### Task 1.3：媒体详情/预览（可选画质列表）
 
 **Files:**
