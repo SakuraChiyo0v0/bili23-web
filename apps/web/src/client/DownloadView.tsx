@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { FileEntryDTO, HistoryEntryDTO, TaskDTO, TaskStatusDTO } from "./types.js";
 import { formatBytes, formatDuration, formatSpeed } from "./types.js";
 import { useI18n } from "./i18n.js";
 import type { I18nKey } from "./i18n.js";
+import {
+  RefreshIcon,
+  LogIcon,
+  PauseIcon,
+  PlayIcon,
+  RetryIcon,
+  TrashIcon,
+  FolderIcon,
+  HistoryIcon,
+  DownloadIcon,
+} from "./icons.js";
 
 /** 需要 SSE / 轮询兜底的“仍在推进”状态 */
 const RUNNING: TaskStatusDTO[] = ["queued", "parsing", "downloading", "merging"];
@@ -275,37 +286,34 @@ export function DownloadView({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>{t("dl.title")}</h2>
-        <button onClick={() => void refreshTasks(true)}>{t("common.refresh")}</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <h1 className="page-title">{t("dl.title")}</h1>
+        <span className="topbar-spacer" />
+        <button className="btn btn-ghost btn-sm" onClick={() => void refreshTasks(true)}>
+          <RefreshIcon />
+          {t("common.refresh")}
+        </button>
       </div>
-      {error && <p style={{ color: "var(--danger)", margin: "8px 0 0" }}>{error}</p>}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
+      {error && <div className="error-text">{error}</div>}
+
+      <div className="chip-row">
         {GROUPS.map((g) => (
-          <button
-            key={g}
-            onClick={() => setGroup(g)}
-            style={{
-              padding: "5px 12px",
-              borderRadius: 14,
-              border: "1px solid var(--border)",
-              background: group === g ? "var(--accent-soft)" : "var(--surface)",
-              color: group === g ? "var(--accent)" : "var(--text-2)",
-              cursor: "pointer",
-            }}
-          >
+          <button key={g} className={`chip${group === g ? " active" : ""}`} onClick={() => setGroup(g)}>
             {t(`dl.tab.${g}`)} ({counts[g]})
           </button>
         ))}
       </div>
 
       {tasks.length === 0 ? (
-        <p style={{ color: "var(--text-3)" }}>{t("dl.emptyAll")}</p>
+        <div className="empty">
+          <DownloadIcon size={36} />
+          <p style={{ margin: "8px 0 0" }}>{t("dl.emptyAll")}</p>
+        </div>
       ) : visible.length === 0 ? (
-        <p style={{ color: "var(--text-3)" }}>{t("dl.emptyGroup")}</p>
+        <div className="empty">{t("dl.emptyGroup")}</div>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className="item-list stagger" style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr" }}>
           {visible.map((task) => (
             <TaskCard
               key={task.id}
@@ -326,75 +334,66 @@ export function DownloadView({ refreshKey }: { refreshKey: number }) {
         </ul>
       )}
 
-      <h2 style={{ marginTop: 28 }}>{t("dl.historyTitle")}</h2>
+      <h2 className="page-title" style={{ marginTop: 32, fontSize: 18 }}>
+        <HistoryIcon />
+        {t("dl.historyTitle")}
+      </h2>
       {history.length === 0 ? (
-        <p style={{ color: "var(--text-3)" }}>{t("dl.emptyHistory")}</p>
+        <div className="empty">{t("dl.emptyHistory")}</div>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className="item-list">
           {history.map((entry) => {
             const rel = entry.outputPath ? rawRelativePath(entry.outputPath, files) : "";
             const fileName = rel ? rel.slice(rel.lastIndexOf("/") + 1) : "";
             return (
-              <li
-                key={entry.taskId}
-                style={{
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  marginBottom: 8,
-                  padding: 10,
-                  background: "var(--surface)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{entry.title}</div>
-                  <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 2 }}>
-                    {formatDateTime(entry.completedAt)}
-                    {entry.outputPath ? ` · ${entry.outputPath}` : ""}
+              <li key={entry.taskId}>
+                <div className="row-main">
+                  <div className="row-title">{entry.title}</div>
+                  <div className="row-meta">
+                    <span className="muted">{formatDateTime(entry.completedAt)}</span>
+                    {entry.outputPath ? <span className="muted">{entry.outputPath}</span> : null}
                   </div>
                 </div>
-                {rel && (
-                  <a href={rawUrl(rel)} download={fileName} title={entry.outputPath}>
-                    {t("dl.downloadFile")}
-                  </a>
-                )}
-                <button onClick={() => deleteHistory(entry.taskId)}>{t("btn.delete")}</button>
+                <div className="row-actions">
+                  {rel && (
+                    <a className="btn btn-soft btn-sm" href={rawUrl(rel)} download={fileName} title={entry.outputPath}>
+                      <DownloadIcon />
+                      {t("dl.downloadFile")}
+                    </a>
+                  )}
+                  <button className="btn btn-danger btn-sm" onClick={() => deleteHistory(entry.taskId)}>
+                    <TrashIcon />
+                    {t("btn.delete")}
+                  </button>
+                </div>
               </li>
             );
           })}
         </ul>
       )}
 
-      <h2 style={{ marginTop: 28 }}>{t("dl.filesTitle")}</h2>
-      <div style={{ marginBottom: 8 }}>
-        <button onClick={() => void refreshFiles()}>{t("dl.refreshFiles")}</button>
+      <h2 className="page-title" style={{ marginTop: 32, fontSize: 18 }}>
+        <FolderIcon />
+        {t("dl.filesTitle")}
+      </h2>
+      <div style={{ marginBottom: 10 }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => void refreshFiles()}>
+          <RefreshIcon />
+          {t("dl.refreshFiles")}
+        </button>
       </div>
       {files.length === 0 ? (
-        <p style={{ color: "var(--text-3)" }}>{t("dl.emptyFiles")}</p>
+        <div className="empty">{t("dl.emptyFiles")}</div>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className="item-list">
           {files.map((f) => {
             const fileName = f.path.slice(f.path.lastIndexOf("/") + 1);
             return (
-              <li
-                key={f.path}
-                style={{
-                  padding: "4px 0",
-                  borderBottom: "1px solid var(--border)",
-                  fontSize: 14,
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                <a href={rawUrl(f.path)} download={fileName} style={{ flex: 1, minWidth: 0, wordBreak: "break-all" }}>
+              <li key={f.path}>
+                <a href={rawUrl(f.path)} download={fileName} className="row-main" style={{ wordBreak: "break-all", fontSize: 14 }}>
                   {f.path}
                 </a>
-                <span style={{ color: "var(--text-3)" }}>{formatBytes(f.size)}</span>
+                <span className="muted" style={{ fontSize: 13 }}>{formatBytes(f.size)}</span>
               </li>
             );
           })}
@@ -410,19 +409,24 @@ function groupOf(status: TaskStatusDTO): GroupKey {
   return "active";
 }
 
-function statusBadge(status: TaskStatusDTO): string {
+function badgeClass(status: TaskStatusDTO): string {
   switch (status) {
     case "completed":
-      return "var(--badge-ok)";
+      return "ok";
     case "failed":
-      return "var(--badge-danger)";
+    case "cancelled":
+      return "danger";
     case "downloading":
     case "parsing":
     case "merging":
-      return "var(--badge-active)";
+      return "active";
     default:
-      return "var(--badge-neutral)";
+      return "neutral";
   }
+}
+
+function statusLabelKey(status: TaskStatusDTO): I18nKey {
+  return `status.${status}` as I18nKey;
 }
 
 function TaskCard(props: {
@@ -452,13 +456,11 @@ function TaskCard(props: {
   const rel = task.outputPath ? rawRelativePath(task.outputPath, files) : "";
   const fileName = rel ? rel.slice(rel.lastIndexOf("/") + 1) : "";
 
-  const actions: Array<{ key: string; label: string; danger?: boolean; onClick: () => void }> = [];
+  const actions: Array<{ key: string; label: string; icon?: ReactNode; danger?: boolean; onClick: () => void }> = [];
   switch (task.status) {
     case "downloading":
-      actions.push(
-        { key: "pause", label: t("btn.pause"), onClick: onPause },
-        { key: "cancel", label: t("btn.cancel"), onClick: onCancel },
-      );
+      actions.push({ key: "pause", label: t("btn.pause"), icon: <PauseIcon />, onClick: onPause });
+      actions.push({ key: "cancel", label: t("btn.cancel"), onClick: onCancel });
       break;
     case "queued":
     case "parsing":
@@ -467,96 +469,60 @@ function TaskCard(props: {
       break;
     case "paused":
     case "interrupted":
-      actions.push({ key: "resume", label: t("btn.resume"), onClick: onResume });
+      actions.push({ key: "resume", label: t("btn.resume"), icon: <PlayIcon />, onClick: onResume });
       break;
     case "failed":
     case "cancelled":
-      actions.push(
-        { key: "retry", label: t("btn.retry"), onClick: onRetry },
-        { key: "delete", label: t("btn.delete"), danger: true, onClick: onDelete },
-      );
+      actions.push({ key: "retry", label: t("btn.retry"), icon: <RetryIcon />, onClick: onRetry });
+      actions.push({ key: "delete", label: t("btn.delete"), icon: <TrashIcon />, danger: true, onClick: onDelete });
       break;
     case "completed":
-      actions.push({ key: "delete", label: t("btn.delete"), danger: true, onClick: onDelete });
+      actions.push({ key: "delete", label: t("btn.delete"), icon: <TrashIcon />, danger: true, onClick: onDelete });
       break;
   }
 
   return (
-    <li
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        marginBottom: 8,
-        padding: 10,
-        background: "var(--surface)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span
-          style={{
-            padding: "2px 8px",
-            borderRadius: 10,
-            fontSize: 12,
-            fontWeight: 600,
-            background: statusBadge(task.status),
-            color: "#fff",
-          }}
-        >
-          {t(`status.${task.status}` as I18nKey)}
-        </span>
-        <strong style={{ flex: 1, minWidth: 120, color: "var(--text)" }}>{task.title}</strong>
-        <span style={{ color: "var(--text-2)", fontSize: 12 }}>{task.qualityLabel}</span>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+    <li className="task-card">
+      <div className="task-head">
+        <span className={`badge ${badgeClass(task.status)}`}>{t(statusLabelKey(task.status))}</span>
+        <strong className="task-title">{task.title}</strong>
+        {task.qualityLabel ? <span className="muted" style={{ fontSize: 12 }}>{task.qualityLabel}</span> : null}
+        <div className="task-actions">
           {actions.map((a) => (
-            <button
-              key={a.key}
-              onClick={a.onClick}
-              style={
-                a.danger
-                  ? { color: "var(--danger)", borderColor: "var(--border-strong)", background: "var(--surface)" }
-                  : { background: "var(--surface)", color: "var(--text)" }
-              }
-            >
+            <button key={a.key} className={a.danger ? "btn btn-danger btn-sm" : "btn btn-ghost btn-sm"} onClick={a.onClick}>
+              {a.icon}
               {a.label}
             </button>
           ))}
-          <button onClick={onToggleLog} style={{ background: "var(--surface)", color: "var(--text-2)" }}>
+          <button className="btn btn-ghost btn-sm" onClick={onToggleLog}>
+            <LogIcon />
             {logOpen ? t("dl.logHide") : t("dl.log")}
           </button>
         </div>
       </div>
 
-      <div style={{ marginTop: 6 }}>
-        <div style={{ height: 8, background: "var(--track)", borderRadius: 4, overflow: "hidden" }}>
-          <div
-            style={{
-              width: `${pct}%`,
-              height: "100%",
-              background: "var(--accent)",
-              transition: "width .3s",
-            }}
-          />
-        </div>
-        <div style={{ color: "var(--text-2)", fontSize: 12, marginTop: 4 }}>
-          {task.status === "downloading" ? (
-            <>
-              {progressText}
-              {speedText ? ` · ${speedText}` : ""}
-              {etaText ? ` · ${etaText}` : ""}
-            </>
-          ) : task.status === "merging" ? (
-            t("dl.mergingText")
-          ) : (
-            t(`status.${task.status}` as I18nKey)
-          )}
-        </div>
+      <div className="progress">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <div className="task-meta">
+        {task.status === "downloading" ? (
+          <>
+            <span>{progressText}</span>
+            {speedText ? <span className="tag brand">{speedText}</span> : null}
+            {etaText ? <span>{etaText}</span> : null}
+          </>
+        ) : task.status === "merging" ? (
+          <span>{t("dl.mergingText")}</span>
+        ) : (
+          <span>{t(statusLabelKey(task.status))}</span>
+        )}
       </div>
 
       {task.status === "interrupted" && task.error && (
-        <p style={{ color: "var(--danger)", margin: "6px 0 0", fontSize: 13 }}>{task.error}</p>
+        <p className="error-text" style={{ margin: "6px 0 0" }}>{task.error}</p>
       )}
       {task.status === "failed" && task.error && (
-        <p style={{ color: "var(--danger)", margin: "6px 0 0", fontSize: 13 }}>{task.error}</p>
+        <p className="error-text" style={{ margin: "6px 0 0" }}>{task.error}</p>
       )}
       {task.status === "completed" && task.outputPath && (
         <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-2)", wordBreak: "break-all" }}>
@@ -564,7 +530,8 @@ function TaskCard(props: {
           {rel && (
             <>
               {" "}
-              <a href={rawUrl(rel)} download={fileName}>
+              <a className="btn btn-soft btn-sm" href={rawUrl(rel)} download={fileName}>
+                <DownloadIcon />
                 {t("dl.downloadFile")}
               </a>
             </>
@@ -573,36 +540,15 @@ function TaskCard(props: {
       )}
 
       {logOpen && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: 8,
-            background: "var(--surface-2)",
-            borderRadius: 6,
-            border: "1px solid var(--border)",
-            fontSize: 12,
-          }}
-        >
+        <div className="log-box">
           {logLoading ? (
-            <span style={{ color: "var(--text-3)" }}>{t("dl.logLoading")}</span>
+            <span className="muted">{t("dl.logLoading")}</span>
           ) : logErr ? (
-            <span style={{ color: "var(--danger)" }}>{logErr}</span>
+            <span className="error-text">{logErr}</span>
           ) : logLines && logLines.length > 0 ? (
-            <pre
-              style={{
-                margin: 0,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
-                maxHeight: 220,
-                overflow: "auto",
-                color: "var(--text-2)",
-                fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
-              }}
-            >
-              {logLines.join("\n")}
-            </pre>
+            <pre>{logLines.join("\n")}</pre>
           ) : (
-            <span style={{ color: "var(--text-3)" }}>{t("dl.logEmpty")}</span>
+            <span className="muted">{t("dl.logEmpty")}</span>
           )}
         </div>
       )}

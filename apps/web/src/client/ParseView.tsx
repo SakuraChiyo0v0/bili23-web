@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import type {
   CoverFormatDTO,
   DanmakuFormatDTO,
@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import { formatDuration } from "./types.js";
 import { useI18n } from "./i18n.js";
+import { CheckIcon, SearchIcon, DownloadIcon } from "./icons.js";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -204,124 +205,177 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
 
   const hiddenChecked = selectedItems.length - visibleSelected.length;
 
+  const hasResults = items.length > 0;
+  const keywordFiltering = keyword.trim().length > 0;
+
   return (
     <div>
-      <h2 style={{ margin: 0 }}>{t("parse.title")}</h2>
-      <textarea
-        rows={3}
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          fontFamily: "inherit",
-          padding: 8,
-          marginTop: 10,
-        }}
-        placeholder={t("parse.urlPlaceholder")}
-        value={urlText}
-        onChange={(e) => setUrlText(e.target.value)}
-      />
-      <div style={{ margin: "8px 0" }}>
-        <button disabled={parsing || urlText.trim().length === 0} onClick={() => void parse()}>
-          {parsing ? t("parse.parsingBtn") : t("parse.button")}
-        </button>{" "}
+      <h1 className="page-title">{t("parse.title")}</h1>
+      <p className="page-sub">{t("parse.subtitle")}</p>
+
+      {/* 搜索 / 解析入口 */}
+      <div className="search-bar">
+        <div className="search-box">
+          <span className="search-icon">
+            <SearchIcon />
+          </span>
+          <textarea
+            className="search-input"
+            rows={2}
+            placeholder={t("parse.urlPlaceholder")}
+            value={urlText}
+            onChange={(e) => setUrlText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                e.preventDefault();
+                if (!parsing && urlText.trim().length > 0) void parse();
+              }
+            }}
+          />
+        </div>
         <button
-          disabled={items.length === 0}
-          onClick={() => {
-            setResults([]);
-            setChecked(new Set());
-            setOptions({});
-            setExpanded(null);
-            setKeyword("");
-          }}
+          className="btn btn-primary"
+          disabled={parsing || urlText.trim().length === 0}
+          onClick={() => void parse()}
         >
-          {t("parse.clear")}
+          {parsing ? (
+            <>
+              <span className="spinner" />
+              {t("parse.parsingBtn")}
+            </>
+          ) : (
+            <>
+              <SearchIcon />
+              {t("parse.button")}
+            </>
+          )}
         </button>
       </div>
-      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
 
-      {items.length > 0 && (
-        <div>
-          <input
-            type="search"
-            placeholder={t("parse.filterPlaceholder")}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", margin: "4px 0" }}
-          />
-          <p style={{ margin: "6px 0", color: "var(--text-2)" }}>
-            {t("parse.matchLine", {
-              visible: visibleItems.length,
-              total: items.length,
-              selected: visibleSelected.length,
-            })}
-            {hiddenChecked > 0 ? ` ${t("parse.hiddenNote", { count: hiddenChecked })}` : ""}
-          </p>
-          <div style={{ marginBottom: 10 }}>
-            <button disabled={visibleItems.length === 0} onClick={() => setAllVisible(true)}>
+      {error && <div className="error-text">{error}</div>}
+
+      {hasResults && (
+        <div className="fade-in">
+          {/* 关键词筛选 */}
+          <div className="search-bar" style={{ marginTop: 14 }}>
+            <div className="search-box">
+              <span className="search-icon">
+                <SearchIcon />
+              </span>
+              <input
+                className="search-input"
+                type="search"
+                placeholder={t("parse.filterPlaceholder")}
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* 选择工具栏 */}
+          <div className="chip-row">
+            <span className="muted" style={{ alignSelf: "center" }}>
+              {t("parse.matchLine", {
+                visible: visibleItems.length,
+                total: items.length,
+                selected: visibleSelected.length,
+              })}
+              {hiddenChecked > 0 ? ` ${t("parse.hiddenNote", { count: hiddenChecked })}` : ""}
+            </span>
+            <span className="topbar-spacer" />
+            <button className="btn btn-ghost btn-sm" disabled={visibleItems.length === 0} onClick={() => setAllVisible(true)}>
               {t("parse.selectAll")}
-            </button>{" "}
-            <button disabled={visibleItems.length === 0} onClick={() => setAllVisible(false)}>
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={visibleItems.length === 0} onClick={() => setAllVisible(false)}>
               {t("parse.selectNone")}
-            </button>{" "}
+            </button>
             <button
+              className="btn btn-brand btn-sm"
               disabled={busy !== null || visibleSelected.length === 0}
               onClick={() => void startBatch()}
             >
+              <DownloadIcon />
               {busy === BATCH_BUSY ? t("common.creating") : t("parse.batch", { count: visibleSelected.length })}
             </button>
           </div>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {visibleItems.map((item) => (
-              <li
-                key={item.id}
-                style={{
-                  border: "1px solid var(--border-strong)",
-                  borderRadius: 8,
-                  marginBottom: 8,
-                  padding: 8,
-                  background: "var(--surface)",
-                }}
-              >
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <input type="checkbox" checked={checked.has(item.id)} onChange={() => toggle(item.id)} />
-                  {item.cover ? (
-                    <img
-                      src={item.cover}
-                      alt=""
-                      width={96}
-                      height={60}
-                      style={{ objectFit: "cover", borderRadius: 4 }}
-                    />
-                  ) : (
-                    <div style={{ width: 96, height: 60, background: "var(--surface-2)", borderRadius: 4 }} />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{item.title}</div>
-                    <div style={{ color: "var(--text-2)", fontSize: 13 }}>
-                      {item.groupTitle} · {formatDuration(item.duration)}
-                      {item.bvid ? ` · BV${item.bvid}` : ""}
-                      {item.interactive ? (
-                        <span style={{ color: "var(--accent)" }}> · {t("parse.interactiveTag")}</span>
-                      ) : null}
-                      {item.badge ? <span style={{ color: "var(--danger)" }}> · {item.badge}</span> : null}
+
+          {/* 结果卡片网格 */}
+          <div className={`grid stagger${keywordFiltering ? "" : ""}`}>
+            {parsing ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <div className="media-card" key={i}>
+                  <div className="media-cover">
+                    <div className="skeleton" style={{ width: "100%", height: "100%" }} />
+                  </div>
+                  <div className="media-body">
+                    <div className="skeleton" style={{ height: 14, marginBottom: 8 }} />
+                    <div className="skeleton" style={{ height: 12, width: "60%" }} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              visibleItems.map((item) => (
+                <Fragment key={item.id}>
+                  <div
+                    className={`media-card${checked.has(item.id) ? " selected" : ""}`}
+                    onClick={() => toggle(item.id)}
+                    role="checkbox"
+                    aria-checked={checked.has(item.id)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        toggle(item.id);
+                      }
+                    }}
+                  >
+                    <div className="media-cover">
+                      {item.cover ? <img src={item.cover} alt="" loading="lazy" /> : null}
+                      <span className="media-duration">{formatDuration(item.duration)}</span>
+                      <span className="media-check">
+                        <CheckIcon />
+                      </span>
+                    </div>
+                    <div className="media-body">
+                      <div className="media-title">{item.title}</div>
+                      <div className="media-meta">
+                        <span className="muted">{item.groupTitle}</span>
+                        {item.interactive ? (
+                          <span className="tag brand">{t("parse.interactiveTag")}</span>
+                        ) : null}
+                        {item.badge ? <span className="tag danger">{item.badge}</span> : null}
+                        <button
+                          className="btn btn-soft btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void loadOptions(item);
+                          }}
+                        >
+                          {expanded === item.id ? t("parse.optionsBtn") : t("parse.optionsBtn")}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <button onClick={() => void loadOptions(item)}>{t("parse.optionsBtn")}</button>
-                </div>
-                {expanded === item.id && (
-                  <OptionPanel
-                    key={item.id}
-                    item={item}
-                    summary={summary(item.id)}
-                    value={sel(item.id)}
-                    busy={busy !== null}
-                    onChange={(patch) => setSel(item.id, patch)}
-                    onDownload={() => void startDownload([item.id], sel(item.id))}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
+                  {expanded === item.id && (
+                    <div className="option-panel" style={{ gridColumn: "1 / -1" }}>
+                      <OptionPanel
+                        item={item}
+                        summary={summary(item.id)}
+                        value={sel(item.id)}
+                        busy={busy !== null}
+                        onChange={(patch) => setSel(item.id, patch)}
+                        onDownload={() => void startDownload([item.id], sel(item.id))}
+                      />
+                    </div>
+                  )}
+                </Fragment>
+              ))
+            )}
+          </div>
+
+          {!parsing && visibleItems.length === 0 && (
+            <div className="empty">{keywordFiltering ? t("parse.emptyFilter") : t("parse.emptyResult")}</div>
+          )}
         </div>
       )}
     </div>
@@ -348,26 +402,19 @@ function OptionPanel(props: {
     onChange({ extras: { ...(value.extras ?? {}), ...patch } });
   };
   return (
-    <div
-      style={{
-        marginTop: 8,
-        padding: 10,
-        background: "var(--surface-2)",
-        borderRadius: 6,
-        border: "1px solid var(--border)",
-      }}
-    >
+    <div>
       {!summary ? (
-        <p style={{ color: "var(--text-3)", margin: 0 }}>{t("parse.loadingOptions")}</p>
+        <p className="muted" style={{ margin: 0 }}>
+          {t("parse.loadingOptions")}
+        </p>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "end" }}>
-            <label>
-              {t("parse.quality")}
+          <div className="field-row">
+            <label className="field-label">
+              <span>{t("parse.quality")}</span>
               <select
                 value={quality}
                 onChange={(e) => onChange({ videoQualityId: Number(e.target.value), videoCodecId: 20 })}
-                style={{ marginLeft: 6 }}
               >
                 <option value={200}>{t("parse.auto")}</option>
                 {summary.qualities.map((q) => (
@@ -377,12 +424,11 @@ function OptionPanel(props: {
                 ))}
               </select>
             </label>
-            <label>
-              {t("parse.codec")}
+            <label className="field-label">
+              <span>{t("parse.codec")}</span>
               <select
                 value={value.videoCodecId ?? 20}
                 onChange={(e) => onChange({ videoCodecId: Number(e.target.value) })}
-                style={{ marginLeft: 6 }}
               >
                 <option value={20}>{t("parse.auto")}</option>
                 {codecs.map((c) => (
@@ -393,12 +439,11 @@ function OptionPanel(props: {
               </select>
             </label>
             {summary.audioQualities.length > 0 && (
-              <label>
-                {t("parse.audioQuality")}
+              <label className="field-label">
+                <span>{t("parse.audioQuality")}</span>
                 <select
                   value={audioId}
                   onChange={(e) => onChange({ audioQualityId: Number(e.target.value) })}
-                  style={{ marginLeft: 6 }}
                 >
                   <option value={0}>{t("parse.auto")}</option>
                   {summary.audioQualities.map((a) => (
@@ -409,23 +454,26 @@ function OptionPanel(props: {
                 </select>
               </label>
             )}
-            <label>
-              {t("parse.container")}
+            <label className="field-label">
+              <span>{t("parse.container")}</span>
               <select
                 value={value.container ?? "mp4"}
                 onChange={(e) => onChange({ container: e.target.value as "mp4" | "mkv" })}
-                style={{ marginLeft: 6 }}
               >
                 <option value="mp4">MP4</option>
                 <option value="mkv">MKV</option>
               </select>
             </label>
-            <button disabled={busy} onClick={onDownload}>
-              {busy ? t("common.creating") : t("parse.downloadItem", { title: item.title })}
-            </button>
+            <label className="field-label" style={{ justifyContent: "flex-end" }}>
+              <span>&nbsp;</span>
+              <button className="btn btn-primary" disabled={busy} onClick={onDownload}>
+                <DownloadIcon />
+                {busy ? t("common.creating") : t("parse.downloadItem", { title: item.title })}
+              </button>
+            </label>
           </div>
-          <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>{t("parse.extrasTitle")}</div>
+          <div style={{ marginTop: 4, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>{t("parse.extrasTitle")}</div>
             <ExtrasEditor value={value.extras ?? {}} onChange={patchExtras} />
           </div>
         </>
@@ -460,12 +508,11 @@ const METADATA_FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "json", label: "JSON" },
 ];
 
-
 function ExtrasEditor(props: { value: ExtrasOptionsDTO; onChange: (patch: ExtrasOptionsDTO) => void }) {
   const { value, onChange } = props;
   const { t } = useI18n();
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div className="field-row" style={{ gap: 16 }}>
       <ExtraRow
         label={t("parse.extra.danmaku")}
         enabled={value.danmaku?.enabled}
@@ -513,13 +560,13 @@ function ExtraRow(props: {
   const { label, enabled, format, formats, onEnabled, onFormat } = props;
   const { t } = useI18n();
   return (
-    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-      <label style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 150 }}>
+    <div className="field-row" style={{ gap: 16 }}>
+      <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6, minWidth: 150 }}>
         <input type="checkbox" checked={enabled ?? false} onChange={(e) => onEnabled(e.target.checked)} />
         {label}
       </label>
-      <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        {t("parse.extra.format")}
+      <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <span>{t("parse.extra.format")}</span>
         <select value={format ?? ""} onChange={(e) => onFormat(e.target.value)}>
           <option value="" disabled>
             {t("parse.extra.default")}

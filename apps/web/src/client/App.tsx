@@ -1,20 +1,30 @@
-import { useState } from "react";
+import { useState, type ReactNode } from 'react';
 import { ParseView } from "./ParseView.js";
 import { DownloadView } from "./DownloadView.js";
 import { SettingsView } from "./SettingsView.js";
 import { useI18n } from "./i18n.js";
+import { useTheme } from "./theme.js";
+import {
+  LogoIcon,
+  SearchIcon,
+  DownloadIcon,
+  SettingsIcon,
+  SunIcon,
+  MoonIcon,
+} from "./icons.js";
 
 type Tab = "parse" | "download" | "settings";
 
 export function App() {
   const { t } = useI18n();
+  const { pref: themePref, resolved, setPref: setThemePref } = useTheme();
   const [tab, setTab] = useState<Tab>("parse");
   const [downloadKey, setDownloadKey] = useState(0);
 
-  const navItems: Array<{ id: Tab; label: string }> = [
-    { id: "parse", label: t("nav.parse") },
-    { id: "download", label: t("nav.download") },
-    { id: "settings", label: t("nav.settings") },
+  const navItems: Array<{ id: Tab; label: string; icon: ReactNode }> = [
+    { id: "parse", label: t("nav.parse"), icon: <SearchIcon /> },
+    { id: "download", label: t("nav.download"), icon: <DownloadIcon /> },
+    { id: "settings", label: t("nav.settings"), icon: <SettingsIcon /> },
   ];
 
   const goDownload = (): void => {
@@ -22,66 +32,71 @@ export function App() {
     setTab("download");
   };
 
+  const toggleTheme = (): void => {
+    setThemePref(resolved === "dark" ? "light" : "dark");
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "var(--bg)",
-        color: "var(--text)",
-        fontFamily:
-          'system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-      }}
-    >
-      <nav
-        style={{
-          width: 170,
-          borderRight: "1px solid var(--border)",
-          background: "var(--surface)",
-          padding: "20px 12px",
-          flexShrink: 0,
-          boxSizing: "border-box",
-        }}
-      >
-        <h1 style={{ fontSize: 18, margin: "0 0 16px", lineHeight: 1.3, color: "var(--text)" }}>
-          Bili23
-          <br />
-          Web
-        </h1>
+    <div className="app">
+      {/* 顶部 AppBar */}
+      <header className="topbar">
+        <div className="logo">
+          <span className="logo-badge">
+            <LogoIcon />
+          </span>
+          <span>Bili23 Web</span>
+        </div>
+        <nav className="topnav">
+          {navItems.map((n) => (
+            <button
+              key={n.id}
+              className={`nav-link${tab === n.id ? " active" : ""}`}
+              onClick={() => setTab(n.id)}
+            >
+              {n.icon}
+              {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="topbar-spacer" />
+        <button
+          className="icon-btn"
+          onClick={toggleTheme}
+          title={resolved === "dark" ? t("settings.behavior.theme.light") : t("settings.behavior.theme.dark")}
+        >
+          {resolved === "dark" ? <SunIcon /> : <MoonIcon />}
+        </button>
+      </header>
+
+      {/* 主内容 */}
+      <main className="main">
+        <div className="page-enter" key={tab}>
+          {tab === "parse" ? (
+            <ParseView
+              onCreated={() => setDownloadKey((k) => k + 1)}
+              onGoDownload={goDownload}
+            />
+          ) : tab === "download" ? (
+            <DownloadView refreshKey={downloadKey} />
+          ) : (
+            <SettingsView />
+          )}
+        </div>
+      </main>
+
+      {/* 移动底部 TabBar */}
+      <nav className="bottom-tabbar">
         {navItems.map((n) => (
           <button
             key={n.id}
+            className={`tab-btn${tab === n.id ? " active" : ""}`}
             onClick={() => setTab(n.id)}
-            style={{
-              display: "block",
-              width: "100%",
-              textAlign: "left",
-              padding: "8px 12px",
-              marginBottom: 6,
-              border: "none",
-              borderRadius: 6,
-              background: tab === n.id ? "var(--accent-soft)" : "transparent",
-              color: tab === n.id ? "var(--accent)" : "var(--text-2)",
-              cursor: "pointer",
-              fontSize: 15,
-            }}
           >
-            {n.label}
+            {n.icon}
+            <span>{n.label}</span>
           </button>
         ))}
       </nav>
-      <main style={{ flex: 1, padding: 24, minWidth: 0 }}>
-        {tab === "parse" ? (
-          <ParseView
-            onCreated={() => setDownloadKey((k) => k + 1)}
-            onGoDownload={goDownload}
-          />
-        ) : tab === "download" ? (
-          <DownloadView refreshKey={downloadKey} />
-        ) : (
-          <SettingsView />
-        )}
-      </main>
     </div>
   );
 }

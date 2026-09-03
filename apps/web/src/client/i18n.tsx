@@ -66,6 +66,10 @@ const zhCN = {
 
   // ---------- 解析页 ----------
   "parse.title": "解析",
+
+  "parse.subtitle": "粘贴 B 站链接，一次可解析多条视频 / 番剧 / 课程等",
+  "parse.emptyFilter": "没有匹配当前关键词的结果。",
+  "parse.emptyResult": "暂无解析结果，试着粘贴链接吧。",
   "parse.urlPlaceholder": "粘贴 B 站链接，可一次多条（每行一条）：\nhttps://www.bilibili.com/video/BVxxxx",
   "parse.button": "解析",
   "parse.parsingBtn": "解析中…",
@@ -286,6 +290,10 @@ const zhTW: Partial<Record<I18nKey, string>> = {
   "btn.cancel": "取消",
   "btn.delete": "刪除",
   "parse.title": "解析",
+
+  "parse.subtitle": "貼上 B 站連結，一次可解析多條影片 / 番劇 / 課程等",
+  "parse.emptyFilter": "沒有符合目前關鍵字的結果。",
+  "parse.emptyResult": "暫無解析結果，試著貼上連結吧。",
   "parse.urlPlaceholder": "貼上 B 站連結，可一次多條（每行一條）：\nhttps://www.bilibili.com/video/BVxxxx",
   "parse.button": "解析",
   "parse.parsingBtn": "解析中…",
@@ -496,6 +504,10 @@ const en: Partial<Record<I18nKey, string>> = {
   "btn.cancel": "Cancel",
   "btn.delete": "Delete",
   "parse.title": "Parse",
+
+  "parse.subtitle": "Paste Bilibili links to parse videos, bangumi, courses and more.",
+  "parse.emptyFilter": "No results match the current keyword.",
+  "parse.emptyResult": "Nothing parsed yet. Paste a link to start.",
   "parse.urlPlaceholder": "Paste Bilibili link(s), one per line:\nhttps://www.bilibili.com/video/BVxxxx",
   "parse.button": "Parse",
   "parse.parsingBtn": "Parsing…",

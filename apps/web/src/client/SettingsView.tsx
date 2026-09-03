@@ -418,22 +418,15 @@ export function SettingsView() {
 
   return (
     <div>
-      <h2 style={{ margin: 0 }}>{t("settings.title")}</h2>
+      <h2 className="page-title">{t("settings.title")}</h2>
 
       {/* 分组导航 */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
+      <div className="chip-row">
         {SECTIONS.map((g) => (
           <button
             key={g}
             onClick={() => setSection(g)}
-            style={{
-              padding: "5px 12px",
-              borderRadius: 14,
-              border: "1px solid var(--border)",
-              background: section === g ? "var(--accent-soft)" : "var(--surface)",
-              color: section === g ? "var(--accent)" : "var(--text-2)",
-              cursor: "pointer",
-            }}
+            className={`chip${section === g ? " active" : ""}`}
           >
             {t(`settings.sections.${g}`)}
           </button>
@@ -441,15 +434,7 @@ export function SettingsView() {
       </div>
 
       {section === "behavior" && (
-        <section
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 14,
-            background: "var(--surface)",
-            maxWidth: 640,
-          }}
-        >
+        <section className="settings-group">
           <h3 style={{ marginTop: 0 }}>{t("settings.behavior.title")}</h3>
           <p style={{ color: "var(--text-2)", fontSize: 13 }}>{t("settings.behavior.hint")}</p>
           {noticeFor("behavior") && <NoticeLine notice={noticeFor("behavior")} />}
@@ -489,15 +474,7 @@ export function SettingsView() {
       )}
 
       {section === "download" && (
-        <section
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 14,
-            background: "var(--surface)",
-            maxWidth: 640,
-          }}
-        >
+        <section className="settings-group">
           <h3 style={{ marginTop: 0 }}>{t("settings.download.title")}</h3>
           <p style={{ color: "var(--text-2)", fontSize: 13 }}>{t("settings.download.hint")}</p>
           {noticeFor("download") && <NoticeLine notice={noticeFor("download")} />}
@@ -923,15 +900,7 @@ export function SettingsView() {
       )}
 
       {section === "advanced" && (
-        <section
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 14,
-            background: "var(--surface)",
-            maxWidth: 640,
-          }}
-        >
+        <section className="settings-group">
           <h3 style={{ marginTop: 0 }}>{t("settings.advanced.title")}</h3>
           <p style={{ color: "var(--text-2)", fontSize: 13 }}>{t("settings.advanced.note")}</p>
           {noticeFor("advanced") && <NoticeLine notice={noticeFor("advanced")} />}
