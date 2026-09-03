@@ -73,6 +73,7 @@ export function ParseView({ config, onToast, onTasksChanged, onNavigate }: Parse
   const [weekNum, setWeekNum] = useState("1");
   const [pn, setPn] = useState("1");
   const [pages, setPages] = useState("1");
+  const [searchMode, setSearchMode] = useState<"page" | "range" | "all">("page");
   const [results, setResults] = useState<ParseResult[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [parseHistory, setParseHistory] = useState<ParseHistoryEntry[]>([]);
@@ -125,6 +126,19 @@ export function ParseView({ config, onToast, onTasksChanged, onNavigate }: Parse
     setSelected((current) => current.size === allItems.length ? new Set() : new Set(allItems.map(itemKey)));
   };
 
+  /** 依据搜索范围模式派生分页参数：page=仅当前页 / range=pn..pn+pages-1 / all=从第1页翻到末页 */
+  const buildPagingParams = (): { pn: number; pages: number } => {
+    const pnNum = Math.max(1, Number(pn) || 1);
+    if (searchMode === "all") {
+      // 后端 #parsePagedUrl 翻到 pagination.totalPages 会自动提前结束，故给足够大的翻页数即可翻遍全部
+      return { pn: 1, pages: 9999 };
+    }
+    if (searchMode === "range") {
+      return { pn: pnNum, pages: Math.max(1, Number(pages) || 1) };
+    }
+    return { pn: pnNum, pages: 1 };
+  };
+
   const runParse = async () => {
     setLoading(true);
     setError("");
@@ -139,7 +153,7 @@ export function ParseView({ config, onToast, onTasksChanged, onNavigate }: Parse
             query,
             ...(keyword.trim() ? { keyword: keyword.trim() } : {}),
             ...(typeOption.supportsWeek ? { weekNum: Math.max(1, Number(weekNum) || 1) } : {}),
-            ...(typeOption.supportsPaging ? { pn: Math.max(1, Number(pn) || 1), pages: Math.max(1, Number(pages) || 1) } : {}),
+            ...(typeOption.supportsPaging ? buildPagingParams() : {}),
           };
       const parsed = await api.parse(request);
       setResults(parsed);
@@ -231,11 +245,26 @@ export function ParseView({ config, onToast, onTasksChanged, onNavigate }: Parse
           {typeOption.supportsKeyword ? (
             <div className="parse-extra-row">
               <label className="compact-field"><span>关键词</span><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="可选，按关键词筛选" /></label>
-              {typeOption.supportsPaging ? (
+            </div>
+          ) : null}
+          {typeOption.supportsPaging ? (
+            <div className="parse-extra-row">
+              <div className="segmented" role="group" aria-label="搜索范围">
+                <button type="button" className={searchMode === "page" ? "is-active" : ""} onClick={() => setSearchMode("page")}>仅当前页</button>
+                <button type="button" className={searchMode === "range" ? "is-active" : ""} onClick={() => setSearchMode("range")}>指定范围</button>
+                <button type="button" className={searchMode === "all" ? "is-active" : ""} onClick={() => setSearchMode("all")}>搜索全部</button>
+              </div>
+              {searchMode === "page" ? (
+                <label className="compact-field"><span>页号</span><input inputMode="numeric" value={pn} onChange={(event) => setPn(event.target.value.replace(/\D/g, ""))} /></label>
+              ) : null}
+              {searchMode === "range" ? (
                 <>
                   <label className="compact-field"><span>起始页</span><input inputMode="numeric" value={pn} onChange={(event) => setPn(event.target.value.replace(/\D/g, ""))} /></label>
                   <label className="compact-field"><span>翻页数</span><input inputMode="numeric" value={pages} onChange={(event) => setPages(event.target.value.replace(/\D/g, ""))} /></label>
                 </>
+              ) : null}
+              {searchMode === "all" ? (
+                <span className="parse-tip"><Icon name="info" size={15} /> 将从第 1 页连续解析直到最后一页（受 B 站风控限制，请谨慎使用）</span>
               ) : null}
             </div>
           ) : null}

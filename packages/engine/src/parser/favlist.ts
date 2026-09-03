@@ -125,7 +125,13 @@ export class FavlistParser implements Parser {
     }));
 
     const title = keyword ? `${folderTitle} - 搜索“${keyword}”` : folderTitle;
-    return { type: "favlist", title, items };
+    const total = data.info?.media_count ?? 0;
+    return {
+      type: "favlist",
+      title,
+      items,
+      ...(total > 0 ? { pagination: { total, page: pn, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) } } : {}),
+    } as ParseResult;
   }
 }
 

@@ -78,6 +78,7 @@ describe("FavlistParser", () => {
     const a = result.items.find((i) => i.bvid === "BV1aa");
     expect(a).toMatchObject({ groupTitle: "收藏视频A", title: "收藏视频A", cid: 9001 });
     expect(result.items.find((i) => i.bvid === "BV3cc")).toBeUndefined();
+    expect(result.pagination).toMatchObject({ total: 3, page: 1, pageSize: 40, totalPages: 1 });
   });
 
   it("ml 链接：media_id 取 ml 后的数字", async () => {

@@ -106,7 +106,13 @@ export class SpaceParser implements Parser {
     ).map((item) => ({ ...item, containerType: "space" as const }));
 
     const title = keyword ? `${uname} - 搜索“${keyword}”` : uname;
-    return { type: "space", title, items };
+    const total = data.page?.count ?? 0;
+    return {
+      type: "space",
+      title,
+      items,
+      ...(total > 0 ? { pagination: { total, page: pn, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) } } : {}),
+    } as ParseResult;
   }
 
   /** 投稿列表：x/space/wbi/arc/search（WBI 签名，参数与桌面 space.py 完全一致） */

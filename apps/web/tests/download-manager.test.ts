@@ -12,7 +12,9 @@ const h = vi.hoisted(() => {
     failFetch: boolean;
     downloads: Array<{ resolve: () => void; reject: (e: unknown) => void }>;
     streamOpts: Array<Record<string, unknown>>;
-  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [] };
+    pageCalls: number[];
+    pagination_totalPages: number | undefined;
+  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [], pageCalls: [], pagination_totalPages: undefined };
   return { state };
 });
 
@@ -21,11 +23,21 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
   return {
     ...actual,
     ensureAnonymousSession: () => Promise.resolve(),
-    parseUrl: vi.fn(async () => ({
-      type: "video",
-      title: "测试合集",
-      items: h.state.parseItems,
-    })),
+    parseUrl: vi.fn(async (_ctx: unknown, _url: string, options?: { pn?: number }) => {
+      const pn = options?.pn ?? 1;
+      h.state.pageCalls.push(pn);
+      const items = h.state.parseItems;
+      const totalPages = h.state.pagination_totalPages;
+      if (totalPages !== undefined && pn > totalPages) {
+        return { type: "video", title: "测试合集", items: [] };
+      }
+      return {
+        type: "video",
+        title: "测试合集",
+        items,
+        ...(totalPages !== undefined && pn <= totalPages ? { pagination: { total: totalPages * 10, page: pn, pageSize: 10, totalPages } } : {}),
+      };
+    }),
     fetchPlayMediaInfo: async () => {
       if (h.state.failFetch) {
         throw new actual.BiliError("DOWNLOAD_FAILED", "模拟解析/取流失败");
@@ -233,6 +245,41 @@ describe("DownloadManager parseRequest（类型入口）", () => {
       expect(calls[calls.length - 1]?.[1]).toBe("https://space.bilibili.com/2?keyword=abc");
     } finally {
       mgr.close();
+    }
+  });
+
+  it("分页类型：pages=9999 时按 pagination.totalPages 提前停止（搜索全部）", async () => {
+    const mgr = await makeManager();
+    try {
+      h.state.parseItems = [makeItem(ID1, 280001) as unknown as Record<string, unknown>];
+      h.state.pagination_totalPages = 3;
+      h.state.pageCalls = [];
+      const res = await mgr.parseRequest({ type: "space", query: "2", pn: 1, pages: 9999 });
+      // 应只请求第 1..3 页，不请求超过 totalPages 的页
+      expect(h.state.pageCalls).toEqual([1, 2, 3]);
+      expect((res[0]?.pagination?.totalPages ?? 0)).toBe(3);
+    } finally {
+      mgr.close();
+      h.state.pagination_totalPages = undefined;
+      h.state.pageCalls = [];
+    }
+  });
+
+  it("分页类型：pages=1 仅当前页，只请求起始页一次", async () => {
+    const mgr = await makeManager();
+    try {
+      h.state.parseItems = [makeItem(ID1, 280001) as unknown as Record<string, unknown>];
+      h.state.pagination_totalPages = 5;
+      h.state.pageCalls = [];
+      const res = await mgr.parseRequest({ type: "space", query: "2", pn: 2, pages: 1 });
+      expect(h.state.pageCalls).toEqual([2]);
+      expect(res.length).toBe(1);
+      // 仅当前页：page 返回的是请求的页码 2
+      expect(res[0]?.pagination?.page).toBe(2);
+    } finally {
+      mgr.close();
+      h.state.pagination_totalPages = undefined;
+      h.state.pageCalls = [];
     }
   });
 

@@ -589,7 +589,9 @@ export class DownloadManager {
     let first: ParseResult | undefined;
     const items: MediaItem[] = [];
     let pagination: ParseResult["pagination"];
-    for (let page = startPn; page < startPn + pages; page += 1) {
+    const MAX_AUTO_PAGES = 100; // 搜索全部时安全上限，防止异常接口导致请求失控
+    const effectivePages = Math.min(pages, MAX_AUTO_PAGES);
+    for (let page = startPn; page < startPn + effectivePages; page += 1) {
       const result = await parseUrl(this.ctx, url, { pn: page });
       for (const item of result.items) {
         if (!this.#items.has(item.id)) this.#items.set(item.id, item);
@@ -599,6 +601,8 @@ export class DownloadManager {
       if (result.pagination) pagination = result.pagination;
       // 已到达最后一页则提前结束（避免请求不存在的页）
       if (result.pagination && page >= result.pagination.totalPages) break;
+      // 无分页返回的接口：空页视为已到末页（搜索全部时安全停止）
+      if (!result.pagination && result.items.length === 0 && page > startPn) break;
     }
     if (!first) return undefined;
     this.#store.addParseHistory({

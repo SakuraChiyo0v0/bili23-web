@@ -93,6 +93,12 @@ export class HistoryParser implements Parser {
       containerTitle: "历史记录",
     }));
 
-    return { type: "history", items, ...(keyword ? { title: `搜索“${keyword}”` } : {}) };
+    const total = body.data?.page?.total ?? 0;
+    return {
+      type: "history",
+      items,
+      ...(keyword ? { title: `搜索“${keyword}”` } : {}),
+      ...(total > 0 ? { pagination: { total, page: pn, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) } } : {}),
+    } as ParseResult;
   }
 }

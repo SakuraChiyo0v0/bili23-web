@@ -124,6 +124,7 @@ describe("SpaceParser", () => {
       "video:BV2bb:p2",
       "video:BV3cc:p1",
     ]);
+    expect(result.pagination).toMatchObject({ total: 1, page: 1, pageSize: 40, totalPages: 1 });
 
     const a = result.items.find((i) => i.bvid === "BV1aa");
     expect(a).toMatchObject({ aid: 1001, cid: 9001, page: 1, title: "视频A", groupTitle: "视频A", badge: "", url: "https://www.bilibili.com/video/BV1aa?p=1" });
