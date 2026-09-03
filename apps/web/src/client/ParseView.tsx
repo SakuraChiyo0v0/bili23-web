@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
 import type {
   CoverFormatDTO,
   DanmakuFormatDTO,
@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 import { formatDuration } from "./types.js";
 import { useI18n } from "./i18n.js";
-import { CheckIcon, SearchIcon, DownloadIcon } from "./icons.js";
+import { CheckIcon, SearchIcon, DownloadIcon, LogoIcon, FilmIcon, PlayIcon, StarIcon, ClockIcon, HistoryIcon } from "./icons.js";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -33,9 +33,39 @@ interface Props {
 }
 
 const BATCH_BUSY = "__batch__";
+const TYPE_CHIPS: Record<string, Array<{ label: string; icon: ReactNode }>> = {
+  "zh-CN": [
+    { label: "投稿视频", icon: <FilmIcon /> },
+    { label: "番剧", icon: <PlayIcon /> },
+    { label: "课程", icon: <StarIcon /> },
+    { label: "音乐", icon: <PlayIcon /> },
+    { label: "收藏夹", icon: <StarIcon /> },
+    { label: "稍后再看", icon: <ClockIcon /> },
+    { label: "历史", icon: <HistoryIcon /> },
+  ],
+  "zh-TW": [
+    { label: "投稿影片", icon: <FilmIcon /> },
+    { label: "番劇", icon: <PlayIcon /> },
+    { label: "課程", icon: <StarIcon /> },
+    { label: "音樂", icon: <PlayIcon /> },
+    { label: "收藏清單", icon: <StarIcon /> },
+    { label: "稍後再看", icon: <ClockIcon /> },
+    { label: "歷史", icon: <HistoryIcon /> },
+  ],
+  en: [
+    { label: "Videos", icon: <FilmIcon /> },
+    { label: "Bangumi", icon: <PlayIcon /> },
+    { label: "Courses", icon: <StarIcon /> },
+    { label: "Music", icon: <PlayIcon /> },
+    { label: "Favorites", icon: <StarIcon /> },
+    { label: "Watch Later", icon: <ClockIcon /> },
+    { label: "History", icon: <HistoryIcon /> },
+  ],
+};
+
 
 export function ParseView({ onCreated, onGoDownload }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [urlText, setUrlText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
@@ -210,48 +240,60 @@ export function ParseView({ onCreated, onGoDownload }: Props) {
 
   return (
     <div>
-      <h1 className="page-title">{t("parse.title")}</h1>
-      <p className="page-sub">{t("parse.subtitle")}</p>
-
-      {/* 搜索 / 解析入口 */}
-      <div className="search-bar">
-        <div className="search-box">
-          <span className="search-icon">
-            <SearchIcon />
-          </span>
-          <textarea
-            className="search-input"
-            rows={2}
-            placeholder={t("parse.urlPlaceholder")}
-            value={urlText}
-            onChange={(e) => setUrlText(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                e.preventDefault();
-                if (!parsing && urlText.trim().length > 0) void parse();
-              }
-            }}
-          />
+            <div className="hero">
+        <div className="hero-mark">
+          <LogoIcon />
         </div>
-        <button
-          className="btn btn-primary"
-          disabled={parsing || urlText.trim().length === 0}
-          onClick={() => void parse()}
-        >
-          {parsing ? (
-            <>
-              <span className="spinner" />
-              {t("parse.parsingBtn")}
-            </>
-          ) : (
-            <>
+        <h1 className="hero-title">Bili23 Web</h1>
+        <p className="hero-sub">{t("parse.subtitle")}</p>
+        <div className="search-card">
+          <div className="search-box">
+            <span className="search-icon">
               <SearchIcon />
-              {t("parse.button")}
-            </>
-          )}
-        </button>
+            </span>
+            <textarea
+              className="search-input"
+              rows={2}
+              placeholder={t("parse.urlPlaceholder")}
+              value={urlText}
+              onChange={(e) => setUrlText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  if (!parsing && urlText.trim().length > 0) void parse();
+                }
+              }}
+            />
+          </div>
+          <button
+            className="btn btn-primary btn-lg"
+            disabled={parsing || urlText.trim().length === 0}
+            onClick={() => void parse()}
+          >
+            {parsing ? (
+              <>
+                <span className="spinner" />
+                {t("parse.parsingBtn")}
+              </>
+            ) : (
+              <>
+                <SearchIcon />
+                {t("parse.button")}
+              </>
+            )}
+          </button>
+        </div>
+        <div className="hero-chips">
+          {(TYPE_CHIPS[lang] ?? []).map((c) => (
+            <span className="hero-chip" key={c.label}>
+              {c.icon}
+              {c.label}
+            </span>
+          ))}
+        </div>
       </div>
 
+      
       {error && <div className="error-text">{error}</div>}
 
       {hasResults && (
