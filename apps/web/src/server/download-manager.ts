@@ -151,6 +151,8 @@ export interface TaskSummary {
   speedBps?: number | undefined;
   /** 预估剩余秒数，仅 downloading 阶段有效 */
   etaSec?: number | undefined;
+  /** 封面 URL（B站缩略图） */
+  cover?: string | undefined;
 }
 
 export interface MediaOptionSummary {
@@ -296,6 +298,7 @@ class ManagedTask {
       startedAt: this.startedAt,
       speedBps: this.status === "downloading" ? this.speedBps : undefined,
       etaSec: this.status === "downloading" ? this.etaSec : undefined,
+      cover: this.item.cover || undefined,
     };
   }
 

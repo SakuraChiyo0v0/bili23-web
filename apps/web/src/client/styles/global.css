@@ -413,3 +413,10 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 
 /* ===== Parse pagination inline ===== */
 .pager-inline{ display:flex; align-items:center; gap:6px; margin-right:auto; }
+
+/* ===== Parse tree cover thumbnail ===== */
+.tree-cover{ width:56px; height:32px; border-radius:6px; object-fit:cover; flex:none; margin-right:8px; background:var(--surface-3); }
+.tree-cell.title .tree-title-text{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; min-width:0; }
+
+/* ===== Task card real cover image ===== */
+img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }

@@ -93,6 +93,7 @@ export interface TaskSummary {
   startedAt?: number;
   speedBps?: number;
   etaSec?: number;
+  cover?: string;
 }
 
 export interface MediaOptionSummary {

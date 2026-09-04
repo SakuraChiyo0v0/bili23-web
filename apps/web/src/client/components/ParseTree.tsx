@@ -61,7 +61,12 @@ export function ParseTree() {
             )}
             <span className="tree-num">{n.item?.page ?? ""}</span>
           </div>
-          <div className="tree-cell title" title={n.title}>{n.title}</div>
+          <div className="tree-cell title" title={n.title}>
+            {isLeaf && n.item?.cover ? (
+              <img className="tree-cover" src={n.item.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+            ) : null}
+            <span className="tree-title-text">{n.title}</span>
+          </div>
           <div className="tree-cell muted">
             {n.item?.badge ? <span className={`badge${n.item.badge === "充电专属" ? " hot" : ""}`}>{n.item.badge}</span> : n.children ? `（${n.children.length}）` : ""}
           </div>

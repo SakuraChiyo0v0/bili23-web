@@ -108,9 +108,13 @@ function TaskCard({ task, onRemove }: { task: TaskSummary; onRemove: (id: string
   const isDone = task.status === "completed";
   return (
     <div className={`task-card${isDone ? " done" : ""}`}>
-      <div className="cover cover-0">
-        <div className="cover-title">{task.title}</div>
-      </div>
+      {task.cover ? (
+        <img className="cover cover-img" src={task.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display="none"; }} />
+      ) : (
+        <div className="cover cover-0">
+          <div className="cover-title">{task.title}</div>
+        </div>
+      )}
       <div className="task-main">
         <div className="task-title" title={task.title}>{task.title}</div>
         <div className="task-meta">
