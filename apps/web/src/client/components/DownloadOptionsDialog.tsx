@@ -160,14 +160,20 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
   const audioQ = media?.audioQualities ?? [];
   const selQ = qualities.find((q) => q.id === videoQualityId);
   const codecs = selQ?.codecs ?? [];
-  // 总大小估算：选中画质/编码的视频带宽 + 选中音频带宽 × 时长(秒) / 8；未知带宽时返回 null
+  // 总大小估算：选中画质视频带宽 + 选中音频带宽，乘时长/数据率转字节。
+  // Auto(0) 时回落到列表第一项（B 站接口按质量从高到低，即“最高可用”），
+  // 以便默认就能看到估算大小；未知带宽时返回 null（不硬编数字）。
+  // 估算只算用户实际勾选的内容：勾了视频才算视频带宽，勾了音频才算音频带宽。
+  const effQ = selQ ?? qualities[0];
+  const effA = audioQ.find((a) => a.id === audioQualityId) ?? audioQ[0];
   const sizeBytes = (() => {
     if (!media || media.timelength <= 0) return null;
-    const vbw = selQ?.videoBandwidth ?? 0;
-    const abw = audioQ.find((a) => a.id === audioQualityId)?.audioBandwidth ?? 0;
+    const vbw = form.video ? (effQ?.videoBandwidth ?? 0) : 0;
+    const abw = form.audio ? (effA?.audioBandwidth ?? 0) : 0;
     const total = (vbw + abw) * (media.timelength / 1000) / 8;
     return total > 0 ? Math.round(total) : null;
   })();
+  const sizeBasis = selQ ? "" : (effQ ? `（按 ${effQ.label} 估算）` : "");
   return (
     <div className="dl-pane" data-tab="media">
       <div className="dl-card">
@@ -197,7 +203,7 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
               {codecs.map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}
             </select>
           </label>
-          {media?.timelength ? <div className="muted small">时长 {fmtDuration(media.timelength)}{sizeBytes ? ` · 约合 ${fmtBytes(sizeBytes)}` : ""}</div> : null}
+          {media?.timelength ? <div className="muted small">时长 {fmtDuration(media.timelength)}{sizeBytes ? ` · 约合 ${fmtBytes(sizeBytes)}${sizeBasis}` : ""}</div> : null}
         </div>
       </div>
       <div className="dl-card">
@@ -282,7 +288,9 @@ function buildChips(form: { video: boolean; audio: boolean; merge: boolean; danm
   return chips;
 }
 
-function fmtDuration(sec: number): string {
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+/** 将毫秒转为时分秒文本（B 站 playurl timelength 单位为毫秒） */
+function fmtDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
 }
