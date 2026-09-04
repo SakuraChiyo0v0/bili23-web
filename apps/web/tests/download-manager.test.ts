@@ -756,6 +756,33 @@ describe("DownloadManager 优先级透传", () => {
     }
   });
 });
+describe("DownloadManager 目录浏览（listSubdirs）", () => {
+  it("仅返回子目录并过滤隐藏/忽略目录，按名称排序", async () => {
+    const mgr = await makeManager();
+    try {
+      const root = join(tmpRoot, "dirs-browse");
+      await mkdir(root, { recursive: true });
+      await mkdir(join(root, "videos"), { recursive: true });
+      await mkdir(join(root, "music"), { recursive: true });
+      await mkdir(join(root, ".hidden"), { recursive: true });
+      await mkdir(join(root, "node_modules"), { recursive: true });
+      await mkdir(join(root, ".tmp"), { recursive: true });
+      await writeFile(join(root, "a.txt"), "x");
+
+      const out = await mgr.listSubdirs(root);
+      expect(out.map((d) => d.name)).toEqual(["music", "videos"]);
+      expect(out[0]?.path).toBe(join(root, "music"));
+      expect(out[1]?.path).toBe(join(root, "videos"));
+
+      // 文件路径 → 空列表；不存在路径 → 空列表
+      expect(await mgr.listSubdirs(join(root, "a.txt"))).toEqual([]);
+      expect(await mgr.listSubdirs(join(root, "nope"))).toEqual([]);
+    } finally {
+      mgr.close();
+    }
+  });
+});
+
 describe("normalizeExtrasStyles 空 style 兜底", () => {
   it("弹幕/字幕启用但 style 传空对象时回填默认样式", () => {
     const out = normalizeExtrasStyles({

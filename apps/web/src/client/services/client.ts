@@ -98,6 +98,12 @@ export function taskLog(id: string): Promise<{ lines: string[] }> {
 export function listFiles(): Promise<{ files: Array<{ name: string; path: string; size: number; mtime: number }> }> {
   return request("/files");
 }
+
+/** 目录选择器：列出指定绝对目录的子目录（下载目录浏览用） */
+export function listDirs(path: string): Promise<{ dirs: Array<{ name: string; path: string }> }> {
+  return request("/dirs?path=" + encodeURIComponent(path));
+}
+
 /** 产物文件下载地址（用于"打开文件"） */
 export function fileRawUrl(relPath: string): string {
   return `${BASE}/files/raw?path=${encodeURIComponent(relPath)}`;

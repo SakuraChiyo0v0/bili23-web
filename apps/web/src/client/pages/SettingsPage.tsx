@@ -4,6 +4,7 @@ import { NamingRuleEditor, CONVENTION_TYPES } from "../components/NamingRuleEdit
 import { CdnEditor } from "../components/CdnEditor";
 import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
+import { listDirs } from "../services/client";
 
 export function SettingsPage() {
   const { config, loading, saved, error, load, save } = useSettingsStore();
@@ -84,11 +85,21 @@ function InterfaceGroup({ config, onPatch }: { config: any; onPatch: (p: any) =>
 
 function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
   const d = config.download;
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <Group title="下载">
-      <Row label="下载目录" desc="留空 = 默认下载目录" control={
-        <input className="text-input" style={{ width: 260 }} value={d.dir} placeholder="默认下载目录" onChange={(e) => onPatch({ download: { dir: e.target.value } })} />
+      <Row label="下载目录" desc="留空 = 默认下载目录（NAS 容器内路径，如 /data/downloads）" control={
+        <span className="dir-picker-row">
+          <input className="text-input" style={{ width: 260 }} value={d.dir} placeholder="默认下载目录" onChange={(e) => onPatch({ download: { dir: e.target.value } })} />
+          <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>浏览…</button>
+        </span>
       }/>
+      <DirPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        value={d.dir}
+        onPick={(dir) => onPatch({ download: { dir } })}
+      />
       <Row label="每任务线程数" desc="单任务分片并发（1–16）" control={
         <Slider value={d.threads} min={1} max={16} onChange={(v) => onPatch({ download: { threads: Number(v) } })} suffix="线程" />
       }/>
@@ -279,3 +290,79 @@ function Slider({ value, min, max, onChange, suffix }: { value: number; min: num
   );
 }
 const CONVENTION_LABELS: Record<number, string> = Object.fromEntries(CONVENTION_TYPES.map((t) => [t.id, t.label]));
+
+function DirPicker({ open, onClose, value, onPick }: { open: boolean; onClose: () => void; value: string; onPick: (dir: string) => void }) {
+  const [current, setCurrent] = useState<string>(value || "/");
+  const [dirs, setDirs] = useState<Array<{ name: string; path: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [manual, setManual] = useState(value || "");
+
+  useEffect(() => {
+    if (!open) return;
+    setCurrent(value || "/");
+    setManual(value || "");
+    setError("");
+  }, [open, value]);
+
+  useEffect(() => {
+    if (!open || !current) return;
+    setLoading(true);
+    setError("");
+    listDirs(current)
+      .then((r) => setDirs(r.dirs))
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
+  }, [open, current]);
+
+  if (!open) return null;
+
+  const up = () => {
+    const trimmed = current.replace(/[\\/]+$/, "");
+    const idx = trimmed.lastIndexOf("/");
+    if (idx > 0) setCurrent(trimmed.slice(0, idx));
+    else if (trimmed.length > 0) setCurrent("/");
+  };
+  const enter = (path: string) => { setCurrent(path); setManual(path); };
+  const confirmPick = () => { const dir = manual.trim().replace(/[\\/]+$/, "") || "/"; onPick(dir); onClose(); };
+
+  return (
+    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal md">
+        <div className="modal-head">
+          <div className="modal-title">选择下载目录</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
+            <svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="dir-picker-current">
+            <button type="button" className="btn sm ghost" onClick={up} disabled={current === "/"}>↑ 上级</button>
+            <code className="dir-current-path">{current}</code>
+          </div>
+          <div className="dir-picker-list">
+            {loading && <p className="muted small">加载中…</p>}
+            {error && <p className="danger small">读取失败：{error}</p>}
+            {!loading && !error && dirs.length === 0 && <p className="muted small">此目录没有可选的子目录</p>}
+            {dirs.map((d) => (
+              <button key={d.path} type="button" className="dir-row" onClick={() => enter(d.path)}>
+                <svg className="ico" viewBox="0 0 24 24" width={16} height={16}><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z" /></svg>
+                <span>{d.name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="dir-picker-tip"><span className="small muted">点击目录进入子目录，路径会同步到底部输入框。</span></div>
+        </div>
+        <div className="modal-foot">
+          <div className="dir-picker-manual">
+            <input className="text-input" style={{ flex: 1 }} value={manual} onChange={(e) => setManual(e.target.value)} placeholder="或直接输入 NAS 容器内路径" />
+          </div>
+          <div className="right">
+            <button type="button" className="btn" onClick={onClose}>取消</button>
+            <button type="button" className="btn primary" onClick={confirmPick}>使用此目录</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

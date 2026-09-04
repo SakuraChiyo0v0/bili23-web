@@ -172,6 +172,14 @@ export interface FileEntry {
   mtime: number;
 }
 
+/** 目录浏览条目：下载目录选择器用（只返回子目录，不含文件） */
+export interface DirEntry {
+  /** 目录名 */
+  name: string;
+  /** 完整绝对路径（供配置回填） */
+  path: string;
+}
+
 export interface TaskSnapshot {
   item: MediaItem;
   options: DownloadOptions;
@@ -1115,6 +1123,33 @@ export class DownloadManager {
   /** 产物目录浏览（不含 .tmp 临时目录） */
   async listFiles(): Promise<FileEntry[]> {
     return this.#walk(this.#rootDir);
+  }
+
+  /**
+   * 浏览给定绝对目录的子目录（下载目录选择器用）。
+   * - 路径不存在 / 不是目录 / 为空 → 返回空列表；
+   * - 只返回可读子目录的 name+path，隐藏项过滤规则与 #walk 一致（跳过 . 开头隐藏目录、node_modules、dist、.tmp）。
+   */
+  async listSubdirs(absDir: string): Promise<DirEntry[]> {
+    const out: DirEntry[] = [];
+    let entries;
+    try {
+      entries = await readdir(absDir, { withFileTypes: true });
+    } catch {
+      return out;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist" || entry.name === ".tmp") continue;
+      const full = join(absDir, entry.name);
+      try {
+        if ((await stat(full)).isDirectory()) out.push({ name: entry.name, path: full });
+      } catch {
+        // 并发删除/无权限：跳过
+      }
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return out;
   }
 
   // ---------- 队列调度 / 重启恢复 ----------

@@ -403,3 +403,42 @@ describe("resolveDownloadPath 防目录穿越", () => {
     expect(resolveDownloadPath(root, "/etc/passwd")).toBeUndefined();
   });
 });
+
+describe("/api/dirs 目录选择接口", () => {
+  it("manager.listSubdirs 缺省时返回空列表；存在时透传子目录", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bili23-dirs-api-"));
+    try {
+      const mk = (withImpl: boolean) => {
+        const deps = makeDeps();
+        if (withImpl) {
+          (deps as unknown as { listSubdirs: unknown }).listSubdirs = async (dir: string) => {
+            if (dir === root) return [{ name: "downloads", path: join(root, "downloads") }, { name: "videos", path: join(root, "videos") }];
+            return [];
+          };
+        }
+        return createApp({ manager: deps as never });
+      };
+
+      const enc = encodeURIComponent(root);
+      const appNo = mk(false);
+      let res = await appNo.request("/api/dirs?path=" + enc);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ dirs: [] });
+
+      const app = mk(true);
+      res = await app.request("/api/dirs?path=" + enc);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        dirs: [
+          { name: "downloads", path: join(root, "downloads") },
+          { name: "videos", path: join(root, "videos") },
+        ],
+      });
+
+      res = await app.request("/api/dirs");
+      expect(await res.json()).toEqual({ dirs: [] });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});

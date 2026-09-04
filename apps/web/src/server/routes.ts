@@ -10,6 +10,7 @@ import type {
 } from "./config.js";
 import type {
   DownloadOptions,
+  DirEntry,
   FileEntry,
   HistoryEntryDto,
   MediaOptionSummary,
@@ -60,6 +61,7 @@ export interface ApiDeps {
   taskLog(id: string): string[] | undefined;
   resolveDownloadFile(relPath: string): string | undefined;
   listFiles(): Promise<FileEntry[]>;
+  listSubdirs?(absDir: string): Promise<DirEntry[]>;
   getConfig?(): Promise<AppConfig>;
   updateConfig?(patch: AppConfigPatch): Promise<AppConfig>;
   /** 类型化解析请求（type 入口） */
@@ -189,6 +191,22 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
   });
 
   app.get("/api/files", async (c) => c.json({ files: await getManager().listFiles() }));
+
+  /** 目录选择器：列出指定绝对目录的子目录（下载目录浏览用；路径越界/不存在返回空列表） */
+  app.get("/api/dirs", async (c) => {
+    const manager = getManager();
+    const dir = c.req.query("path") ?? "";
+    if (!dir || dir.length === 0) return c.json({ dirs: [] });
+    let st;
+    try {
+      st = await stat(dir);
+    } catch {
+      return c.json({ dirs: [] });
+    }
+    if (!st.isDirectory() || !manager.listSubdirs) return c.json({ dirs: [] });
+    const dirs: DirEntry[] = await manager.listSubdirs(dir);
+    return c.json({ dirs });
+  });
 
   app.post("/api/tasks/:id/pause", (c) => {
     const manager = getManager();

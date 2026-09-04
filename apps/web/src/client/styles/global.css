@@ -446,3 +446,14 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 /* ===== Settings extras separators ===== */
 .panel-sep{ font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; padding:12px 0 4px; }
 .settings-group .panel-sep:first-child{ padding-top:0; }
+
+/* ===== Download dir picker ===== */
+.dir-picker-row{ display:flex; align-items:center; gap:8px; }
+.dir-picker-row .text-input{ flex:1; min-width:180px; }
+.dir-picker-current{ display:flex; align-items:center; gap:8px; padding:8px 0; }
+.dir-current-path{ font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; background:var(--line); padding:4px 8px; border-radius:6px; overflow-wrap:anywhere; }
+.dir-picker-list{ max-height:280px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:4px; }
+.dir-row{ display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:7px 8px; border-radius:6px; color:var(--ink); }
+.dir-row:hover{ background:var(--line); }
+.dir-picker-manual{ display:flex; flex:1; }
+.dir-picker-tip{ padding:6px 0 2px; }
