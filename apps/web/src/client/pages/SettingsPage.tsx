@@ -136,7 +136,6 @@ function AdditionalGroup({ config, onPatch }: { config: any; onPatch: (p: any) =
     <StyleEditor open={!!styleKind} onClose={() => setStyleKind("")} kind={styleKind || "danmaku"} value={styleKind === "subtitle" ? a.subtitle?.style : a.danmaku?.style} onChange={(sv) => {
         if (styleKind === "subtitle") onPatch({ additional: { subtitle: { ...a.subtitle, style: sv } } });
         else onPatch({ additional: { danmaku: { ...a.danmaku, style: sv } } });
-        useSettingsStore.getState().save({ additional: styleKind === "subtitle" ? { subtitle: { ...a.subtitle, style: sv } } : { danmaku: { ...a.danmaku, style: sv } } });
       }} />
     </Group>
   );
@@ -149,7 +148,6 @@ function NamingGroup({ config, onPatch }: { config: any; onPatch: (p: any) => vo
   const [editorOpen, setEditorOpen] = useState(false);
   const saveRules = (next: any[]) => {
     onPatch({ fileNaming: { rules: next } });
-    useSettingsStore.getState().save({ fileNaming: { rules: next } });
   };
   return (
     <Group title="命名规则">
@@ -181,7 +179,6 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
   const [cdnOpen, setCdnOpen] = useState(false);
   const saveCdnHosts = (next: any[]) => {
     onPatch({ advanced: { cdnHosts: next } });
-    useSettingsStore.getState().save({ advanced: { cdnHosts: next } });
   };
   return (
     <Group title="高级">

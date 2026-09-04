@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import { parseUrl } from "../services/client";
 import { useDownloadOptions } from "../store/useDownloadOptions";
-import { useParseSession as _sp } from "../store/useParseSession";
 import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
 import { useParseSession } from "../store/useParseSession";
 import { useToast } from "../lib/toast";

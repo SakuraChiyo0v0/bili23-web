@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { TermsPanel } from "./TermsPanel";
 import { FavoritesFlyout } from "./FavoritesFlyout";
+import { useParseSession } from "../store/useParseSession";
 import { Icon } from "../lib/icons";
 import type { RouteId } from "../lib/routes";
 
@@ -75,6 +76,7 @@ export function Sidebar({
 }) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
+  const parseSession = useParseSession();
   return (
     <>
       <aside className="sidebar">
@@ -121,7 +123,7 @@ export function Sidebar({
           </button>
         </nav>
       </aside>
-      <FavoritesFlyout open={favOpen} onClose={() => setFavOpen(false)} onOpenFolder={() => { onNavigate("parse"); setFavOpen(false); }} />
+      <FavoritesFlyout open={favOpen} onClose={() => setFavOpen(false)} onOpenFolder={(/*title*/ _title, mediaId) => { parseSession.setParseType("favlist"); parseSession.setInput("https://www.bilibili.com/list/ml" + mediaId); onNavigate("parse"); setFavOpen(false); }} />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </>
   );

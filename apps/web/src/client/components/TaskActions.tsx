@@ -1,5 +1,5 @@
 import {
-  cancelTask, pauseTask, resumeTask, retryTask, deleteTask, taskLog,
+  cancelTask, pauseTask, resumeTask, retryTask, deleteTask, taskLog, listFiles, fileRawUrl,
 } from "../services/client";
 import { useTasksStore, TASK_STATUS_META } from "../store/useTasksStore";
 import type { TaskSummary } from "../services/types";
@@ -32,7 +32,15 @@ export function TaskActions({
         await retryTask(task.id);
         onToast("已重新开始", "ok");
       } else if (meta.action === "open") {
-        window.open(task.outputPath ? "#files" : "#files", "_self");
+        try {
+          const { files } = await listFiles();
+          const base = (task.outputPath ? task.outputPath.split(/[\\/]/).pop() : "") ?? "";
+          const hit = files.find((f) => f.name === base || f.path.endsWith(base));
+          if (hit) window.open(fileRawUrl(hit.path), "_blank");
+          else onToast("产物文件暂不可用", "warn");
+        } catch {
+          onToast("无法打开产物文件", "err");
+        }
       } else if (meta.action === "delete") {
         await deleteTask(task.id);
         onRemove(task.id);

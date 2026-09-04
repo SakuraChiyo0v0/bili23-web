@@ -6,7 +6,6 @@ import { useTasksStore } from "../store/useTasksStore";
 import { useToast } from "../lib/toast";
 import type { MediaOptionSummary } from "../services/types";
 
-
 export function DownloadOptionsDialog() {
   const {
     open, items, media, mediaLoading, mediaError, form,
@@ -16,6 +15,7 @@ export function DownloadOptionsDialog() {
   const { toast } = useToast();
   const setTasks = useTasksStore((s) => s.setTasks);
   const [dupList, setDupList] = useState<Array<{ itemId: string; title: string }>>([]);
+  const [activeTab, setActiveTab] = useState("media");
 
   // 打开时拉取首个条目的媒体候选
   useEffect(() => {
@@ -110,19 +110,21 @@ export function DownloadOptionsDialog() {
           </button>
         </div>
         <div className="tabs-nav">
-          <TabBtn id="media" label="媒体设置" />
-          <TabBtn id="additional" label="附加文件" />
-          <TabBtn id="download" label="下载设置" />
+          <button type="button" className={`tab${activeTab === "media" ? " active" : ""}`} onClick={() => setActiveTab("media")}>媒体设置</button>
+          <button type="button" className={`tab${activeTab === "additional" ? " active" : ""}`} onClick={() => setActiveTab("additional")}>附加文件</button>
+          <button type="button" className={`tab${activeTab === "download" ? " active" : ""}`} onClick={() => setActiveTab("download")}>下载设置</button>
         </div>
         <div className="modal-body dl-body">
-          <MediaPane
-            media={media} loading={mediaLoading} error={mediaError}
-            form={form} patchForm={patchForm}
-            videoQualityId={videoQualityId} audioQualityId={audioQualityId} codecId={codecId}
-            setQuality={setQuality} setAudio={setAudio} setCodec={setCodec}
-          />
-          <AdditionalPane form={form} patchForm={patchForm} />
-          <DownloadPane />
+          {activeTab === "media" && (
+            <MediaPane
+              media={media} loading={mediaLoading} error={mediaError}
+              form={form} patchForm={patchForm}
+              videoQualityId={videoQualityId} audioQualityId={audioQualityId} codecId={codecId}
+              setQuality={setQuality} setAudio={setAudio} setCodec={setCodec}
+            />
+          )}
+          {activeTab === "additional" && <AdditionalPane form={form} patchForm={patchForm} />}
+          {activeTab === "download" && <DownloadPane />}
         </div>
         <div className="dl-footer">
           <div className="dl-preview">
@@ -137,21 +139,6 @@ export function DownloadOptionsDialog() {
       <DuplicateDialog open={dupList.length > 0} onClose={() => setDupList([])} duplicates={dupList} onForce={forceDownload} />
     </div>
   );
-}
-
-function TabBtn({ id, label }: { id: string; label: string }) {
-  return (
-    <button type="button" className={`tab${id === "media" ? " active" : ""}`} onClick={() => switchTab(id)}>
-      {label}
-    </button>
-  );
-}
-
-function switchTab(id: string): void {
-  const body = document.querySelector(".dl-body") as HTMLElement | null;
-  if (!body) return;
-  // 简化：三页签做在同一容器滚动，用 data 标记切换（此处用一屏滚动，仅展示媒体+附加+下载区）
-  body.dataset.tab = id;
 }
 
 function MediaPane({ media, loading, error, form, patchForm, videoQualityId, audioQualityId, codecId, setQuality, setAudio, setCodec }: {
@@ -222,7 +209,7 @@ function AdditionalPane({ form, patchForm }: {
   patchForm: (p: Partial<{ danmaku: boolean; subtitle: boolean; cover: boolean; chapter: boolean; metadata: boolean }>) => void;
 }) {
   return (
-    <div className="dl-pane" data-tab="additional" style={{ display: "none" }}>
+    <div className="dl-pane" data-tab="additional">
       <div className="dl-card">
         <div className="dl-card-title">附加文件</div>
         <ToggleRow label="弹幕" checked={form.danmaku} onChange={(v) => patchForm({ danmaku: v })} />
@@ -237,7 +224,7 @@ function AdditionalPane({ form, patchForm }: {
 
 function DownloadPane() {
   return (
-    <div className="dl-pane" data-tab="download" style={{ display: "none" }}>
+    <div className="dl-pane" data-tab="download">
       <div className="dl-card">
         <div className="dl-card-title">下载设置</div>
         <div className="muted small">输出容器默认 MP4；命名规则与编号沿用全局设置（P4 完整接入）。</div>

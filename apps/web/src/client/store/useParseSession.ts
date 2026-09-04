@@ -114,23 +114,3 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   toggleCollapse: (id) => set((s) => ({ tree: s.tree.map((n) => (n.id === id ? { ...n, collapsed: !n.collapsed } : n)) })),
   selectedLeaves: () => collect([], get().tree),
 }));
-
-export function collectAllLeaves(results: ParseResult[]): MediaItem[] {
-  const out: MediaItem[] = [];
-  for (const r of results) for (const it of r.items) out.push(it);
-  return out;
-}
-
-import type { TaskSummary } from "../services/types";
-
-interface TasksState {
-  tasks: TaskSummary[];
-  setTasks: (t: TaskSummary[]) => void;
-  upsert: (t: TaskSummary) => void;
-}
-
-export const useTasksStore = create<TasksState>((set) => ({
-  tasks: [],
-  setTasks: (tasks) => set({ tasks }),
-  upsert: (t) => set((s) => ({ tasks: [...s.tasks.filter((x) => x.id !== t.id), t] })),
-}));

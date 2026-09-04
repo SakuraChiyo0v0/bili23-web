@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { useUiSettings } from "./lib/useUiSettings";
+import { useEffect, useState } from "react";
 import { useTermsGate } from "./lib/useTermsGate";
 import { useHashRoute, type RouteId } from "./lib/routes";
 import { useToast, ToastProvider } from "./lib/toast";
-import { Modal } from "./components/Modal";
 import { Sidebar, TopBar, MobileTabBar } from "./components/Layout";
 import { LoginDialog } from "./components/LoginDialog";
 import { useAuthStore } from "./store/useAuthStore";
@@ -24,14 +22,11 @@ export function App() {
 function Shell() {
   const [route, navigate] = useHashRoute();
   const [accepted, accept] = useTermsGate();
-  const [ui, updateUi] = useUiSettings();
   const { toast } = useToast();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const auth = useAuthStore();
   useEffect(() => { void auth.refresh(); /*eslint-disable-next-line*/ }, []);
 
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
 
   if (!accepted) {
     return (
@@ -55,10 +50,7 @@ function Shell() {
         <TopBar
           title={route.title}
           route={route.id}
-          onNavigate={(id: RouteId) => {
-            if (id === "settings") openSettings();
-            else navigate(id);
-          }}
+          onNavigate={(id: RouteId) => navigate(id)}
           onToast={() => toast("这是全局提示（Toast），后续用于下载结果与操作反馈。")}
         />
         <main className="content">{renderPage()}</main>
@@ -66,14 +58,6 @@ function Shell() {
       </div>
 
       <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        theme={ui.theme}
-        motion={ui.motion}
-        onChangeTheme={(theme) => updateUi({ theme })}
-        onChangeMotion={(motion) => updateUi({ motion })}
-      />
     </div>
   );
 }
@@ -101,68 +85,3 @@ function TermsGateCard({ onAccept }: { onAccept: () => void }) {
   );
 }
 
-function SettingsDialog({
-  open,
-  onClose,
-  theme,
-  motion,
-  onChangeTheme,
-  onChangeMotion,
-}: {
-  open: boolean;
-  onClose: () => void;
-  theme: "light" | "dark" | "system";
-  motion: "smooth" | "reduced";
-  onChangeTheme: (v: "light" | "dark" | "system") => void;
-  onChangeMotion: (v: "smooth" | "reduced") => void;
-}) {
-  return (
-    <Modal open={open} onClose={onClose} title="设置" width="md" sheetOnMobile>
-      <div className="panel settings-group" style={{ marginBottom: 18 }}>
-        <div className="settings-group">
-          <h2>界面外观</h2>
-          <div className="panel">
-            <div className="setting-row">
-              <div className="s-info">
-                <div className="s-title">主题</div>
-                <div className="s-desc">浅色 / 深色 / 跟随系统（Web 端增强项，后续并入设置页）</div>
-              </div>
-              <div className="control">
-                <div className="seg">
-                  {(["light", "dark", "system"] as const).map((t) => (
-                    <button key={t} type="button" className={`seg-btn${theme === t ? " active" : ""}`} onClick={() => onChangeTheme(t)}>
-                      {{ light: "浅色", dark: "深色", system: "跟随系统" }[t]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="setting-row">
-              <div className="s-info">
-                <div className="s-title">动画强度</div>
-                <div className="s-desc">流畅 / 减弱（尊重系统“减少动态效果”偏好）</div>
-              </div>
-              <div className="control">
-                <div className="seg">
-                  {(["smooth", "reduced"] as const).map((m) => (
-                    <button key={m} type="button" className={`seg-btn${motion === m ? " active" : ""}`} onClick={() => onChangeMotion(m)}>
-                      {{ smooth: "流畅", reduced: "减弱" }[m]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p className="small muted" style={{ padding: "0 2px" }}>
-          说明：这是 P0 骨架内嵌的“界面外观”示例弹窗。完整设置页（下载 / 解析 / 附加内容 / 命名 / 高级）在 P4 接入后端配置。
-        </p>
-      </div>
-      <div className="modal-foot">
-        <div className="right">
-          <button type="button" className="btn primary" onClick={onClose}>完成</button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
