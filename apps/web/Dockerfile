@@ -16,6 +16,7 @@ FROM base AS build
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @bili23-web/engine build
 RUN pnpm --filter @bili23-web/web build
+RUN pnpm --filter @bili23-web/web exec vite build
 
 FROM base AS prod
 # 只装生产依赖，保持 pnpm 布局；workspace 链接指向 /repo/packages
