@@ -88,6 +88,29 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
   -f deploy/docker-compose.nas.yml up -d
 ```
 
+### 如果你在 NAS 上 pull 很慢（网络受限）
+
+`ghcr.io`（GitHub 容器源）从部分 NAS 网络直拉**308MB 镜像**可能极慢甚至卡住。
+南大镜像站 `ghcr.nju.edu.cn` 已同步本镜像（含 `latest` 与各 commit 的 tag，如 `78305cf...`）。
+
+手动更新时若对 `ghcr.io` 拉不动，改用南大源拉取并重打标签给 compose 用：
+
+```bash
+cd /volume1/docker/bili23-web
+# 1) 从南大源拉最新镜像（更快）
+sudo docker pull ghcr.nju.edu.cn/sakurachiyo0v0/bili23-web:latest
+# 2) 重打标签为 ghcr.io（compose 的 image 名），复用本地镜像，不再触发对 ghcr.io 的拉取
+sudo docker tag ghcr.nju.edu.cn/sakurachiyo0v0/bili23-web:latest \
+  ghcr.io/sakurachiyo0v0/bili23-web:latest
+# 3) 重建容器（数据在宿主 ./data，不受影响）
+sudo docker rm -f bili23-web
+sudo docker compose --project-directory /volume1/docker/bili23-web \
+  -f deploy/docker-compose.nas.yml up -d
+```
+
+> 注意：`ghcr.io` 与 `ghcr.nju.edu.cn` 是同一份镜像的不同域名，tag/ID 一致；
+> 这只在 NAS 本地网络慢时用，不影响 CI（CI 始终推 `ghcr.io`）。
+
 ## 六、数据与备份
 
 容器内数据根目录是 `/data`，挂载到宿主 `./data`（即 `/volume1/docker/bili23-web/data`）：

@@ -311,6 +311,9 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
 5. **未跟踪备份/草稿不要提交**：`docs/upstream-sync-design.md`、`packages/engine/src/types.ts.bak`、
    `packages/engine/tests/_scratch.ts.txt` 等（如仍在工作区）是临时文件，不要纳入提交。
 6. **node:sqlite 要求 Node 22+**（引擎 `package.json` engines 写了 ≥22.5）。Docker 用 node:22-alpine。
+7. **`ghcr.io` 从 NAS 直拉慢/卡**：镜像是 308MB（含 ffmpeg），部分 NAS 网络直拉会上分钟无进度。
+   `ghcr.nju.edu.cn`（南大镜像站）已同步该镜像（含 `latest` 和每个 commit 的 tag）。
+   在 NAS 更新时若对 `ghcr.io` 拉不动，改用南大源拉取并重打标签给 compose 用，见 `deploy/README.md` §五。
 
 ---
 
