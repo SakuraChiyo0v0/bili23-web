@@ -72,7 +72,8 @@ export interface ApiDeps {
   qrLoginPoll?(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }>;
   logoutAuth?(): Promise<AuthStatus>;
   authStatus?(): Promise<AuthStatus>;
-  listFavFolders?(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number }> }>;
+  listFavFolders?(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number; cover: string }> }>;
+  listFollowBangumi?(type?: string): Promise<Array<{ seasonId: number; title: string; cover: string; newEp: string; progress: string; isFinish: number; url: string }>>;
 }
 
 export type ApiErrorStatus = 400 | 401 | 404 | 409 | 500 | 502;
@@ -312,6 +313,17 @@ export function registerApi(app: Hono, getManager: () => ApiDeps): void {
     if (!manager.listFavFolders) return c.json({ error: { code: "NOT_FOUND", message: "收藏夹接口不可用" } }, 404);
     try {
       return c.json(await manager.listFavFolders());
+    } catch (err) {
+      const { status, body } = errorBody(err);
+      return c.json(body, status);
+    }
+  });
+  app.get("/api/bangumi/follow", async (c) => {
+    const manager = getManager();
+    if (!manager.listFollowBangumi) return c.json({ error: { code: "NOT_FOUND", message: "追番接口不可用" } }, 404);
+    try {
+      const type = c.req.query("type") ?? "1";
+      return c.json({ follow: await manager.listFollowBangumi(type) });
     } catch (err) {
       const { status, body } = errorBody(err);
       return c.json(body, status);

@@ -123,7 +123,7 @@ export function Sidebar({
           </button>
         </nav>
       </aside>
-      <FavoritesFlyout open={favOpen} onClose={() => setFavOpen(false)} onOpenFolder={(/*title*/ _title, mediaId) => { parseSession.setParseType("favlist"); parseSession.setInput("https://www.bilibili.com/list/ml" + mediaId); onNavigate("parse"); setFavOpen(false); }} />
+      <FavoritesFlyout open={favOpen} onClose={() => setFavOpen(false)} onOpenFolder={(/*title*/ _title, mediaId) => { parseSession.setParseType("favlist"); parseSession.setInput("https://www.bilibili.com/list/ml" + mediaId); onNavigate("parse"); setFavOpen(false); }} onOpenBangumi={(url) => { parseSession.setParseType("bangumi"); parseSession.setInput(url); onNavigate("parse"); setFavOpen(false); }} />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </>
   );

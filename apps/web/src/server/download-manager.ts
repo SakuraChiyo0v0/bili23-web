@@ -538,7 +538,7 @@ export class DownloadManager {
   }
 
   /** 登录用户收藏夹列表（1:1 收藏夹面板；需登录，未登录抛 LOGIN_REQUIRED） */
-  async listFavFolders(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number }> }> {
+  async listFavFolders(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number; cover: string }> }> {
     await this.#sessionReady;
     if (!this.#sessdata) {
       throw new BiliError("LOGIN_REQUIRED", "请先登录");
@@ -554,8 +554,46 @@ export class DownloadManager {
     if (res.code !== 0) {
       throw new BiliError("LOGIN_REQUIRED", res.code === -101 ? "登录态无效" : "获取收藏夹失败");
     }
-    const folders = (res.data?.list ?? []).map((f) => ({ id: f.id, title: f.title, mediaCount: f.media_count ?? 0 }));
+    const list = res.data?.list ?? [];
+    const folders = await Promise.all(list.map(async (f) => {
+      let cover = "";
+      try {
+        const one = await this.#http.getJSON<{
+          code: number; data?: { medias?: Array<{ cover?: string }> };
+        }>(BILI_API_BASE + "/x/v3/fav/resource/list", { params: { media_id: String(f.id), pn: 1, ps: 1 } });
+        cover = one.data?.medias?.[0]?.cover ?? "";
+      } catch { /* 单收藏夹封面失败不阻塞整体 */ }
+      return { id: f.id, title: f.title, mediaCount: f.media_count ?? 0, cover };
+    }));
     return { mid, folders };
+  }
+
+  /** 登录用户追番/追剧列表（type=1 番剧 / type=2 电影 / type=3 纪录片 / type=4 国创 / type=5 电视剧 / type=7 综艺）；需登录 */
+  async listFollowBangumi(type = "1"): Promise<Array<{ seasonId: number; title: string; cover: string; newEp: string; progress: string; isFinish: number; url: string }>> {
+    await this.#sessionReady;
+    if (!this.#sessdata) {
+      throw new BiliError("LOGIN_REQUIRED", "请先登录");
+    }
+    const nav = await this.#http.getJSON<{ code: number; data?: { mid?: number } }>(BILI_API_BASE + "/x/web-interface/nav");
+    const mid = nav.data?.mid;
+    if (nav.code !== 0 || !mid) {
+      throw new BiliError("LOGIN_REQUIRED", "登录态无效，请重新登录");
+    }
+    const res = await this.#http.getJSON<{
+      code: number; data?: { list?: Array<{ season_id: number; title: string; cover: string; new_ep?: { index_show?: string }; progress?: string; is_finish?: number; url?: string }> };
+    }>(BILI_API_BASE + "/x/space/bangumi/follow/list", { params: { type, pn: 1, ps: 20, follow_status: 0, vmid: String(mid) } });
+    if (res.code !== 0) {
+      throw new BiliError("LOGIN_REQUIRED", res.code === -101 ? "登录态无效" : "获取追番列表失败");
+    }
+    return (res.data?.list ?? []).map((b) => ({
+      seasonId: b.season_id,
+      title: b.title,
+      cover: b.cover ?? "",
+      newEp: b.new_ep?.index_show ?? "",
+      progress: b.progress ?? "",
+      isFinish: b.is_finish ?? 0,
+      url: b.url ?? `https://www.bilibili.com/bangumi/play/ss${b.season_id}`,
+    }));
   }
 
   #previewSessdata(s: string): string {

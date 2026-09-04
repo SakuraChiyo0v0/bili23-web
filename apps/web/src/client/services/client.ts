@@ -112,7 +112,11 @@ export function loginCookie(sessdata: string): Promise<AuthStatus> { return requ
 export function logoutAuth(): Promise<AuthStatus> { return request("/auth", { method: "DELETE" }); }
 export function qrLoginStart(): Promise<QrLoginSession> { return request("/auth/qr", { method: "POST" }); }
 export function qrLoginPoll(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }> { return request("/auth/qr/poll", { method: "POST", body: JSON.stringify({ qrcodeKey }) }); }
-export interface FavFolder { id: number; title: string; mediaCount: number }
+export interface FavFolder { id: number; title: string; mediaCount: number; cover?: string }
+export interface FollowBangumi { seasonId: number; title: string; cover: string; newEp: string; progress: string; isFinish: number; url: string }
+export function listFollowBangumi(type?: string): Promise<{ follow: FollowBangumi[] }> {
+  return request("/bangumi/follow" + (type ? "?type=" + encodeURIComponent(type) : ""));
+}
 export function listFavorites(): Promise<{ mid: number; folders: FavFolder[] }> {
   return request("/favorites");
 }
