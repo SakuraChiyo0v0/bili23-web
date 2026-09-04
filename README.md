@@ -5,13 +5,13 @@
 
 > 独立新仓库，不复用旧 TS SDK。功能基准 = 桌面版 Python 源码
 > `C:\LocalSpace\Projects\Github-Proj\Bili23-Downloader`（行为参照，不复制代码）。
-> 当前阶段前端已移除，仓库为**纯后端服务**（Hono + 引擎），前端由你后续重建。
+> 当前为**前后端一体的 Web 服务**：Hono REST/SSE 后端 + React/Vite 前端（Vite 构建后由同一服务静态托管 SPA）。
 
 ## 仓库结构
 
 ```
 packages/engine/   全新 TS 下载引擎（解析/取流/下载/合并/附加内容/命名规则/存储）
-apps/web/          Web 端：Hono 后端（REST + SSE），无前端构建产物
+apps/web/          Web 端：Hono 后端（REST + SSE）+ React 前端（src/client，构建到 dist/client 静态托管）
 deploy/            NAS compose（docker-compose.nas.yml / .env.example / README）
 .github/workflows/ push → ghcr 自动构建
 docs/              设计文档与实施计划
@@ -23,6 +23,7 @@ docs/              设计文档与实施计划
 pnpm install
 pnpm check                                  # typecheck + test + build 全量校验
 pnpm --filter @bili23-web/web dev:server    # http://localhost:8787（后端）
+pnpm --filter @bili23-web/web dev:client    # http://localhost:5173（前端开发服务器，/api 代理到后端）
 ```
 
 数据目录 `BILI23_DATA_DIR`（默认 `./data`），下载目录 `DOWNLOAD_DIR`（默认 `<data>/downloads`）。
@@ -79,4 +80,4 @@ pnpm --filter @bili23-web/web dev:server    # http://localhost:8787（后端）
 | POST | `/api/auth` | 设置 SESSDATA |
 | DELETE | `/api/auth` | 退出并清除登录态 |
 
-> 登录仅需 SESSDATA cookie（用于稍后再看/历史/高画质），未实现扫码等其它登录方式。
+> 登录支持 SESSDATA cookie 与扫码两种方式（用于稍后再看/历史/高画质/收藏夹）。

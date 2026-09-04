@@ -81,8 +81,8 @@ function makeDeps(): ApiDeps & {
         itemId,
         mediaType: "dash",
         timelength: 213000,
-        qualities: [{ id: 80, label: "1080P", codecs: [{ id: 7, label: "AVC/H.264" }] }],
-        audioQualities: [{ id: 30280, label: "192K" }],
+        qualities: [{ id: 80, label: "1080P", codecs: [{ id: 7, label: "AVC/H.264" }], videoBandwidth: 1000000 }],
+        audioQualities: [{ id: 30280, label: "192K", audioBandwidth: 192000 }],
       };
     },
     async createTasks(itemIds, options, force = false) {

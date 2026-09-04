@@ -49,10 +49,14 @@ export interface DownloadConfig {
   defaultContainer: "mp4" | "mkv";
 }
 
-/** 界面组（默认跟随系统） */
+/** 界面/行为组（默认跟随系统） */
 export interface BehaviorConfig {
   language: "zh-CN" | "zh-TW" | "en" | "system";
   theme: "light" | "dark" | "system";
+  /** 解析成功后是否写入解析历史（对齐桌面 Behavior > 保存解析历史，默认开） */
+  saveParseHistory: boolean;
+  /** 点下载后是否自动弹出“下载选项”弹窗（对齐桌面 Behavior > 下载前弹下载选项框，默认开） */
+  showDownloadOptionsDialog: boolean;
 }
 
 /** 高级组（默认全空；可选项缺省 = 不覆盖自动选择） */
@@ -108,6 +112,8 @@ export function defaultAppConfig(): AppConfig {
     behavior: {
       language: "system",
       theme: "system",
+      saveParseHistory: true,
+      showDownloadOptionsDialog: true,
     },
     advanced: {
       cdnHosts: [],
@@ -147,6 +153,9 @@ function sanitizeBehavior(raw: unknown): BehaviorConfig {
   return {
     language: isOneOf(o.language, LANGUAGES) ? o.language : def.language,
     theme: isOneOf(o.theme, THEMES) ? o.theme : def.theme,
+    saveParseHistory: typeof o.saveParseHistory === "boolean" ? o.saveParseHistory : def.saveParseHistory,
+    showDownloadOptionsDialog:
+      typeof o.showDownloadOptionsDialog === "boolean" ? o.showDownloadOptionsDialog : def.showDownloadOptionsDialog,
   };
 }
 
@@ -235,6 +244,8 @@ export function validateConfig(next: AppConfig): string[] {
   if (!isOneOf(dl.defaultContainer, CONTAINERS)) errors.push("download.defaultContainer 需为 mp4 或 mkv");
   if (!isOneOf(be.language, LANGUAGES)) errors.push("behavior.language 需为 zh-CN、zh-TW、en 或 system");
   if (!isOneOf(be.theme, THEMES)) errors.push("behavior.theme 需为 light、dark 或 system");
+  if (typeof be.saveParseHistory !== "boolean") errors.push("behavior.saveParseHistory 需为布尔值");
+  if (typeof be.showDownloadOptionsDialog !== "boolean") errors.push("behavior.showDownloadOptionsDialog 需为布尔值");
   const nonNegative = (field: string, v: number | undefined): void => {
     if (v !== undefined && (typeof v !== "number" || !Number.isFinite(v) || v < 0)) {
       errors.push(`${field} 需为不小于 0 的数字`);

@@ -15,23 +15,16 @@ export function TopBar({
   title,
   route,
   onNavigate,
-  onToast,
 }: {
   title: string;
   route: RouteId;
   onNavigate: (id: RouteId) => void;
-  onToast: () => void;
 }) {
-  const current = TABS.find((t) => t.id === route);
+  void route;
   return (
     <header className="topbar">
       <div className="topbar-title">{title}</div>
       <div className="topbar-actions">
-        {current?.id === "downloads" && (
-          <button type="button" className="btn sm" onClick={onToast}>
-            预览提示
-          </button>
-        )}
         <button type="button" className="icon-btn" onClick={() => onNavigate("settings")} aria-label="设置" title="设置">
           <Icon name="gear" size={19} />
         </button>
@@ -145,7 +138,7 @@ export function AboutModal({ open, onClose }: { open: boolean; onClose: () => vo
           <div className="about-logo">B</div>
           <h3>Bili23 Web</h3>
           <p className="muted small">桌面版 Bili23-Downloader 的 1:1 Web 复刻</p>
-          <p className="small muted">信息架构 / 交互 1:1 对齐原版 PyQt 客户端，Web 化视觉与响应式增强。<br />P0 工程骨架 · 2026-09</p>
+          <p className="small muted">信息架构 / 交互 1:1 对齐原版 PyQt 客户端，Web 化视觉与响应式增强。<br />Web 版 · 2026-09</p>
         </div>
         <div className="modal-foot">
           <button type="button" className="btn ghost" onClick={() => setShowTerms((s) => !s)}>使用协议</button>

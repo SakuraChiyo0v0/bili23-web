@@ -599,6 +599,37 @@ describe("DownloadManager 设置语义（目录/命名/重名/重复）", () => 
   });
 });
 
+describe("DownloadManager 保存解析历史开关（behavior.saveParseHistory）", () => {
+  it("默认开启时 parseUrls 写入解析历史", async () => {
+    const mgr = await makeManager();
+    try {
+      const items = await seedThree(mgr);
+      expect(mgr.listParseHistory().length).toBeGreaterThan(0);
+      const last = mgr.listParseHistory()[0]!;
+      expect(last.itemCount).toBe(3);
+      expect(last.type).toBe("video");
+    } finally {
+      mgr.close();
+    }
+  });
+
+  it("关闭后 parseUrls 不再写入解析历史，历史保留旧记录", async () => {
+    const mgr = await makeManager();
+    try {
+      await seedThree(mgr);
+      const before = mgr.listParseHistory().length;
+      expect(before).toBeGreaterThan(0);
+      await mgr.updateConfig({ behavior: { saveParseHistory: false } });
+      // 再次解析应不新增
+      h.state.parseItems = [makeItem(ID1, 280001)] as never;
+      await mgr.parseUrls(["https://www.bilibili.com/video/BV1xx411c7mD"]);
+      expect(mgr.listParseHistory().length).toBe(before);
+    } finally {
+      mgr.close();
+    }
+  });
+});
+
 describe("DownloadManager 高级默认档位兜底（advanced.default*）", () => {
   it("任务未显式指定画质/音质/编码时，用 advanced 默认档位传给取流", async () => {
     const mgr = await makeManager();

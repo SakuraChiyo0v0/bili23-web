@@ -28,7 +28,7 @@ export function SettingsPage() {
 
       <InterfaceGroup config={config} onPatch={patch} />
       <DownloadGroup config={config} onPatch={patch} />
-      <BehaviorGroup onPatch={patch} />
+      <BehaviorGroup config={config} onPatch={patch} />
       <AdditionalGroup config={config} onPatch={patch} />
       <NamingGroup config={config} onPatch={patch} />
       <AdvancedGroup config={config} onPatch={patch} />
@@ -112,12 +112,17 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
   );
 }
 
-function BehaviorGroup({ onPatch }: { onPatch: (p: any) => void }) {
+function BehaviorGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
+  const b = config.behavior;
   return (
     <Group title="解析与行为">
-      <Row label="保存解析历史" desc="解析过的链接是否入历史（Web 端默认开启）" control={<Toggle checked onChange={() => onPatch({})} />} />
-      <Row label="下载前弹出下载选项框" desc="每次下载前显示下载选项弹窗" control={<Toggle checked onChange={() => onPatch({})} />} />
-      <Row label="解析列表设置" desc="列显隐/交替行色/悬浮条（P6 细节打磨）" control={<span className="small muted">后续章节</span>} />
+      <Row label="保存解析历史" desc="关闭后新解析不再写入解析历史" control={
+        <Toggle checked={b.saveParseHistory} onChange={(v) => onPatch({ behavior: { saveParseHistory: v } })} />
+      } />
+      <Row label="下载前弹出下载选项框" desc="关闭后点“下载选中项”直接按默认选项创建任务" control={
+        <Toggle checked={b.showDownloadOptionsDialog} onChange={(v) => onPatch({ behavior: { showDownloadOptionsDialog: v } })} />
+      } />
+      <Row label="解析列表设置" desc="列显隐/交替行色/悬浮条（原版功能，Web 端暂未实现）" control={<span className="small muted">未实现</span>} />
       <Row label="剪贴板监控 / 窗口行为 / 排序偏好" desc="桌面专属，Web 端暂不支持" control={<span className="small muted">—</span>} />
     </Group>
   );

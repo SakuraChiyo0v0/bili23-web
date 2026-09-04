@@ -159,9 +159,9 @@ export interface MediaOptionSummary {
   itemId: string;
   mediaType: "dash" | "mp4";
   timelength: number;
-  /** 可选画质（含该画质可用编码） */
-  qualities: Array<{ id: number; label: string; codecs: Array<{ id: number; label: string }> }>;
-  audioQualities: Array<{ id: number; label: string }>;
+  /** 可选画质（含该画质可用编码）；videoBandwidth 为该画质约合视频流码率(bps，0=未知) */
+  qualities: Array<{ id: number; label: string; codecs: Array<{ id: number; label: string }>; videoBandwidth: number }>;
+  audioQualities: Array<{ id: number; label: string; audioBandwidth: number }>;
 }
 
 export interface FileEntry {
@@ -625,6 +625,8 @@ export class DownloadManager {
     // 桌面在启动时初始化匿名指纹 cookie（CookieManager.init_cookie_info），
     // Web 侧在首次解析前补齐同一套 cookie，降低 WBI 接口 412 概率
     await this.#sessionReady;
+    // 对齐桌面 Behavior > 保存解析历史：关闭时解析不写入 parse_history
+    const saveParseHistory = (await this.#configReady.then(() => this.#configStore.get())).behavior.saveParseHistory;
     const results: ParseResult[] = [];
     for (const raw of urls) {
       const url = raw.trim();
@@ -635,12 +637,15 @@ export class DownloadManager {
           this.#items.set(item.id, item);
         }
       }
-      this.#store.addParseHistory({
-        url,
-        title: result.title ?? "",
-        type: result.type,
-        itemCount: result.items.length,
-      });
+      if (saveParseHistory) {
+        this.#store.addParseHistory({
+          url,
+          title: result.title ?? "",
+          type: result.type,
+          itemCount: result.items.length,
+        });
+
+      }
       results.push(result);
     }
     return results;
@@ -698,6 +703,7 @@ export class DownloadManager {
     startPn: number,
     pages: number,
   ): Promise<ParseResult | undefined> {
+    const saveParseHistory = (await this.#configReady.then(() => this.#configStore.get())).behavior.saveParseHistory;
     let first: ParseResult | undefined;
     const items: MediaItem[] = [];
     let pagination: ParseResult["pagination"];
@@ -717,12 +723,14 @@ export class DownloadManager {
       if (!result.pagination && result.items.length === 0 && page > startPn) break;
     }
     if (!first) return undefined;
-    this.#store.addParseHistory({
-      url,
-      title: first.title ?? "",
-      type: first.type,
-      itemCount: items.length,
-    });
+    if (saveParseHistory) {
+      this.#store.addParseHistory({
+        url,
+        title: first.title ?? "",
+        type: first.type,
+        itemCount: items.length,
+      });
+    }
     return {
       type: first.type,
       items,
@@ -812,6 +820,20 @@ export class DownloadManager {
   }
 
   /** 拉取某个条目的可选画质/编码/音质（下载选项弹层用） */
+  /** MP4 durl 某画质的约合带宽(bps)：durl 无单独带宽，用 size/timelength 估算 */
+  #durlBandwidth(info: VideoMediaInfo, q: number): number {
+    const list = info.durl ?? [];
+    if (!list.length || info.timelength <= 0) return 0;
+    const seg = list.find((d) => d.order === 0) ?? list[0]!;
+    return Math.round(((seg.size ?? 0) * 8) / (info.timelength / 1000));
+  }
+
+  /** 某音质 id 对应的音频流带宽(bps)；找不到返回 0 */
+  #audioBandwidth(info: VideoMediaInfo, id: number): number {
+    const s = (info.audioList ?? []).find((a) => a.id === id);
+    return s?.bandwidth ?? 0;
+  }
+
   async mediaOptions(itemId: string): Promise<MediaOptionSummary> {
     const item = this.#items.get(itemId);
     if (!item) throw new BiliError("INVALID_URL", `条目不存在：${itemId}`);
@@ -821,12 +843,10 @@ export class DownloadManager {
     for (const q of info.qualities) {
       seen.add(q);
       const byCodec = info.videoByQuality[q];
-      const codecs = byCodec
-        ? Object.keys(byCodec)
-            .map(Number)
-            .map((id) => ({ id, label: codecLabel(id) }))
-        : [];
-      qualities.push({ id: q, label: videoQualityLabel(q), codecs });
+      const codecIds = byCodec ? Object.keys(byCodec).map(Number) : [];
+      const codecs = codecIds.map((id) => ({ id, label: codecLabel(id) }));
+      const firstBw = codecIds[0] != null && byCodec ? (byCodec[codecIds[0]]?.bandwidth ?? 0) : 0;
+      qualities.push({ id: q, label: videoQualityLabel(q), codecs, videoBandwidth: firstBw });
     }
     // 单文件/MP4 直链形态（audio=m4a 192K、lesson=mp4 1080P、durl 视频）没有 DASH qualities，
     // 把接口返回的 mp4Qualities 补进选项，避免下拉只剩"自动"（Task 2.9 顺手修复）
@@ -834,7 +854,7 @@ export class DownloadManager {
       for (const q of info.mp4Qualities) {
         if (seen.has(q)) continue;
         seen.add(q);
-        qualities.push({ id: q, label: info.mp4QualityLabel[q] ?? String(q), codecs: [] });
+        qualities.push({ id: q, label: info.mp4QualityLabel[q] ?? String(q), codecs: [], videoBandwidth: this.#durlBandwidth(info, q) });
       }
     }
     return {
@@ -842,7 +862,7 @@ export class DownloadManager {
       mediaType: info.mediaType,
       timelength: info.timelength,
       qualities,
-      audioQualities: info.audioQualities.map((id) => ({ id, label: audioQualityLabel(id) })),
+      audioQualities: info.audioQualities.map((id) => ({ id, label: audioQualityLabel(id), audioBandwidth: this.#audioBandwidth(info, id) })),
     };
   }
 

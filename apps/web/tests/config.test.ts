@@ -35,7 +35,7 @@ describe("ConfigStore 设置存储（download/behavior/advanced 组）", () => {
         duplicatePolicy: "prompt",
         defaultContainer: "mp4",
       });
-      expect(cfg.behavior).toEqual({ language: "system", theme: "system" });
+      expect(cfg.behavior).toEqual({ language: "system", theme: "system", saveParseHistory: true, showDownloadOptionsDialog: true });
       expect(cfg.advanced).toEqual({ cdnHosts: [] });
       // 旧组内容保留
       expect((cfg.additional.danmaku as { enabled?: boolean } | undefined)?.enabled).toBe(true);
@@ -115,6 +115,39 @@ describe("ConfigStore 设置存储（download/behavior/advanced 组）", () => {
       expect(cfg2.behavior.theme).toBe("dark");
       expect(cfg2.advanced.cdnHosts).toEqual(["cdn.example.com"]);
       expect(cfg2.advanced.defaultVideoQualityId).toBe(80);
+    } finally {
+      await cleanup(dir);
+    }
+  });
+
+  it("behavior 新开关默认开且可持久化，重启保留", async () => {
+    const { dir, file, store } = await makeStore(undefined);
+    try {
+      expect(store.get().behavior.saveParseHistory).toBe(true);
+      expect(store.get().behavior.showDownloadOptionsDialog).toBe(true);
+      const next = await store.update({
+        behavior: { saveParseHistory: false, showDownloadOptionsDialog: false },
+      });
+      expect(next.behavior.saveParseHistory).toBe(false);
+      expect(next.behavior.showDownloadOptionsDialog).toBe(false);
+      const store2 = new ConfigStore(file);
+      await store2.load();
+      expect(store2.get().behavior.saveParseHistory).toBe(false);
+      expect(store2.get().behavior.showDownloadOptionsDialog).toBe(false);
+    } finally {
+      await cleanup(dir);
+    }
+  });
+
+  it("update 校验 behavior 开关必须为布尔", async () => {
+    const { dir, store } = await makeStore(undefined);
+    try {
+      await expect(
+        store.update({ behavior: { saveParseHistory: "yes" } } as never),
+      ).rejects.toThrow(/saveParseHistory/);
+      await expect(
+        store.update({ behavior: { showDownloadOptionsDialog: 1 } } as never),
+      ).rejects.toThrow(/showDownloadOptionsDialog/);
     } finally {
       await cleanup(dir);
     }

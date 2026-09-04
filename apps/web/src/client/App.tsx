@@ -51,7 +51,6 @@ function Shell() {
           title={route.title}
           route={route.id}
           onNavigate={(id: RouteId) => navigate(id)}
-          onToast={() => toast("这是全局提示（Toast），后续用于下载结果与操作反馈。")}
         />
         <main className="content">{renderPage()}</main>
         <MobileTabBar route={route.id} onNavigate={navigate} />

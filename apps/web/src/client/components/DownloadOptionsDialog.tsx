@@ -9,8 +9,8 @@ import type { MediaOptionSummary } from "../services/types";
 export function DownloadOptionsDialog() {
   const {
     open, items, media, mediaLoading, mediaError, form,
-    videoQualityId, audioQualityId, codecId,
-    close, setMedia, setMediaLoading, setMediaError, patchForm, setQuality, setAudio, setCodec,
+    videoQualityId, audioQualityId, codecId, container,
+    close, setMedia, setMediaLoading, setMediaError, patchForm, setQuality, setAudio, setCodec, setContainer,
   } = useDownloadOptions();
   const { toast } = useToast();
   const setTasks = useTasksStore((s) => s.setTasks);
@@ -47,7 +47,7 @@ export function DownloadOptionsDialog() {
       ...(audioQualityId > 0 ? { audioQualityId } : {}),
       ...(codecId > 0 ? { videoCodecId: codecId } : {}),
       extras,
-      container: "mp4" as const,
+      container,
     };
     useDownloadOptions.getState().setResolved(options);
   };
@@ -124,7 +124,7 @@ export function DownloadOptionsDialog() {
             />
           )}
           {activeTab === "additional" && <AdditionalPane form={form} patchForm={patchForm} />}
-          {activeTab === "download" && <DownloadPane />}
+          {activeTab === "download" && <DownloadPane container={container} setContainer={setContainer} />}
         </div>
         <div className="dl-footer">
           <div className="dl-preview">
@@ -141,6 +141,14 @@ export function DownloadOptionsDialog() {
   );
 }
 
+function fmtBytes(b?: number): string {
+  if (!b) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0, n = b;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i > 1 ? 1 : 0)} ${u[i]}`;
+}
+
 function MediaPane({ media, loading, error, form, patchForm, videoQualityId, audioQualityId, codecId, setQuality, setAudio, setCodec }: {
   media?: MediaOptionSummary; loading: boolean; error?: string;
   form: { video: boolean; audio: boolean; merge: boolean; keep: boolean; keepType: string };
@@ -150,7 +158,16 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
 }) {
   const qualities = media?.qualities ?? [];
   const audioQ = media?.audioQualities ?? [];
-  const codecs = media?.qualities[0]?.codecs ?? [];
+  const selQ = qualities.find((q) => q.id === videoQualityId);
+  const codecs = selQ?.codecs ?? [];
+  // 总大小估算：选中画质/编码的视频带宽 + 选中音频带宽 × 时长(秒) / 8；未知带宽时返回 null
+  const sizeBytes = (() => {
+    if (!media || media.timelength <= 0) return null;
+    const vbw = selQ?.videoBandwidth ?? 0;
+    const abw = audioQ.find((a) => a.id === audioQualityId)?.audioBandwidth ?? 0;
+    const total = (vbw + abw) * (media.timelength / 1000) / 8;
+    return total > 0 ? Math.round(total) : null;
+  })();
   return (
     <div className="dl-pane" data-tab="media">
       <div className="dl-card">
@@ -180,7 +197,7 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
               {codecs.map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}
             </select>
           </label>
-          {media?.timelength ? <div className="muted small">时长 {fmtDuration(media.timelength)} · 总大小估算中…</div> : null}
+          {media?.timelength ? <div className="muted small">时长 {fmtDuration(media.timelength)}{sizeBytes ? ` · 约合 ${fmtBytes(sizeBytes)}` : ""}</div> : null}
         </div>
       </div>
       <div className="dl-card">
@@ -222,12 +239,19 @@ function AdditionalPane({ form, patchForm }: {
   );
 }
 
-function DownloadPane() {
+function DownloadPane({ container, setContainer }: { container: "mp4" | "mkv"; setContainer: (v: "mp4" | "mkv") => void }) {
   return (
     <div className="dl-pane" data-tab="download">
       <div className="dl-card">
         <div className="dl-card-title">下载设置</div>
-        <div className="muted small">输出容器默认 MP4；命名规则与编号沿用全局设置（P4 完整接入）。</div>
+        <div className="dl-field">
+          <span>输出容器</span>
+          <div className="seg">
+            <button type="button" className={`seg-btn${container === "mp4" ? " active" : ""}`} onClick={() => setContainer("mp4")}>MP4</button>
+            <button type="button" className={`seg-btn${container === "mkv" ? " active" : ""}`} onClick={() => setContainer("mkv")}>MKV</button>
+          </div>
+        </div>
+        <div className="muted small" style={{ marginTop: 6 }}>命名规则与编号沿用全局设置（设置页 &gt; 命名规则）。</div>
       </div>
     </div>
   );

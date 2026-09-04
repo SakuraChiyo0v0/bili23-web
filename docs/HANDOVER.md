@@ -2,7 +2,7 @@
 
 > 本文档面向**接手继续开发的下一位开发者**。目标：你拿到仓库后，能快速理解它是什么、做到哪一步、
 > 为什么这样设计、怎么跑、怎么部署、有哪些坑，以及接下来该做什么。请先通读一遍再动手。
-> 最近更新：2026-09-04（前端整体移除到 backup 分支，main 为纯 REST/SSE 后端）。
+> 最近更新：2026-09-05（main 已重建 React/Vite 前端并由同一服务静态托管 SPA，本文“纯后端”句子已作为历史说明）。
 > 前端相关文档（重要）：`docs/frontend-kickoff-state.md`（开工状态/恢复入口）→ `docs/original-ui-baseline.md`（原版 1:1 交互基准）
 > → `docs/frontend-structure-plan.md`（前端结构/里程碑）→ `docs/original-reference-notes.md`（原版硬数据速查）。
 
@@ -15,8 +15,8 @@
 
 - **不是**在旧 TS SDK 上改，而是**独立新仓库**。
 - **功能基准** = 桌面版 Python 源码（行为参照、不复制代码）。
-- **当前阶段**：`main` 是**纯后端服务**（Hono REST/SSE + 下载引擎），不含任何前端。
-  此前一版 React/Vite 前端（含扫码登录 UI 等）在 `backup/frontend-20260904`，**已确认废弃：不参考、不复用、不移植**。
+- **当前阶段**：`main` 为**Hono REST/SSE 后端 + React/Vite 前端**。前端源码在 `apps/web/src/client`，构建产物 `dist/client` 由同一服务静态托管。
+  曾经移除的旧 React/Vite 前端快照在 `backup/frontend-20260904`，已确认废弃，不作为当前前端基准。
 
 ---
 
@@ -26,7 +26,7 @@
 | --- | --- |
 | 本地仓库 | `C:\LocalSpace\Projects\My-Proj\NAS-PROJECTS\bili23-web` |
 | 远程 | `https://github.com/SakuraChiyo0v0/bili23-web.git` |
-| 默认分支 | `main`（纯后端） |
+| 默认分支 | `main`（后端 + 前端一体） |
 | 备份分支 | `backup/frontend-20260904`（旧前端快照，已推送） |
 | Git 身份 | `SakuraChiyo0v0` / `3296299414@qq.com` |
 
@@ -53,7 +53,7 @@ git -c http.proxy= -c https.proxy= push origin main
 - **HTTP**：全局 `fetch`（undici），自封装带 cookie/UA/Referer/重试
 - **反爬**：WBI 签名（`api/wbi.ts`）
 
-> 注：前端依赖（React/Vite/@vitejs/plugin-react/qrcode）已从 `main` 移除，只存在于备份分支与历史提交。
+> 注：前端依赖（React/Vite/@vitejs/plugin-react/qrcode）在 `main` 的 `apps/web/package.json` 中；构建输出 `apps/web/dist/client`。
 
 ---
 
@@ -75,7 +75,7 @@ packages/engine/   下载引擎（纯库，无 HTTP 服务）
   src/constants/   画质/编码枚举
   src/index.ts     引擎统一导出
   tests/           引擎单元测试（vitest）
-apps/web/          Web 后端（Hono，纯 API 服务，无前端产物）
+apps/web/          Web 端：Hono 后端 + React/Vite 前端（src/client → dist/client 静态托管）
   src/server/      index.ts（启动）/ routes.ts（接口）/ download-manager.ts（任务调度）/
                    config.ts（全局设置）
   tests/           web 测试（vitest）
@@ -85,8 +85,8 @@ deploy/            NAS compose / .env.example / 部署说明
 docs/              设计与实施文档
 ```
 
-> `main` 上已无 `apps/web/src/client`、`index.html`、`vite.config.ts`、`tsconfig.client.json`、前端测试及前端相关依赖；
-> 服务启动后 `/` 与静态资源不再托管，只提供 `/api/*`。旧前端见备份分支（第 2 节）。
+> `main` 上已有 `apps/web/src/client`（React 前端）、`index.html`、`vite.config.ts`、`tsconfig.client.json`与前端测试。
+> 服务启动后 `/` 与 `/assets/*` 托管前端 SPA；`/api/*` 仍为后端接口。
 
 ---
 
@@ -267,7 +267,8 @@ pnpm --filter @bili23-web/web test
 pnpm --filter @bili23-web/web build
 
 # 启动后端（开发）
-pnpm --filter @bili23-web/web dev:server   # http://localhost:8787（仅 API）
+pnpm --filter @bili23-web/web dev:server   # 后端 http://localhost:8787
+pnpm --filter @bili23-web/web dev:client    # 前端 http://localhost:5173（/api 代理到后端）
 # 或用 tsc 产物跑
 node apps/web/dist/server/index.js
 ```
@@ -295,8 +296,8 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
   -f deploy/docker-compose.nas.yml up -d
 ```
 
-> 镜像变化影响：push main 会自动重建镜像并触发 watchtower。当前镜像**不含任何前端**，
-> 重建后浏览器访问 `:8788` 将只有 API（`/` 404）。若 NAS 上的旧容器仍在服务旧 UI，重建前请先确认。
+> 镜像变化影响：push main 会自动重建镜像并触发 watchtower。当前镜像包含前端（vite build 后静态托管），
+> 重建后浏览器访问 `:8788` 会看到前端页面（若 `dist/client` 未构建则 `/` 404）。
 
 ---
 
@@ -304,7 +305,7 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
 
 1. **412 反爬**：`space/favlist/popular` 等 WBI 接口偶尔返回 `HTTP 412 Precondition Failed`，属 B 站反爬/风控，
    非代码 bug（原版同样会遇到）。重试或稍后再试。非 WBI 接口（video/history/list/festival）基本稳定。
-2. **当前 `/` 返回 404**：`main` 为纯 API 后端，不再托管前端页面。前端需重建（见 §12）。
+2. **编辑前端需先 `pnpm --filter @bili23-web/web build`**：启动服务时若 `dist/client` 不存在，`/` 会返回 404。开发时可用 `dev:client`（Vite dev server）。
 3. **文件行尾是 CRLF**：编辑 `apps/web/src/server/*.ts`、`packages/engine/src/*.ts` 等文件时注意行尾
    （git 暂存会提示 CRLF→LF）。多行字符串替换务必用 `\r?\n`。
 4. **`engine` 与 `web` 的构建顺序**：改 engine 后需先 build engine，web 才能拿到新类型。
@@ -320,9 +321,9 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
 ## 12. 待办 / 建议（接手后）
 
 ### 必须
-- [ ] **重建前端**（响应式、移动端可用）。当前 `main` 不含前端，服务只提供 `/api/*`。
-      建议做成 B 站官网风格、动效丰富、响应式；通过 `/api/*` 对接后端。
-      前端按 `docs/original-ui-baseline.md`（原版 UI/交互 1:1 基准）与 `docs/frontend-structure-plan.md`（结构与实现方案）重建。
+- [x] **重建前端**：2026-09-05 已在 `main` 完成 React/Vite 前端（解析/下载/设置/登录/收藏夹），构建后由同一服务静态托管。
+      前端源码 `apps/web/src/client`，对接 `/api/*`；开发用 `pnpm --filter @bili23-web/web dev:client`。
+
 
 ### 建议
 - [ ] 把 `/api/parse` 的 `pn/pages` 透传到前端「批量翻页」交互。

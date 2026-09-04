@@ -100,13 +100,18 @@ export interface MediaOptionSummary {
   itemId: string;
   mediaType: "dash" | "mp4";
   timelength: number;
-  qualities: Array<{ id: number; label: string; codecs: Array<{ id: number; label: string }> }>;
-  audioQualities: Array<{ id: number; label: string }>;
+  qualities: Array<{ id: number; label: string; codecs: Array<{ id: number; label: string }>; videoBandwidth: number }>;
+  audioQualities: Array<{ id: number; label: string; audioBandwidth: number }>;
 }
 
 /** 全局配置（config.ts 的 AppConfig，前端只读/写关心的子集） */
 export interface AppConfig {
-  behavior: { language: string; theme: string };
+  behavior: {
+    language: string;
+    theme: string;
+    saveParseHistory: boolean;
+    showDownloadOptionsDialog: boolean;
+  };
   download: {
     dir: string; parallel: number; threads: number; speedLimitKbps: number;
     renamePolicy: string; duplicatePolicy: string; defaultContainer: "mp4" | "mkv";

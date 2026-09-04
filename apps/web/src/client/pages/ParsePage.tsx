@@ -1,8 +1,9 @@
 import { useCallback } from "react";
-import { parseUrl } from "../services/client";
+import { createTasks, parseUrl } from "../services/client";
 import { useDownloadOptions } from "../store/useDownloadOptions";
 import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
 import { useParseSession } from "../store/useParseSession";
+import { useSettingsStore } from "../store/useSettingsStore";
 import { useToast } from "../lib/toast";
 import { ParseTree } from "../components/ParseTree";
 
@@ -40,11 +41,35 @@ export function ParsePage() {
   }, [session, toast]);
 
   const { openDialog } = useDownloadOptions();
-  const doDownload = useCallback(() => {
+  const cfg = useSettingsStore((st) => st.config);
+  const doDownload = useCallback(async () => {
     const leaves = session.selectedLeaves();
     if (!leaves.length) { toast("请先勾选要下载的条目", "warn"); return; }
-    openDialog(leaves);
-  }, [session, openDialog, toast]);
+    // 对齐桌面 Behavior > 下载前弹下载选项框：开启（默认）→ 弹窗；关闭 → 按默认选项直接创建
+    if (cfg?.behavior.showDownloadOptionsDialog !== false) {
+      openDialog(leaves);
+      return;
+    }
+    const ids = leaves.map((i) => i.id);
+    const container = cfg?.download?.defaultContainer === "mkv" ? ("mkv" as const) : ("mp4" as const);
+    const options = {
+      downloadVideo: true,
+      downloadAudio: true,
+      mergeVideoAudio: true,
+      container,
+    };
+    try {
+      const { tasks } = await createTasks(ids, options);
+      toast(`已创建 ${tasks.length} 个下载任务`, "ok");
+    } catch (e) {
+      const err = e as Error & { code?: string; duplicates?: Array<{ itemId: string; title: string }> };
+      if (err.code === "DUPLICATE" || (err.duplicates && err.duplicates.length)) {
+        toast(`已跳过 ${err.duplicates?.length ?? ids.length} 个重复项`, "warn");
+      } else {
+        toast("创建任务失败：" + (e instanceof Error ? e.message : String(e)), "err");
+      }
+    }
+  }, [session, cfg, openDialog, toast]);
 
 
   const leaves = session.selectedLeaves();

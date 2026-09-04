@@ -6,7 +6,8 @@ Hono REST/SSE 后端；引擎在 `packages/engine`（workspace 依赖）。
 
 ```bash
 pnpm install
-pnpm --filter @bili23-web/web dev:server   # http://localhost:8787（后端 API）
+pnpm --filter @bili23-web/web dev:server   # 后端 http://localhost:8787（后端 API）
+pnpm --filter @bili23-web/web dev:client   # 前端 http://localhost:5173（Vite dev server，/api 代理到后端）
 ```
 
 ## 生产构建与冒烟
