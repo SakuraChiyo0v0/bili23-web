@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { mediaOptions, createTasks } from "../services/client";
 import { DuplicateDialog } from "./DuplicateDialog";
-import { useDownloadOptions } from "../store/useDownloadOptions";
+import { StyleEditor, type StyleValues } from "./StyleEditor";
+import { useDownloadOptions, formToExtras, type ExtraOptionState, type DanmakuFormat, type SubtitleFormat, type CoverFormat, type MetadataFormat } from "../store/useDownloadOptions";
+import { useSettingsStore } from "../store/useSettingsStore";
 import { useTasksStore } from "../store/useTasksStore";
 import { useToast } from "../lib/toast";
+import { Icon } from "../lib/icons";
 import type { MediaOptionSummary } from "../services/types";
 
 export function DownloadOptionsDialog() {
@@ -14,8 +17,28 @@ export function DownloadOptionsDialog() {
   } = useDownloadOptions();
   const { toast } = useToast();
   const setTasks = useTasksStore((s) => s.setTasks);
+  const settingsCfg = useSettingsStore((st) => st.config);
+  const settingsLoad = useSettingsStore((st) => st.load);
   const [dupList, setDupList] = useState<Array<{ itemId: string; title: string }>>([]);
   const [activeTab, setActiveTab] = useState("media");
+  // 样式编辑弹窗（kind + 当前值）
+  const [styleKind, setStyleKind] = useState<"" | "danmaku" | "subtitle">("");
+  // 字幕语言选择弹窗
+  const [langOpen, setLangOpen] = useState(false);
+  // 本次任务命名规则（undefined = 沿用全局设置默认）
+  const [namingRuleId, setNamingRuleId] = useState<string | undefined>(undefined);
+  const allRules = (settingsCfg?.fileNaming?.rules as Array<{ id: string; name: string; type: number; rule: string; default?: boolean }> | undefined) ?? [];
+  const namingChoices = allRules.length > 0
+    ? [{ id: "", name: "沿用全局设置", type: 0 as number, rule: "" }, ...allRules]
+    : [{ id: "", name: "沿用全局设置", type: 0 as number, rule: "" }];
+
+  // 打开时确保全局配置已加载（用于初始化附加默认与命名规则列表）
+  useEffect(() => {
+    if (!open) return;
+    if (!useSettingsStore.getState().config && !useSettingsStore.getState().loading) {
+      void settingsLoad();
+    }
+  }, [open, settingsLoad]);
 
   // 打开时拉取首个条目的媒体候选
   useEffect(() => {
@@ -30,14 +53,9 @@ export function DownloadOptionsDialog() {
 
   // 组装 DownloadOptions（点确认时）
   const buildOptions = (): void => {
-    const extras = {
-      danmaku: { enabled: form.danmaku },
-      subtitle: { enabled: form.subtitle },
-      cover: { enabled: form.cover },
-      chapter: { embed: form.chapter },
-      metadata: { enabled: form.metadata },
-    };
-    const options = {
+    const extras = formToExtras(form);
+    const selectedRule = namingRuleId ? allRules.find((r) => r.id === namingRuleId) : undefined;
+    const options: import("../services/types").DownloadOptions = {
       downloadVideo: form.video,
       downloadAudio: form.audio,
       mergeVideoAudio: form.merge,
@@ -46,6 +64,7 @@ export function DownloadOptionsDialog() {
       ...(videoQualityId > 0 ? { videoQualityId } : {}),
       ...(audioQualityId > 0 ? { audioQualityId } : {}),
       ...(codecId > 0 ? { videoCodecId: codecId } : {}),
+      ...(selectedRule ? { naming: { conventionType: selectedRule.type, rule: selectedRule.rule, number: "" } } : {}),
       extras,
       container,
     };
@@ -123,8 +142,19 @@ export function DownloadOptionsDialog() {
               setQuality={setQuality} setAudio={setAudio} setCodec={setCodec}
             />
           )}
-          {activeTab === "additional" && <AdditionalPane form={form} patchForm={patchForm} />}
-          {activeTab === "download" && <DownloadPane container={container} setContainer={setContainer} />}
+          {activeTab === "additional" && (
+            <AdditionalPane
+              form={form} patchForm={patchForm}
+              container={container}
+              styleKind={styleKind} setStyleKind={setStyleKind}
+              langOpen={langOpen} setLangOpen={setLangOpen}
+            />
+          )}
+          {activeTab === "download" && (
+            <DownloadPane container={container} setContainer={setContainer}
+              namingRuleId={namingRuleId} setNamingRuleId={setNamingRuleId}
+              namingChoices={namingChoices} />
+          )}
         </div>
         <div className="dl-footer">
           <div className="dl-preview">
@@ -151,8 +181,8 @@ function fmtBytes(b?: number): string {
 
 function MediaPane({ media, loading, error, form, patchForm, videoQualityId, audioQualityId, codecId, setQuality, setAudio, setCodec }: {
   media?: MediaOptionSummary; loading: boolean; error?: string;
-  form: { video: boolean; audio: boolean; merge: boolean; keep: boolean; keepType: string };
-  patchForm: (p: Partial<{ video: boolean; audio: boolean; merge: boolean; keep: boolean; keepType: "both" | "video" | "audio" }>) => void;
+  form: ExtraOptionState;
+  patchForm: (p: Partial<ExtraOptionState>) => void;
   videoQualityId: number; audioQualityId: number; codecId: number;
   setQuality: (v: number) => void; setAudio: (v: number) => void; setCodec: (v: number) => void;
 }) {
@@ -227,29 +257,151 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
   );
 }
 
-function AdditionalPane({ form, patchForm }: {
-  form: { danmaku: boolean; subtitle: boolean; cover: boolean; chapter: boolean; metadata: boolean };
-  patchForm: (p: Partial<{ danmaku: boolean; subtitle: boolean; cover: boolean; chapter: boolean; metadata: boolean }>) => void;
+
+const DANMAKU_FORMATS: Array<{ v: DanmakuFormat; label: string }> = [
+  { v: "xml", label: "XML" }, { v: "ass", label: "ASS" }, { v: "json", label: "JSON" },
+];
+const SUBTITLE_FORMATS: Array<{ v: SubtitleFormat; label: string }> = [
+  { v: "srt", label: "SRT" }, { v: "lrc", label: "LRC" }, { v: "txt", label: "TXT" },
+  { v: "ass", label: "ASS" }, { v: "json", label: "JSON" },
+];
+const COVER_FORMATS: Array<{ v: CoverFormat; label: string }> = [
+  { v: "jpg", label: "JPG" }, { v: "png", label: "PNG" }, { v: "avif", label: "AVIF" }, { v: "webp", label: "WEBP" },
+];
+const METADATA_FORMATS: Array<{ v: MetadataFormat; label: string }> = [
+  { v: "nfo", label: "NFO" }, { v: "json", label: "JSON" },
+];
+
+function AdditionalPane({
+  form, patchForm, container, styleKind, setStyleKind, langOpen, setLangOpen,
+}: {
+  form: ExtraOptionState;
+  patchForm: (p: Partial<ExtraOptionState>) => void;
+  container: "mp4" | "mkv";
+  styleKind: "" | "danmaku" | "subtitle";
+  setStyleKind: (v: "" | "danmaku" | "subtitle") => void;
+  langOpen: boolean;
+  setLangOpen: (v: boolean) => void;
 }) {
+  const canAssEmbed = container === "mkv";
+  const patch = (p: Partial<ExtraOptionState>) => patchForm(p);
   return (
     <div className="dl-pane" data-tab="additional">
       <div className="dl-card">
-        <div className="dl-card-title">附加文件</div>
-        <ToggleRow label="弹幕" checked={form.danmaku} onChange={(v) => patchForm({ danmaku: v })} />
-        <ToggleRow label="字幕" checked={form.subtitle} onChange={(v) => patchForm({ subtitle: v })} />
-        <ToggleRow label="封面" checked={form.cover} onChange={(v) => patchForm({ cover: v })} />
-        <ToggleRow label="章节" checked={form.chapter} onChange={(v) => patchForm({ chapter: v })} />
-        <ToggleRow label="元数据" checked={form.metadata} onChange={(v) => patchForm({ metadata: v })} />
+        <div className="dl-card-title">弹幕</div>
+        <ToggleRow label="下载弹幕" checked={form.danmaku.enabled} onChange={(v) => patch({ danmaku: { ...form.danmaku, enabled: v } })} />
+        {form.danmaku.enabled && (
+          <div className="dl-extra-rows">
+            <InlineSelect label="格式" value={form.danmaku.format} options={DANMAKU_FORMATS}
+              onChange={(format) => patch({ danmaku: { ...form.danmaku, format } })} />
+            <div className="dl-inline"><span>样式（仅 ASS 生效）</span>
+              <button type="button" className="btn sm ghost" onClick={() => setStyleKind("danmaku")}>自定义…</button>
+            </div>
+            <ToggleRow label={`嵌入视频（作为字幕轨，需 ASS + ${canAssEmbed ? "MKV" : "容器切到 MKV"}）`}
+              checked={form.danmaku.embed}
+              disabled={!canAssEmbed || form.danmaku.format !== "ass"}
+              onChange={(v) => patch({ danmaku: { ...form.danmaku, embed: v } })} />
+            {form.danmaku.embed && canAssEmbed && form.danmaku.format === "ass" && (
+              <ToggleRow label="嵌入后删除源文件" checked={form.danmaku.deleteAfterEmbed}
+                onChange={(v) => patch({ danmaku: { ...form.danmaku, deleteAfterEmbed: v } })} />
+            )}
+          </div>
+        )}
       </div>
+      <div className="dl-card">
+        <div className="dl-card-title">字幕</div>
+        <ToggleRow label="下载字幕" checked={form.subtitle.enabled} onChange={(v) => patch({ subtitle: { ...form.subtitle, enabled: v } })} />
+        {form.subtitle.enabled && (
+          <div className="dl-extra-rows">
+            <InlineSelect label="格式" value={form.subtitle.format} options={SUBTITLE_FORMATS}
+              onChange={(format) => patch({ subtitle: { ...form.subtitle, format } })} />
+            <div className="dl-inline"><span>语言</span>
+              <button type="button" className="btn sm ghost" onClick={() => setLangOpen(true)}>
+                {form.subtitle.language.downloadSpecified && form.subtitle.language.specifiedLanguages.length > 0
+                  ? `指定 ${form.subtitle.language.specifiedLanguages.length} 种`
+                  : "全部语言"}
+              </button>
+            </div>
+            <div className="dl-inline"><span>样式（仅 ASS 生效）</span>
+              <button type="button" className="btn sm ghost" onClick={() => setStyleKind("subtitle")}>自定义…</button>
+            </div>
+            <ToggleRow label={`嵌入视频（作为字幕轨，需 ASS + ${canAssEmbed ? "MKV" : "容器切到 MKV"}）`}
+              checked={form.subtitle.embed}
+              disabled={!canAssEmbed || form.subtitle.format !== "ass"}
+              onChange={(v) => patch({ subtitle: { ...form.subtitle, embed: v } })} />
+            {form.subtitle.embed && canAssEmbed && form.subtitle.format === "ass" && (
+              <ToggleRow label="嵌入后删除源文件" checked={form.subtitle.deleteAfterEmbed}
+                onChange={(v) => patch({ subtitle: { ...form.subtitle, deleteAfterEmbed: v } })} />
+            )}
+          </div>
+        )}
+      </div>
+      <div className="dl-card">
+        <div className="dl-card-title">封面</div>
+        <ToggleRow label="下载封面" checked={form.cover.enabled} onChange={(v) => patch({ cover: { ...form.cover, enabled: v } })} />
+        {form.cover.enabled && (
+          <div className="dl-extra-rows">
+            <InlineSelect label="格式" value={form.cover.format} options={COVER_FORMATS}
+              onChange={(format) => {
+                const next = { ...form.cover, format };
+                if (format === "avif") next.attach = false;
+                patch({ cover: next });
+              }} />
+            <ToggleRow label="嵌入封面到视频文件" checked={form.cover.attach} disabled={form.cover.format === "avif"}
+              onChange={(v) => patch({ cover: { ...form.cover, attach: v } })} />
+            {form.cover.attach && form.cover.format !== "avif" && (
+              <ToggleRow label="嵌入后删除源图片" checked={form.cover.deleteAfterAttach}
+                onChange={(v) => patch({ cover: { ...form.cover, deleteAfterAttach: v } })} />
+            )}
+          </div>
+        )}
+      </div>
+      <div className="dl-card">
+        <div className="dl-card-title">章节</div>
+        <ToggleRow label="嵌入章节信息（合并时生效）" checked={form.chapter.embed}
+          onChange={(v) => patch({ chapter: { embed: v } })} />
+      </div>
+      <div className="dl-card">
+        <div className="dl-card-title">元数据</div>
+        <ToggleRow label="下载元数据（NFO 刮削）" checked={form.metadata.enabled}
+          onChange={(v) => patch({ metadata: { ...form.metadata, enabled: v } })} />
+        {form.metadata.enabled && (
+          <div className="dl-extra-rows">
+            <InlineSelect label="格式" value={form.metadata.format} options={METADATA_FORMATS}
+              onChange={(format) => patch({ metadata: { ...form.metadata, format } })} />
+          </div>
+        )}
+      </div>
+      {/* 字幕语言选择 */}
+      <SubtitleLanguageDialog open={langOpen} onClose={() => setLangOpen(false)}
+        selection={form.subtitle.language}
+        onChange={(language) => patch({ subtitle: { ...form.subtitle, language } })} />
+      <StyleEditor
+        open={styleKind === "danmaku" || styleKind === "subtitle"}
+        onClose={() => setStyleKind("")}
+        kind={styleKind === "subtitle" ? "subtitle" : "danmaku"}
+        value={(styleKind === "subtitle" ? form.subtitle.style : form.danmaku.style) as StyleValues | undefined}
+        onChange={(sv) => {
+          if (styleKind === "subtitle") patch({ subtitle: { ...form.subtitle, style: sv as ExtraOptionState["subtitle"]["style"] } });
+          else patch({ danmaku: { ...form.danmaku, style: sv as ExtraOptionState["danmaku"]["style"] } });
+        }}
+      />
     </div>
   );
 }
 
-function DownloadPane({ container, setContainer }: { container: "mp4" | "mkv"; setContainer: (v: "mp4" | "mkv") => void }) {
+
+function DownloadPane({ container, setContainer, namingRuleId, setNamingRuleId, namingChoices }: {
+  container: "mp4" | "mkv";
+  setContainer: (v: "mp4" | "mkv") => void;
+  namingRuleId: string | undefined;
+  setNamingRuleId: (v: string | undefined) => void;
+  namingChoices: Array<{ id: string; name: string; type: number; rule: string }>;
+}) {
   return (
     <div className="dl-pane" data-tab="download">
       <div className="dl-card">
-        <div className="dl-card-title">下载设置</div>
+        <div className="dl-card-title">输出</div>
         <div className="dl-field">
           <span>输出容器</span>
           <div className="seg">
@@ -257,7 +409,75 @@ function DownloadPane({ container, setContainer }: { container: "mp4" | "mkv"; s
             <button type="button" className={`seg-btn${container === "mkv" ? " active" : ""}`} onClick={() => setContainer("mkv")}>MKV</button>
           </div>
         </div>
-        <div className="muted small" style={{ marginTop: 6 }}>命名规则与编号沿用全局设置（设置页 &gt; 命名规则）。</div>
+        <label className="dl-field">
+          <span>命名规则</span>
+          <select className="text-input" value={namingRuleId ?? ""} onChange={(e) => setNamingRuleId(e.target.value || undefined)}>
+            {namingChoices.map((r) => <option key={r.id || "global"} value={r.id}>{r.name}</option>)}
+          </select>
+        </label>
+        <div className="muted small" style={{ marginTop: 6 }}>编号与起始号沿用全局设置（设置页 &gt; 命名规则）。</div>
+      </div>
+    </div>
+  );
+}
+
+function InlineSelect<T extends string>({ label, value, options, onChange }: {
+  label: string; value: T; options: Array<{ v: T; label: string }>; onChange: (v: T) => void;
+}) {
+  return (
+    <label className="dl-inline">
+      <span>{label}</span>
+      <select className="text-input" value={value} onChange={(e) => onChange(e.target.value as T)}>
+        {options.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/** 字幕语言选择：可选语言与 B 站字幕接口一致 */
+const SUBTITLE_LANGS = [
+  { v: "zh-CN", label: "简体中文" }, { v: "zh-TW", label: "繁体中文" },
+  { v: "en", label: "英语" }, { v: "ja", label: "日语" },
+  { v: "ko", label: "韩语" }, { v: "ai-zh", label: "AI 中文" },
+  { v: "ai-en", label: "AI 英文" },
+];
+function SubtitleLanguageDialog({ open, onClose, selection, onChange }: {
+  open: boolean; onClose: () => void;
+  selection: { downloadSpecified: boolean; specifiedLanguages: string[] };
+  onChange: (v: { downloadSpecified: boolean; specifiedLanguages: string[] }) => void;
+}) {
+  const [specified, setSpecified] = useState<boolean>(selection.downloadSpecified);
+  const [langs, setLangs] = useState<string[]>(selection.specifiedLanguages);
+  if (!open) return null;
+  const toggleLang = (v: string) => {
+    setLangs((cur) => cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]);
+  };
+  return (
+    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal sm">
+        <div className="modal-head"><div className="modal-title">字幕语言</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="dl-toggle"><span>只下载指定语言</span>
+            <input type="checkbox" className="switch" checked={specified} onChange={(e) => setSpecified(e.target.checked)} />
+          </div>
+          {specified && (
+            <div className="lang-grid">
+              {SUBTITLE_LANGS.map((l) => (
+                <label key={l.v} className="lang-chip"><input type="checkbox" checked={langs.includes(l.v)}
+                  onChange={() => toggleLang(l.v)} /> {l.label}</label>
+              ))}
+            </div>
+          )}
+          {specified && langs.length === 0 && <div className="muted small">请至少选择一种语言</div>}
+        </div>
+        <div className="modal-foot">
+          <div className="right">
+            <button type="button" className="btn" onClick={onClose}>取消</button>
+            <button type="button" className="btn primary" onClick={() => { onChange({ downloadSpecified: specified, specifiedLanguages: specified ? langs : [] }); onClose(); }}>确定</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -272,19 +492,19 @@ function ToggleRow({ label, checked, onChange, disabled }: { label: string; chec
   );
 }
 
-function anyExtra(form: { video: boolean; audio: boolean; danmaku: boolean; subtitle: boolean; cover: boolean; chapter: boolean; metadata: boolean }): boolean {
-  return form.video || form.audio || form.danmaku || form.subtitle || form.cover || form.chapter || form.metadata;
+function anyExtra(form: ExtraOptionState): boolean {
+  return form.video || form.audio || form.danmaku.enabled || form.subtitle.enabled || form.cover.enabled || form.chapter.embed || form.metadata.enabled;
 }
 
-function buildChips(form: { video: boolean; audio: boolean; merge: boolean; danmaku: boolean; subtitle: boolean; cover: boolean; chapter: boolean; metadata: boolean }): string[] {
+function buildChips(form: ExtraOptionState): string[] {
   const chips: string[] = [];
   if (form.video) chips.push("video");
   if (form.audio) chips.push("audio");
-  if (form.danmaku) chips.push("danmaku");
-  if (form.subtitle) chips.push("subtitle");
-  if (form.cover) chips.push("cover");
-  if (form.chapter) chips.push("chapter");
-  if (form.metadata) chips.push("metadata");
+  if (form.danmaku.enabled) chips.push("danmaku");
+  if (form.subtitle.enabled) chips.push("subtitle");
+  if (form.cover.enabled) chips.push("cover");
+  if (form.chapter.embed) chips.push("chapter");
+  if (form.metadata.enabled) chips.push("metadata");
   return chips;
 }
 

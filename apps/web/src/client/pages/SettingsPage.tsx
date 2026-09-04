@@ -131,17 +131,78 @@ function BehaviorGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
 function AdditionalGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
   const a = config.additional || {};
   const [styleKind, setStyleKind] = useState<"" | "danmaku" | "subtitle">("");
+  const patch = (extra: string, patchObj: any) => onPatch({ additional: { [extra]: patchObj } });
+  const patchD = (patchObj: any) => patch("danmaku", { ...a.danmaku, ...patchObj });
+  const patchS = (patchObj: any) => patch("subtitle", { ...a.subtitle, ...patchObj });
+  const patchC = (patchObj: any) => patch("cover", { ...a.cover, ...patchObj });
+  const patchM = (patchObj: any) => patch("metadata", { ...a.metadata, ...patchObj });
   return (
     <Group title="附加内容">
-      <Row label="弹幕" desc="下载弹幕" control={<><Toggle checked={a.danmaku?.enabled} onChange={(v) => onPatch({ additional: { danmaku: { ...a.danmaku, enabled: v } } })} /><button type="button" className="btn sm ghost" onClick={() => setStyleKind("danmaku")}>样式</button></>} />
-      <Row label="字幕" desc="下载字幕" control={<><Toggle checked={a.subtitle?.enabled} onChange={(v) => onPatch({ additional: { subtitle: { ...a.subtitle, enabled: v } } })} /><button type="button" className="btn sm ghost" onClick={() => setStyleKind("subtitle")}>样式</button></>} />
-      <Row label="封面" desc="下载封面" control={<Toggle checked={a.cover?.enabled} onChange={(v) => onPatch({ additional: { cover: { ...a.cover, enabled: v } } })} />} />
-      <Row label="章节" desc="内嵌章节信息" control={<Toggle checked={a.chapter?.embed} onChange={(v) => onPatch({ additional: { chapter: { ...a.chapter, embed: v } } })} />} />
-      <Row label="元数据" desc="下载元数据（NFO 刮削）" control={<Toggle checked={a.metadata?.enabled} onChange={(v) => onPatch({ additional: { metadata: { ...a.metadata, enabled: v } } })} />} />
-    <StyleEditor open={!!styleKind} onClose={() => setStyleKind("")} kind={styleKind || "danmaku"} value={styleKind === "subtitle" ? a.subtitle?.style : a.danmaku?.style} onChange={(sv) => {
-        if (styleKind === "subtitle") onPatch({ additional: { subtitle: { ...a.subtitle, style: sv } } });
-        else onPatch({ additional: { danmaku: { ...a.danmaku, style: sv } } });
-      }} />
+      <div className="panel-sep">弹幕</div>
+      <Row label="下载弹幕" desc="" control={<Toggle checked={a.danmaku?.enabled} onChange={(v) => patchD({ enabled: v })} />} />
+      {a.danmaku?.enabled && (
+        <>
+          <Row label="弹幕格式" desc="输出格式" control={
+            <select className="text-input" style={{ width: 140 }} value={a.danmaku?.format ?? "ass"} onChange={(e) => patchD({ format: e.target.value })}>
+              <option value="xml">XML</option><option value="ass">ASS</option><option value="json">JSON</option>
+            </select>
+          } />
+          <Row label="弹幕样式" desc="仅 ASS 生效" control={<button type="button" className="btn sm ghost" onClick={() => setStyleKind("danmaku")}>自定义…</button>} />
+          <Row label="嵌入视频" desc="作为字幕轨，需 ASS + MKV" control={<Toggle checked={a.danmaku?.embed} onChange={(v) => patchD({ embed: v })} />} />
+          {a.danmaku?.embed && (
+            <Row label="嵌入后删除源文件" desc="" control={<Toggle checked={a.danmaku?.deleteAfterEmbed} onChange={(v) => patchD({ deleteAfterEmbed: v })} />} />
+          )}
+        </>
+      )}
+      <div className="panel-sep">字幕</div>
+      <Row label="下载字幕" desc="" control={<Toggle checked={a.subtitle?.enabled} onChange={(v) => patchS({ enabled: v })} />} />
+      {a.subtitle?.enabled && (
+        <>
+          <Row label="字幕格式" desc="输出格式" control={
+            <select className="text-input" style={{ width: 140 }} value={a.subtitle?.format ?? "ass"} onChange={(e) => patchS({ format: e.target.value })}>
+              <option value="srt">SRT</option><option value="lrc">LRC</option><option value="txt">TXT</option>
+              <option value="ass">ASS</option><option value="json">JSON</option>
+            </select>
+          } />
+          <Row label="字幕样式" desc="仅 ASS 生效" control={<button type="button" className="btn sm ghost" onClick={() => setStyleKind("subtitle")}>自定义…</button>} />
+          <Row label="嵌入视频" desc="作为字幕轨，需 ASS + MKV" control={<Toggle checked={a.subtitle?.embed} onChange={(v) => patchS({ embed: v })} />} />
+          {a.subtitle?.embed && (
+            <Row label="嵌入后删除源文件" desc="" control={<Toggle checked={a.subtitle?.deleteAfterEmbed} onChange={(v) => patchS({ deleteAfterEmbed: v })} />} />
+          )}
+        </>
+      )}
+      <div className="panel-sep">封面</div>
+      <Row label="下载封面" desc="" control={<Toggle checked={a.cover?.enabled} onChange={(v) => patchC({ enabled: v })} />} />
+      {a.cover?.enabled && (
+        <>
+          <Row label="封面格式" desc="" control={
+            <select className="text-input" style={{ width: 140 }} value={a.cover?.format ?? "jpg"} onChange={(e) => { const format = e.target.value; patchC({ format, attach: format === "avif" ? false : a.cover?.attach }); }}>
+              <option value="jpg">JPG</option><option value="png">PNG</option>
+              <option value="avif">AVIF</option><option value="webp">WEBP</option>
+            </select>
+          } />
+          <Row label="嵌入封面" desc="AVIF 不支持嵌入" control={<Toggle checked={a.cover?.attach} onChange={(v) => patchC({ attach: v })} />} />
+          {a.cover?.attach && (
+            <Row label="嵌入后删除源图片" desc="" control={<Toggle checked={a.cover?.deleteAfterAttach} onChange={(v) => patchC({ deleteAfterAttach: v })} />} />
+          )}
+        </>
+      )}
+      <div className="panel-sep">章节 / 元数据</div>
+      <Row label="内嵌章节信息" desc="合并时生效" control={<Toggle checked={a.chapter?.embed} onChange={(v) => patch("chapter", { ...a.chapter, embed: v })} />} />
+      <Row label="下载元数据" desc="" control={<Toggle checked={a.metadata?.enabled} onChange={(v) => patchM({ enabled: v })} />} />
+      {a.metadata?.enabled && (
+        <Row label="元数据格式" desc="" control={
+          <select className="text-input" style={{ width: 140 }} value={a.metadata?.format ?? "nfo"} onChange={(e) => patchM({ format: e.target.value })}>
+            <option value="nfo">NFO</option><option value="json">JSON</option>
+          </select>
+        } />
+      )}
+      <StyleEditor open={!!styleKind} onClose={() => setStyleKind("")} kind={styleKind || "danmaku"}
+        value={(styleKind === "subtitle" ? a.subtitle?.style : a.danmaku?.style) as any}
+        onChange={(sv: any) => {
+          if (styleKind === "subtitle") patchS({ style: sv });
+          else patchD({ style: sv });
+        }} />
     </Group>
   );
 }
