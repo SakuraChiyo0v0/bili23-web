@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { DownloadManager } from "./download-manager.js";
 import { registerApi } from "./routes.js";
 import { join } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve, sep } from "node:path";
+
 
 export interface CreateAppOptions {
   /** 测试注入 manager；缺省按环境变量懒加载默认实例 */
@@ -24,7 +27,7 @@ function getDefaultManager(): DownloadManager {
   return defaultManager;
 }
 
-const CLIENT_DIR = join(process.cwd(), "dist", "client");
+const CLIENT_DIR = process.cwd() + sep + join("dist", "client");
 
 /** 静态资源 MIME（只覆盖前端产物需要的类型） */
 function contentTypes(path: string): string {
@@ -38,6 +41,12 @@ function contentTypes(path: string): string {
   return "application/octet-stream";
 }
 
+/** 解析到 dist/client 内路径；若越界返回 undefined（防目录穿越） */
+function safeClientPath(rel: string): string | undefined {
+  const abs = resolve(CLIENT_DIR, rel);
+  return abs === CLIENT_DIR || abs.startsWith(CLIENT_DIR + sep) ? abs : undefined;
+}
+
 export function createApp(opts: CreateAppOptions = {}) {
   const app = new Hono();
   const getManager = (): DownloadManager => opts.manager ?? getDefaultManager();
@@ -48,19 +57,25 @@ export function createApp(opts: CreateAppOptions = {}) {
   // 前端 SPA（hash 路由）：托管 dist/client 静态文件，非 /api/* 且非静态文件时回退 index.html
   if (existsSync(CLIENT_DIR)) {
     app.get("/assets/*", async (c) => {
-      const file = await import("node:fs/promises").then((m) =>
-        m.readFile(join(CLIENT_DIR, "assets", c.req.path.replace(/^\/assets\//, ""))),
-      );
-      return new Response(file, { headers: { "Content-Type": contentTypes(c.req.path) } });
+      const rel = "assets/" + c.req.path.replace(/^\/assets\//, "");
+      const abs = safeClientPath(rel);
+      if (!abs) return c.notFound();
+      try {
+        const file = await import("node:fs/promises").then((m) => m.readFile(abs));
+        return new Response(file, { headers: { "Content-Type": contentTypes(c.req.path) } });
+      } catch {
+        return c.notFound();
+      }
     });
     app.get("*", (c) => {
       const path = new URL(c.req.url).pathname;
       if (path.startsWith("/api")) return c.notFound();
-      let resolved = join(CLIENT_DIR, path.replace(/^\/+/, ""));
-      if (!existsSync(resolved) || resolved === CLIENT_DIR) {
-        resolved = join(CLIENT_DIR, "index.html");
+      const abs = safeClientPath(path.replace(/^\/+/, ""));
+      if (abs && existsSync(abs) && statSync(abs).isFile()) {
+        return new Response(readFileSync(abs), { headers: { "Content-Type": contentTypes(abs) } });
       }
-      return new Response(readFileSync(resolved), { headers: { "Content-Type": contentTypes(resolved) } });
+      // 目录/空 path/未知路径 → 回退 index.html（SPA hash 路由）
+      return new Response(readFileSync(resolve(CLIENT_DIR, "index.html")), { headers: { "Content-Type": "text/html" } });
     });
   }
 
