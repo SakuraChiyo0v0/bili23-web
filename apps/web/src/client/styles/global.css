@@ -163,6 +163,7 @@ html[data-theme=dark] .overlay{ background:rgba(0,0,0,.55); }
   .overlay.sheet-on-mobile .modal{ max-height:94vh; }
   .overlay.sheet-on-mobile .modal-head{ padding-top:14px; }
   .setting-row{ flex-wrap:wrap; padding:12px 14px; }
+  .panel-sep{ padding-left:14px; padding-right:14px; }
   .control{ width:100%; justify-content:flex-end; }
 }
 html[data-motion="reduced"] *{ animation:none !important; transition:none !important; }
@@ -449,8 +450,8 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 .lang-chip input{ accent-color:var(--accent); }
 
 /* ===== Settings extras separators ===== */
-.panel-sep{ font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; padding:12px 0 4px; }
-.settings-group .panel-sep:first-child{ padding-top:0; }
+.panel-sep{ font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; padding:14px 16px 6px; border-top:1px solid var(--line); margin-top:6px; }
+.settings-group .panel-sep:first-child{ border-top:none; margin-top:0; padding-top:14px; }
 
 /* ===== Download dir picker ===== */
 .dir-picker-row{ display:flex; align-items:center; gap:8px; }
