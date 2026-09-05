@@ -265,7 +265,7 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .tabs-nav .tab.active{ background:transparent; color:var(--ink); }
 .tabs-nav .tab.active::after{ content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent); }
 .dl-body{ padding:16px 18px 8px; overflow:auto; }
-.dl-card{ border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
+.dl-card{ position:relative; border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
 .dl-card-title{ font-weight:600; font-size:14.5px; margin-bottom:10px; }
 .dl-selects{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:8px; }
 .dl-field{ display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:var(--ink-2); }
@@ -501,3 +501,6 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 /* ===== Download list sort ===== */
 .sort-ctl{ display:flex; align-items:center; gap:4px; }
 .sort-ctl select{ border-radius:8px; }
+/* download options media type badge */
+.dl-card .dl-type{ position:absolute; top:14px; right:16px; background:var(--surface-3); color:var(--muted); }
+.dl-card .dl-type.mp4{ color:var(--accent); }

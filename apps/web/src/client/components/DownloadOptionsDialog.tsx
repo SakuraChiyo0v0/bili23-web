@@ -179,6 +179,11 @@ function fmtBytes(b?: number): string {
   return `${n.toFixed(i > 1 ? 1 : 0)} ${u[i]}`;
 }
 
+function fmtBps(bps?: number): string {
+  if (!bps || bps <= 0) return "";
+  return (bps / 1_000_000).toFixed(bps >= 10_000_000 ? 0 : 1) + " Mbps";
+}
+
 function MediaPane({ media, loading, error, form, patchForm, videoQualityId, audioQualityId, codecId, setQuality, setAudio, setCodec }: {
   media?: MediaOptionSummary; loading: boolean; error?: string;
   form: ExtraOptionState;
@@ -208,6 +213,7 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
     <div className="dl-pane" data-tab="media">
       <div className="dl-card">
         <div className="dl-card-title">媒体信息</div>
+        {media && <span className={`badge dl-type${media.mediaType === "dash" ? "" : " mp4"}`}>{media.mediaType === "dash" ? "DASH 流" : "单文件/MP4"}</span>}
         {loading ? <div className="muted small">加载媒体候选…</div>
           : error ? <div className="muted small">加载失败：{error}</div>
           : <div className="muted small">已获取可选的画质/音质/编码（来自真实媒体探测）</div>}
@@ -216,14 +222,14 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
             <span>画质</span>
             <select value={videoQualityId} onChange={(e) => setQuality(Number(e.target.value))}>
               <option value={0}>Auto（按优先级）</option>
-              {qualities.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
+              {qualities.map((q) => <option key={q.id} value={q.id}>{q.label}{fmtBps(q.videoBandwidth) ? " · " + fmtBps(q.videoBandwidth) : ""}</option>)}
             </select>
           </label>
           <label className="dl-field">
             <span>音质</span>
             <select value={audioQualityId} onChange={(e) => setAudio(Number(e.target.value))}>
               <option value={0}>Auto（按优先级）</option>
-              {audioQ.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
+              {audioQ.map((q) => <option key={q.id} value={q.id}>{q.label}{fmtBps(q.audioBandwidth) ? " · " + fmtBps(q.audioBandwidth) : ""}</option>)}
             </select>
           </label>
           <label className="dl-field">
