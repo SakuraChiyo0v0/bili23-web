@@ -51,6 +51,13 @@ function Shell() {
           title={route.title}
           route={route.id}
           onNavigate={(id: RouteId) => navigate(id)}
+          loggedIn={auth.loggedIn}
+          uname={auth.uname}
+          face={auth.face}
+          mid={auth.mid}
+          preview={auth.preview}
+          onLogin={() => setLoginOpen(true)}
+          onLogout={async () => { const { logoutAuth } = await import("./services/client"); await logoutAuth(); await auth.refresh(); toast("已退出登录"); }}
         />
         <main className="content">{renderPage()}</main>
         <MobileTabBar route={route.id} onNavigate={navigate} />

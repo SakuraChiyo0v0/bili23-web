@@ -463,3 +463,13 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 .dir-row:hover{ background:var(--line); }
 .dir-picker-manual{ display:flex; flex:1; }
 .dir-picker-tip{ padding:6px 0 2px; }
+
+/* ===== User profile modal ===== */
+.profile-row{ display:flex; align-items:center; gap:14px; }
+.profile-avatar{ width:48px; height:48px; font-size:18px; }
+.profile-meta{ min-width:0; display:flex; flex-direction:column; gap:3px; }
+.profile-uname{ font-size:16px; font-weight:700; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:220px; }
+
+/* topbar avatar button */
+.avatar-btn{ width:34px; height:34px; display:flex; align-items:center; justify-content:center; }
+.avatar-btn .avatar-img, .avatar-btn .avatar{ display:block; }

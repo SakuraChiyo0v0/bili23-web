@@ -15,19 +15,48 @@ export function TopBar({
   title,
   route,
   onNavigate,
+  loggedIn,
+  uname,
+  face,
+  mid,
+  preview,
+  onLogin,
+  onLogout,
 }: {
   title: string;
   route: RouteId;
   onNavigate: (id: RouteId) => void;
+  loggedIn: boolean;
+  uname?: string;
+  face?: string;
+  mid?: number;
+  preview?: string;
+  onLogin: () => void;
+  onLogout: () => void;
 }) {
   void route;
+  const [profileOpen, setProfileOpen] = useState(false);
   return (
     <header className="topbar">
       <div className="topbar-title">{title}</div>
       <div className="topbar-actions">
+        {loggedIn ? (
+          <button type="button" className="icon-btn avatar-btn" onClick={() => setProfileOpen(true)} aria-label="账号" title="账号">
+            {face ? (
+              <img className="avatar-img" src={face} alt="" referrerPolicy="no-referrer" width={26} height={26} onError={(e) => { const el = e.currentTarget as HTMLImageElement; el.style.display = "none"; }} />
+            ) : (
+              <span className="avatar" style={{ width: 26, height: 26, fontSize: 12 }}>{uname?.charAt(0) || "用"}</span>
+            )}
+          </button>
+        ) : (
+          <button type="button" className="icon-btn" onClick={onLogin} aria-label="登录" title="登录">
+            <Icon name="user" size={19} />
+          </button>
+        )}
         <button type="button" className="icon-btn" onClick={() => onNavigate("settings")} aria-label="设置" title="设置">
           <Icon name="gear" size={19} />
         </button>
+        <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} uname={uname} face={face} mid={mid} preview={preview} onLogout={() => { setProfileOpen(false); onLogout(); }} />
       </div>
     </header>
   );
@@ -75,6 +104,7 @@ export function Sidebar({
 }) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [favOpen, setFavOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const parseSession = useParseSession();
   return (
     <>
@@ -106,7 +136,7 @@ export function Sidebar({
           </button>
           <div className="nav-spacer" />
           {loggedIn ? (
-              <button type="button" className="nav-item" onClick={onLogout} title={(uname ? uname + " · " : "") + (preview || "") + (mid ? " · UID " + mid : "")}>
+              <button type="button" className="nav-item" onClick={() => setProfileOpen(true)} title={(uname ? uname + " · " : "") + (preview || "") + (mid ? " · UID " + mid : "")}>
               {face ? (
                 <span className="avatar" style={{ width: 26, height: 26 }}>
                   <img className="avatar-img" src={face} alt="" referrerPolicy="no-referrer" onError={(e) => { const el = e.currentTarget as HTMLImageElement; el.style.display = "none"; const p = el.parentElement; if (p) p.textContent = (uname?.charAt(0) || "用"); }} />
@@ -130,6 +160,7 @@ export function Sidebar({
       </aside>
       <FavoritesFlyout open={favOpen} onClose={() => setFavOpen(false)} onOpenFolder={(/*title*/ _title, mediaId) => { parseSession.setParseType("favlist"); parseSession.setInput("https://www.bilibili.com/list/ml" + mediaId); onNavigate("parse"); setFavOpen(false); }} onOpenBangumi={(url) => { parseSession.setParseType("bangumi"); parseSession.setInput(url); onNavigate("parse"); setFavOpen(false); }} />
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} uname={uname} face={face} mid={mid} preview={preview} onLogout={() => { setProfileOpen(false); onLogout(); }} />
     </>
   );
 }
@@ -171,6 +202,45 @@ export function AboutModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+export function ProfileModal({ open, onClose, uname, face, mid, preview, onLogout }: {
+  open: boolean; onClose: () => void; uname?: string; face?: string; mid?: number; preview?: string; onLogout: () => void;
+}) {
+  if (!open) return null;
+  const fallback = (el: HTMLImageElement) => { el.style.display = "none"; const p = el.parentElement; if (p) p.textContent = (uname?.charAt(0) || "用"); };
+  return (
+    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal sm" role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <div className="modal-title">账号</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="profile-row">
+            <span className="avatar profile-avatar">
+              {face ? <img className="avatar-img" src={face} alt="" referrerPolicy="no-referrer" width={48} height={48} onError={(e) => fallback(e.currentTarget)} /> : null}
+              {face ? null : (uname?.charAt(0) || "用")}
+            </span>
+            <div className="profile-meta">
+              <div className="profile-uname">{uname || "已登录"}</div>
+              <div className="muted small">{mid ? "UID " + mid : preview ? "已登录" : ""}</div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onLogout}>退出登录</button>
+          <div className="right">
+            {mid ? (
+              <a className="btn" href={"https://space.bilibili.com/" + mid} target="_blank" rel="noreferrer" onClick={onClose}>打开 B 站主页</a>
+            ) : null}
+            <button type="button" className="btn" onClick={onClose}>关闭</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
