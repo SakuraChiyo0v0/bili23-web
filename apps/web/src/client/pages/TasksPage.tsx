@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { subscribeTaskEvents, pauseTask, resumeTask, deleteTask } from "../services/client";
 import {
   useTasksStore, isDownloading, isCompleted, TASK_STATUS_META, type TaskTab,
@@ -31,6 +31,33 @@ export function TasksPage() {
     return () => closers.forEach((c) => c());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks.map((t) => t.id).join("|")]);
+
+  // 任务完成/失败通知：首次进入只建立基线；之后新进入终态的任务弹提示与浏览器通知
+  const notifiedRef = useRef<Set<string>>(new Set());
+  const baselineRef = useRef(false);
+  useEffect(() => {
+    const terminal: Record<string, TaskSummary> = {};
+    for (const t of tasks) {
+      if (t.status === "completed" || t.status === "failed" || t.status === "cancelled") terminal[t.id] = t;
+    }
+    if (!baselineRef.current) {
+      baselineRef.current = true;
+      for (const id of Object.keys(terminal)) notifiedRef.current.add(id);
+      return;
+    }
+    for (const t of Object.values(terminal)) {
+      if (notifiedRef.current.has(t.id)) continue;
+      notifiedRef.current.add(t.id);
+      const ok = t.status === "completed";
+      toast(ok ? `下载完成：${t.title}` : `下载失败：${t.title}`, ok ? "ok" : "err");
+      if (sortPrefs.notifyFinished && typeof Notification !== "undefined" && Notification.permission === "granted") {
+        try {
+          new Notification(ok ? "下载完成" : "下载失败", { body: t.title, tag: t.id });
+        } catch { /* 忽略通知异常 */ }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks.map((t) => `${t.id}:${t.status}`).join("|")]);
 
   // 下载中/已完成 双页签列表
   const downloading = useMemo(() => tasks.filter(isDownloading), [tasks]);

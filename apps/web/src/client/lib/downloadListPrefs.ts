@@ -2,9 +2,9 @@ import { useCallback, useState } from "react";
 import { loadJSON, saveJSON } from "./storage";
 
 export type SortField = "created" | "title" | "progress" | "size" | "status";
-export interface DownloadListPrefs { sort: SortField; desc: boolean }
+export interface DownloadListPrefs { sort: SortField; desc: boolean; notifyFinished: boolean }
 const KEY = "ui.downloadList";
-export const DEFAULT_DL_PREFS: DownloadListPrefs = { sort: "created", desc: true };
+export const DEFAULT_DL_PREFS: DownloadListPrefs = { sort: "created", desc: true, notifyFinished: true };
 
 export function loadDownloadListPrefs(): DownloadListPrefs {
   return { ...DEFAULT_DL_PREFS, ...loadJSON<Partial<DownloadListPrefs>>(KEY, {}) };

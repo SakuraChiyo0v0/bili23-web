@@ -6,6 +6,7 @@ import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { listDirs } from "../services/client";
 import { useParseListPrefs } from "../lib/parseListPrefs";
+import { useDownloadListPrefs } from "../lib/downloadListPrefs";
 
 export function SettingsPage() {
   const { config, loading, saved, error, load, save } = useSettingsStore();
@@ -127,6 +128,7 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
 function BehaviorGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
   const b = config.behavior;
   const [listPrefs, setListPrefs] = useParseListPrefs();
+  const [dlPrefs, setDlPrefs] = useDownloadListPrefs();
   return (
     <Group title="解析与行为">
       <Row label="保存解析历史" desc="关闭后新解析不再写入解析历史" control={
@@ -140,6 +142,14 @@ function BehaviorGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
       } />
       <Row label="解析列表交替行色" desc="相邻行用不同底色区分（原版交替行色）" control={
         <Toggle checked={listPrefs.zebraRows} onChange={(v) => setListPrefs({ zebraRows: v })} />
+      } />
+      <Row label="下载完成/失败通知" desc="任务结束弹提示；若已授权浏览器通知则同时发系统通知" control={
+        <Toggle checked={dlPrefs.notifyFinished} onChange={(v) => {
+          if (v && typeof Notification !== "undefined" && Notification.permission === "default") {
+            void Notification.requestPermission();
+          }
+          setDlPrefs({ notifyFinished: v });
+        }} />
       } />
       <Row label="剪贴板监控 / 窗口行为 / 排序偏好" desc="桌面专属，Web 端暂不支持" control={<span className="small muted">—</span>} />
     </Group>
