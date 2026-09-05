@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { createTasks, parseUrl } from "../services/client";
 import { useDownloadOptions } from "../store/useDownloadOptions";
 import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
@@ -74,6 +74,22 @@ export function ParsePage() {
 
   const leaves = session.selectedLeaves();
 
+  // 快捷键：Ctrl+A 全选 / Ctrl+D 全不选（输入框/下拉内不拦截）
+  useEffect(() => {
+    if (session.state !== "success") return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === "a" || e.key === "A") { e.preventDefault(); session.setAll(true); }
+        else if (e.key === "d" || e.key === "D") { e.preventDefault(); session.setAll(false); }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [session.state, session]);
+
   return (
     <section className="page">
       <div className="panel parse-card">
@@ -122,9 +138,14 @@ export function ParsePage() {
           </span>
           {session.state === "success" && (
             <>
-              <button type="button" className="btn sm" onClick={() => session.setAll(true)}>全选</button>
-              <button type="button" className="btn sm" onClick={() => session.setAll(false)}>全不选</button>
-              <button type="button" className="btn sm ghost" onClick={session.reset}>清空</button>
+              <span className="toolbar-ops">
+                <button type="button" className="btn sm" onClick={() => session.setAll(true)} title="Ctrl+A">全选</button>
+                <button type="button" className="btn sm" onClick={() => session.invertAll()} title="反选">反选</button>
+                <button type="button" className="btn sm" onClick={() => session.setAll(false)} title="Ctrl+D">全不选</button>
+                <button type="button" className="btn sm ghost" onClick={() => session.expandAll(true)}>展开</button>
+                <button type="button" className="btn sm ghost" onClick={() => session.expandAll(false)}>收起</button>
+                <button type="button" className="btn sm ghost" onClick={session.reset}>清空</button>
+              </span>
             </>
           )}
         </div>

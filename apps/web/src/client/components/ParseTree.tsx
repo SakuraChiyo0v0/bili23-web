@@ -47,7 +47,7 @@ export function ParseTree() {
       <div key={n.id}>
         <div
           className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}`}
-          onClick={() => { if (isLeaf) toggle(n.id); else toggleCollapse(n.id); }}
+          onClick={() => toggle(n.id)}
         >
           <div className="tree-cell">
             <span className="tree-indent" style={{ paddingLeft: depth * 20 }} />
@@ -57,7 +57,9 @@ export function ParseTree() {
                 <span className={`checkbox ${checked}`}>{checked === "on" ? <Icon name="check" size={12} /> : null}</span>
               </>
             ) : (
-              <Icon name={collapsed ? "chevR" : "chevD"} size={16} />
+              <button type="button" className="tree-chev" aria-label={collapsed ? "展开" : "折叠"} onClick={(e) => { e.stopPropagation(); toggleCollapse(n.id); }}>
+                <Icon name={collapsed ? "chevR" : "chevD"} size={16} />
+              </button>
             )}
             <span className="tree-num">{n.item?.page ?? ""}</span>
           </div>

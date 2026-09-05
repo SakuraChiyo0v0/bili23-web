@@ -31,7 +31,9 @@ interface ParseSession {
   reset: () => void;
   toggle: (nodeId: string) => void;
   setAll: (v: boolean) => void;
+  invertAll: () => void;
   toggleCollapse: (nodeId: string) => void;
+  expandAll: (open: boolean) => void;
   selectedLeaves: () => MediaItem[];
 }
 
@@ -94,6 +96,10 @@ function applyAll(nodes: TreeNode[], v: boolean): TreeNode[] {
   return nodes.map((n) => ({ ...n, checked: v, children: n.children ? applyAll(n.children, v) : undefined }));
 }
 
+function invertAll(nodes: TreeNode[]): TreeNode[] {
+  return nodes.map((n) => ({ ...n, checked: n.checked === true ? false : true, children: n.children ? invertAll(n.children) : undefined }));
+}
+
 export const useParseSession = create<ParseSession>((set, get) => ({
   state: "idle",
   results: [],
@@ -111,6 +117,11 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   reset: () => set({ state: "idle", results: [], tree: [], input: "", parseType: "auto", error: undefined }),
   toggle: (id) => set((s) => ({ tree: recompute(toggleNode(s.tree, id)) })),
   setAll: (v) => set((s) => ({ tree: recompute(applyAll(s.tree, v)) })),
+  invertAll: () => set((s) => ({ tree: recompute(invertAll(s.tree)) })),
   toggleCollapse: (id) => set((s) => ({ tree: s.tree.map((n) => (n.id === id ? { ...n, collapsed: !n.collapsed } : n)) })),
+  expandAll: (open) => set((s) => {
+    const setCollapsed = (ns: TreeNode[], collapsed: boolean): TreeNode[] => ns.map((n) => ({ ...n, collapsed: n.children ? collapsed : n.collapsed, children: n.children ? setCollapsed(n.children, collapsed) : undefined }));
+    return { tree: setCollapsed(s.tree, !open) };
+  }),
   selectedLeaves: () => collect([], get().tree),
 }));

@@ -187,6 +187,7 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .parse-btn{ height:42px; padding:0 22px; border-radius:10px; font-size:14.5px; }
 .toolbar{ display:flex; align-items:center; gap:6px; margin-top:14px; min-height:34px; flex-wrap:wrap; }
 .toolbar-label{ color:var(--ink-2); font-weight:500; margin-right:auto; }
+.toolbar-ops{ display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center; }
 .toolbar-label b{ color:var(--ink); }
 .parse-card{ padding:18px; }
 .spinner{ width:22px; height:22px; border:3px solid var(--surface-3); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
@@ -205,6 +206,8 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .tree-cell.title{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:500; }
 .tree-cell.muted{ color:var(--muted); font-size:12.5px; font-weight:400; }
 .tree-indent{ flex:none; }
+.tree-chev{ display:inline-flex; align-items:center; justify-content:center; background:none; border:none; padding:0; color:var(--muted); cursor:pointer; flex:none; }
+.tree-chev:hover{ color:var(--accent); }
 .tree-num{ color:var(--muted); font-size:12.5px; flex:none; }
 .checkbox{ width:18px; height:18px; border-radius:5px; border:1.5px solid var(--line-strong); flex:none; display:inline-flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; background:var(--surface); transition:all .12s; }
 .checkbox:hover{ border-color:var(--accent); }
@@ -331,8 +334,9 @@ html[data-theme=dark] .tab.active::after{ background:var(--accent); }
   .url-row{ flex-direction:column; }
   .url-input-wrap input{ height:44px; }
   .parse-btn{ width:100%; }
-  .toolbar{ overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
-  .toolbar > *{ flex:none; }
+  .toolbar{ flex-wrap:wrap; }
+  .toolbar-label{ width:100%; }
+  .toolbar-ops{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   /* 下载选项弹窗手机全屏 Sheet */
   .dl-body{ padding:12px 12px 8px; }
   .dl-selects{ grid-template-columns:1fr; }
@@ -449,6 +453,7 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 
 /* ===== Download dir picker ===== */
 .dir-picker-row{ display:flex; align-items:center; gap:8px; }
+@media (max-width:640px){ .dir-picker-row{ align-items:stretch; } .dir-picker-row .text-input{ width:100% !important; } .dir-picker-manual{ width:100%; } }
 .dir-picker-row .text-input{ flex:1; min-width:180px; }
 .dir-picker-current{ display:flex; align-items:center; gap:8px; padding:8px 0; }
 .dir-current-path{ font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; background:var(--line); padding:4px 8px; border-radius:6px; overflow-wrap:anywhere; }
