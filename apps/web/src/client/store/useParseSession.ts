@@ -32,6 +32,7 @@ interface ParseSession {
   toggle: (nodeId: string) => void;
   setAll: (v: boolean) => void;
   invertAll: () => void;
+  setByIndices: (idx: Set<number>) => void;
   toggleCollapse: (nodeId: string) => void;
   expandAll: (open: boolean) => void;
   selectedLeaves: () => MediaItem[];
@@ -100,6 +101,15 @@ function invertAll(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((n) => ({ ...n, checked: n.checked === true ? false : true, children: n.children ? invertAll(n.children) : undefined }));
 }
 
+/** 按顶层结果条目序号（1..N）勾选：先全不选，再勾选指定序号对应的顶层节点（含其下所有分P叶子） */
+function setByResultIndices(nodes: TreeNode[], want: Set<number>): TreeNode[] {
+  const setChecked = (n: TreeNode, v: boolean): TreeNode => ({ ...n, checked: v, children: n.children ? n.children.map((c) => setChecked(c, v)) : undefined });
+  return nodes.map((n, i) => {
+    if (want.has(i + 1)) return setChecked(n, true);
+    return setChecked(n, false);
+  });
+}
+
 export const useParseSession = create<ParseSession>((set, get) => ({
   state: "idle",
   results: [],
@@ -118,6 +128,7 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   toggle: (id) => set((s) => ({ tree: recompute(toggleNode(s.tree, id)) })),
   setAll: (v) => set((s) => ({ tree: recompute(applyAll(s.tree, v)) })),
   invertAll: () => set((s) => ({ tree: recompute(invertAll(s.tree)) })),
+  setByIndices: (want) => set((s) => ({ tree: recompute(setByResultIndices(s.tree, want)) })),
   toggleCollapse: (id) => set((s) => ({ tree: s.tree.map((n) => (n.id === id ? { ...n, collapsed: !n.collapsed } : n)) })),
   expandAll: (open) => set((s) => {
     const setCollapsed = (ns: TreeNode[], collapsed: boolean): TreeNode[] => ns.map((n) => ({ ...n, collapsed: n.children ? collapsed : n.collapsed, children: n.children ? setCollapsed(n.children, collapsed) : undefined }));

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createTasks, parseUrl } from "../services/client";
 import { useDownloadOptions } from "../store/useDownloadOptions";
 import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
@@ -6,9 +6,11 @@ import { useParseSession } from "../store/useParseSession";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useToast } from "../lib/toast";
 import { ParseTree } from "../components/ParseTree";
+import { Icon } from "../lib/icons";
 
 export function ParsePage() {
   const session = useParseSession();
+  const [batchOpen, setBatchOpen] = useState(false);
   const { toast } = useToast();
   const parsePages = (t: string) => ["space","favlist","history","watch_later","list"].includes(t);
 
@@ -142,6 +144,7 @@ export function ParsePage() {
                 <button type="button" className="btn sm" onClick={() => session.setAll(true)} title="Ctrl+A">全选</button>
                 <button type="button" className="btn sm" onClick={() => session.invertAll()} title="反选">反选</button>
                 <button type="button" className="btn sm" onClick={() => session.setAll(false)} title="Ctrl+D">全不选</button>
+                <button type="button" className="btn sm ghost" onClick={() => setBatchOpen(true)}>批量选择</button>
                 <button type="button" className="btn sm ghost" onClick={() => session.expandAll(true)}>展开</button>
                 <button type="button" className="btn sm ghost" onClick={() => session.expandAll(false)}>收起</button>
                 <button type="button" className="btn sm ghost" onClick={session.reset}>清空</button>
@@ -169,7 +172,59 @@ export function ParsePage() {
           </button>
         </div>
       )}
+      <BatchSelectDialog open={batchOpen} onClose={() => setBatchOpen(false)} total={session.tree.length} onApply={(nums) => { session.setByIndices(new Set(nums)); setBatchOpen(false); }} />
       <DownloadOptionsDialog />
     </section>
+  );
+}
+
+
+function BatchSelectDialog({ open, onClose, total, onApply }: {
+  open: boolean; onClose: () => void; total: number; onApply: (nums: number[]) => void;
+}) {
+  const [text, setText] = useState("");
+  const { toast } = useToast();
+  if (!open) return null;
+  const parseNums = (): number[] | null => {
+    const out: number[] = [];
+    const parts = text.trim().split(/[,，;；\s]+/).filter(Boolean);
+    for (const part of parts) {
+      const m = /^(\d+)\s*-\s*(\d+)$/.exec(part) || /^(\d+)\.\.(\d+)$/.exec(part);
+      if (m) {
+        const a = Number(m[1]); const b = Number(m[2]);
+        if (a < 1 || b < a || b > total) return null;
+        for (let i = a; i <= b; i++) out.push(i);
+        continue;
+      }
+      const n = Number(part);
+      if (!Number.isInteger(n) || n < 1 || n > total) return null;
+      out.push(n);
+    }
+    return out.length ? out : null;
+  };
+  const apply = () => {
+    const nums = parseNums();
+    if (!nums) { toast("格式无效：请输入 1-" + total + " 的行号，如 1,3,5-10", "warn"); return; }
+    onApply([...new Set(nums)]);
+    toast("已按行号勾选 " + new Set(nums).size + " 项", "ok");
+  };
+  return (
+    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal sm">
+        <div className="modal-head"><div className="modal-title">批量选择（按行号）</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p className="muted small">当前共 {total} 项。输入要勾选的行号，支持 1、3、5-10 这类范围（含分P/合集按整组勾选）。</p>
+          <input className="text-input" style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={"如 1,3,5-10（1-" + total + "）"} onKeyDown={(e) => { if (e.key === "Enter") apply(); }} autoFocus />
+        </div>
+        <div className="modal-foot">
+          <div className="right">
+            <button type="button" className="btn" onClick={onClose}>取消</button>
+            <button type="button" className="btn primary" onClick={apply}>勾选</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
