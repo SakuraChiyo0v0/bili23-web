@@ -5,6 +5,7 @@ import { CdnEditor } from "../components/CdnEditor";
 import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { listDirs } from "../services/client";
+import { useParseListPrefs } from "../lib/parseListPrefs";
 
 export function SettingsPage() {
   const { config, loading, saved, error, load, save } = useSettingsStore();
@@ -125,6 +126,7 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
 
 function BehaviorGroup({ config, onPatch }: { config: any; onPatch: (p: any) => void }) {
   const b = config.behavior;
+  const [listPrefs, setListPrefs] = useParseListPrefs();
   return (
     <Group title="解析与行为">
       <Row label="保存解析历史" desc="关闭后新解析不再写入解析历史" control={
@@ -133,7 +135,12 @@ function BehaviorGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
       <Row label="下载前弹出下载选项框" desc="关闭后点“下载选中项”直接按默认选项创建任务" control={
         <Toggle checked={b.showDownloadOptionsDialog} onChange={(v) => onPatch({ behavior: { showDownloadOptionsDialog: v } })} />
       } />
-      <Row label="解析列表设置" desc="列显隐/交替行色/悬浮条（原版功能，Web 端暂未实现）" control={<span className="small muted">未实现</span>} />
+      <Row label="显示标签 / 时长 / 时间列" desc="关闭后解析列表只显示“勾选 + 标题”两列（列显隐）" control={
+        <Toggle checked={listPrefs.showMeta} onChange={(v) => setListPrefs({ showMeta: v })} />
+      } />
+      <Row label="解析列表交替行色" desc="相邻行用不同底色区分（原版交替行色）" control={
+        <Toggle checked={listPrefs.zebraRows} onChange={(v) => setListPrefs({ zebraRows: v })} />
+      } />
       <Row label="剪贴板监控 / 窗口行为 / 排序偏好" desc="桌面专属，Web 端暂不支持" control={<span className="small muted">—</span>} />
     </Group>
   );

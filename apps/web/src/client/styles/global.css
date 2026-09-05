@@ -493,3 +493,8 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 .ctx-menu{ position:fixed; min-width:150px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow-lg); padding:5px; display:flex; flex-direction:column; gap:1px; }
 .ctx-item{ text-align:left; padding:8px 12px; border-radius:7px; font-size:13px; color:var(--ink); background:none; border:none; cursor:pointer; }
 .ctx-item:hover{ background:var(--surface-2); color:var(--accent); }
+/* ===== Parse list prefs ===== */
+.tree.no-meta .tree-header, .tree.no-meta .tree-row{ grid-template-columns:80px minmax(0,1fr); }
+.tree-row.zebra{ background:color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.tree-row.zebra:hover{ background:var(--surface-2); }
+.tree-row.group.zebra{ background:transparent; }

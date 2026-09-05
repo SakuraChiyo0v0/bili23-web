@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useParseSession, type TreeNode } from "../store/useParseSession";
 import type { MediaItem } from "../services/types";
 import { useToast } from "../lib/toast";
+import { useParseListPrefs } from "../lib/parseListPrefs";
 import { Icon } from "../lib/icons";
 
 function fmtDur(sec: number): string {
@@ -18,6 +19,7 @@ export function ParseTree({ onDownloadOne }: { onDownloadOne?: (item: MediaItem)
   const [anchor, setAnchor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
+  const [listPrefs] = useParseListPrefs();
 
   // 搜索过滤：命中标题(含父级) 的叶子保留；含命中的组自动展开
   const filtered = useMemo(() => {
@@ -58,14 +60,17 @@ export function ParseTree({ onDownloadOne }: { onDownloadOne?: (item: MediaItem)
   }, [visibleTree]);
   const setNodeIdsChecked = useParseSession((s) => s.setNodeIdsChecked);
 
+  let rowSeq = 0;
   const renderRow = (n: TreeNode, depth: number) => {
     const isLeaf = n.kind === "leaf";
     const checked = n.checked === true ? "on" : n.checked === "partial" ? "partial" : "";
     const collapsed = n.collapsed && !filtered.forcedExpand.has(n.id);
+    if (isLeaf) rowSeq += 1;
+    const zebraOn = isLeaf && listPrefs.zebraRows && rowSeq % 2 === 0;
     return (
       <div key={n.id}>
         <div
-          className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}`}
+          className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}${zebraOn ? " zebra" : ""}`}
           onClick={(e) => {
             if (e.shiftKey && isLeaf && anchor) { rangeToggle(anchor, n.id); return; }
             toggle(n.id);
@@ -97,10 +102,10 @@ export function ParseTree({ onDownloadOne }: { onDownloadOne?: (item: MediaItem)
             <span className="tree-title-text">{n.title}</span>
           </div>
           <div className="tree-cell muted">
-            {n.item?.badge ? <span className={`badge${n.item.badge === "充电专属" ? " hot" : ""}`}>{n.item.badge}</span> : n.children ? `（${n.children.length}）` : ""}
+            {listPrefs.showMeta && (n.item?.badge ? <span className={`badge${n.item.badge === "充电专属" ? " hot" : ""}`}>{n.item.badge}</span> : n.children ? `（${n.children.length}）` : "")}
           </div>
-          <div className="tree-cell muted">{n.item ? fmtDur(n.item.duration) : ""}</div>
-          <div className="tree-cell muted col-time">{n.item ? new Date(n.item.pubtime * 1000).toLocaleDateString() : ""}</div>
+          {listPrefs.showMeta && <div className="tree-cell muted">{n.item ? fmtDur(n.item.duration) : ""}</div>}
+          {listPrefs.showMeta && <div className="tree-cell muted col-time">{n.item ? new Date(n.item.pubtime * 1000).toLocaleDateString() : ""}</div>}
         </div>
         {n.children && !collapsed && n.children.map((c) => renderRow(c, depth + 1))}
       </div>
@@ -123,13 +128,13 @@ export function ParseTree({ onDownloadOne }: { onDownloadOne?: (item: MediaItem)
       {visibleTree.length === 0 ? (
         <div className="empty-state"><p>无匹配结果</p></div>
       ) : (
-        <div className="tree">
+        <div className={`tree${listPrefs.zebraRows ? " zebra" : ""}${listPrefs.showMeta ? "" : " no-meta"}`}>
           <div className="tree-header">
             <div className="tree-cell">#</div>
             <div className="tree-cell title">标题</div>
-            <div className="tree-cell">标签</div>
-            <div className="tree-cell">时长</div>
-            <div className="tree-cell col-time">时间</div>
+            {listPrefs.showMeta && <div className="tree-cell">标签</div>}
+            {listPrefs.showMeta && <div className="tree-cell">时长</div>}
+            {listPrefs.showMeta && <div className="tree-cell col-time">时间</div>}
           </div>
           <div className="tree-body">{visibleTree.map((n) => renderRow(n, 0))}</div>
         </div>
