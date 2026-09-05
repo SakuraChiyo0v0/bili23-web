@@ -385,6 +385,12 @@ export interface AuthStatus {
   loggedIn: boolean;
   /** 脱敏后的 SESSDATA 预览（如 "abc…1234"），便于 UI 提示已登录 */
   preview: string;
+  /** 登录用户昵称（未登录/未取到为空） */
+  uname?: string;
+  /** 登录用户头像 URL（未登录/未取到为空） */
+  face?: string;
+  /** 登录用户 UID */
+  mid?: number;
 }
 
 /** 扫码登录会话状态（QR 生成后轮询用） */
@@ -433,6 +439,8 @@ export class DownloadManager {
   #dataDir: string;
   /** 当前 SESSDATA（未登录为 undefined）；持久化于 <data>/auth.json */
   #sessdata: string | undefined;
+  /** 最近一次从 nav 取回的登录用户信息（可选字段；尽力而为，未取到保持 undefined） */
+  #user: { uname?: string; face?: string; mid?: number } | undefined;
   /** CDN 节点（advanced.cdnHosts），取流时作为候选地址前缀 */
   #cdnHosts: string[] = [];
   /** 自定义 ffmpeg 可执行文件路径（advanced.ffmpegPath） */
@@ -512,6 +520,7 @@ export class DownloadManager {
       const sessdata = this.#http.jar.get("SESSDATA");
       if (sessdata) {
         this.#sessdata = sessdata;
+        await this.#refreshUser();
         await this.#persistAuth();
       }
       return { qrUrl: "", qrcodeKey, status, loggedIn: !!sessdata };
@@ -523,12 +532,14 @@ export class DownloadManager {
     if (!s) throw new BiliError("INVALID_URL", "SESSDATA 不能为空");
     this.#sessdata = s;
     this.#http.jar.set("SESSDATA", s);
+    await this.#refreshUser();
     await this.#persistAuth();
-    return { loggedIn: true, preview: this.#previewSessdata(s) };
+    return this.#authStatusObj();
   }
 
   async logoutAuth(): Promise<AuthStatus> {
     this.#sessdata = undefined;
+    this.#user = undefined;
     this.#http.jar.delete("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5");
     try {
       await rm(join(this.#dataDir, "auth.json"), { force: true });
@@ -539,10 +550,57 @@ export class DownloadManager {
   }
 
   async authStatus(): Promise<AuthStatus> {
-    return {
+    // 已登录但尚未缓存用户信息（旧 auth.json / 首次登录未取到）时，后台补拉一次并持久化
+    if (this.#sessdata && !this.#user) {
+      void this.#refreshUser().then(() => {
+        if (this.#sessdata && this.#user) void this.#persistAuth();
+      });
+    }
+    return this.#authStatusObj();
+  }
+
+  /** 组装当前登录态（含已缓存的用户昵称/头像/UID；未登录为空） */
+  #authStatusObj(): AuthStatus {
+    const base: AuthStatus = {
       loggedIn: !!this.#sessdata,
       preview: this.#sessdata ? this.#previewSessdata(this.#sessdata) : "",
     };
+    if (!this.#sessdata) return base;
+    const u = this.#user;
+    if (u?.uname) base.uname = u.uname;
+    if (u?.face) base.face = u.face;
+    if (u?.mid !== undefined) base.mid = u.mid;
+    return base;
+  }
+
+  /**
+   * 尽力从 /x/web-interface/nav 拉取当前登录用户（昵称/头像/UID）。
+   * 失败不抛错（保持 undefined，不阻塞登录流程）；已确认当前 SESSDATA 有效。
+   */
+  async #refreshUser(): Promise<void> {
+    if (!this.#sessdata) { this.#user = undefined; return; }
+    try {
+      await this.#sessionReady;
+      const nav = await this.#http.getJSON<{
+        code: number;
+        data?: { mid?: number; uname?: string; face?: string };
+      }>(BILI_API_BASE + "/x/web-interface/nav", { timeoutMs: 3000 });
+      if (nav.code !== 0 || !nav.data?.mid) {
+        this.#user = undefined;
+        return;
+      }
+      const d = nav.data;
+      const mid = d.mid;
+      if (typeof mid !== "number") { this.#user = undefined; return; }
+      this.#user = {
+        mid,
+        ...(d.uname ? { uname: d.uname } : {}),
+        ...(d.face ? { face: d.face } : {}),
+      };
+    } catch {
+      // 拉取失败保留原有/清空，不阻断登录
+      this.#user = undefined;
+    }
   }
 
   /** 登录用户收藏夹列表（1:1 收藏夹面板；需登录，未登录抛 LOGIN_REQUIRED） */
@@ -610,16 +668,21 @@ export class DownloadManager {
   }
 
   async #persistAuth(): Promise<void> {
-    await writeFile(join(this.#dataDir, "auth.json"), JSON.stringify({ sessdata: this.#sessdata ?? "" }, null, 2), "utf8");
+    const payload: { sessdata: string; user?: { uname?: string; face?: string; mid?: number } } = {
+      sessdata: this.#sessdata ?? "",
+    };
+    if (this.#user) payload.user = this.#user;
+    await writeFile(join(this.#dataDir, "auth.json"), JSON.stringify(payload, null, 2), "utf8");
   }
 
   /** 重启后从 auth.json 还原登录态（幂等；在 init 时调用） */
   async #loadAuth(): Promise<void> {
     try {
       const raw = await readFile(join(this.#dataDir, "auth.json"), "utf8");
-      const parsed = JSON.parse(raw) as { sessdata?: string };
+      const parsed = JSON.parse(raw) as { sessdata?: string; user?: { uname?: string; face?: string; mid?: number } };
       if (parsed.sessdata) {
         this.#sessdata = parsed.sessdata;
+        this.#user = parsed.user ?? undefined;
         this.#http.jar.set("SESSDATA", parsed.sessdata);
       }
     } catch {

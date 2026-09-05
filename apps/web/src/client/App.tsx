@@ -45,7 +45,7 @@ function Shell() {
 
   return (
     <div className="app">
-      <Sidebar route={route.id} onNavigate={navigate} onLogin={() => setLoginOpen(true)} loggedIn={auth.loggedIn} preview={auth.preview} onLogout={async () => { const { logoutAuth } = await import("./services/client"); await logoutAuth(); await auth.refresh(); toast("已退出登录"); }} />
+      <Sidebar route={route.id} onNavigate={navigate} onLogin={() => setLoginOpen(true)} loggedIn={auth.loggedIn} preview={auth.preview} uname={auth.uname} face={auth.face} mid={auth.mid} onLogout={async () => { const { logoutAuth } = await import("./services/client"); await logoutAuth(); await auth.refresh(); toast("已退出登录"); }} />
       <div className="main">
         <TopBar
           title={route.title}

@@ -242,6 +242,9 @@ describe("DownloadManager 扫码登录", () => {
           headers: { "Set-Cookie": "SESSDATA=qr_sess_1; Path=/; Domain=.bilibili.com" },
         });
       }
+      if (url.includes("/x/web-interface/nav")) {
+        return new Response(JSON.stringify({ code: 0, data: { mid: 2, uname: "测试用户", face: "https://i0.hdslb.com/bfs/face/example.jpg" } }), { status: 200 });
+      }
       return new Response("{}", { status: 500 });
     };
     const http = new HttpClient({ fetchImpl: fetchImpl as typeof fetch });
@@ -255,14 +258,23 @@ describe("DownloadManager 扫码登录", () => {
 
       const poll = await mgr.qrLoginPoll("key123");
       expect(poll.loggedIn).toBe(true);
-      expect((await mgr.authStatus()).loggedIn).toBe(true);
+      const st = await mgr.authStatus();
+      expect(st.loggedIn).toBe(true);
+      expect(st.uname).toBe("测试用户");
+      expect(st.face).toBe("https://i0.hdslb.com/bfs/face/example.jpg");
+      expect(st.mid).toBe(2);
 
-      // 重启后持久化生效
+      // 重启后持久化生效（含用户信息）
       mgr.close();
       mgr = undefined as unknown as DownloadManagerType;
       const mgr2 = new DownloadManager({ dataDir });
       await mgr2.init();
-      expect(await mgr2.authStatus()).toEqual({ loggedIn: true, preview: "qr_sess_1" });
+      const st2 = await mgr2.authStatus();
+      expect(st2.loggedIn).toBe(true);
+      expect(st2.preview).toBe("qr_sess_1");
+      expect(st2.uname).toBe("测试用户");
+      expect(st2.face).toBe("https://i0.hdslb.com/bfs/face/example.jpg");
+      expect(st2.mid).toBe(2);
       mgr2.close();
     } finally {
       mgr?.close();

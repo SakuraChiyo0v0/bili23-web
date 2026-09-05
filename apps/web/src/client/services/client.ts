@@ -111,7 +111,7 @@ export function fileRawUrl(relPath: string): string {
 export function updateConfig(patch: AppConfigPatch): Promise<{ config: AppConfig }> {
   return request("/config", { method: "PUT", body: JSON.stringify({ config: patch }) });
 }
-export interface AuthStatus { loggedIn: boolean; preview: string }
+export interface AuthStatus { loggedIn: boolean; preview: string; uname?: string; face?: string; mid?: number }
 export interface QrLoginSession { qrUrl: string; qrcodeKey: string; status: number }
 export function authStatus(): Promise<AuthStatus> { return request("/auth/status"); }
 export function loginCookie(sessdata: string): Promise<AuthStatus> { return request("/auth", { method: "POST", body: JSON.stringify({ sessdata }) }); }

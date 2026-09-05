@@ -58,6 +58,9 @@ export function Sidebar({
   onLogin,
   loggedIn,
   preview,
+  uname,
+  face,
+  mid,
   onLogout,
 }: {
   route: RouteId;
@@ -65,6 +68,9 @@ export function Sidebar({
   onLogin: () => void;
   loggedIn: boolean;
   preview: string;
+  uname?: string;
+  face?: string;
+  mid?: number;
   onLogout: () => void;
 }) {
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -100,9 +106,15 @@ export function Sidebar({
           </button>
           <div className="nav-spacer" />
           {loggedIn ? (
-            <button type="button" className="nav-item" onClick={onLogout} title={preview}>
-              <span className="avatar" style={{ width: 26, height: 26, fontSize: 12 }}>用</span>
-              <span className="nav-label">已登录 · {preview || "账户"}</span>
+              <button type="button" className="nav-item" onClick={onLogout} title={(uname ? uname + " · " : "") + (preview || "") + (mid ? " · UID " + mid : "")}>
+              {face ? (
+                <span className="avatar" style={{ width: 26, height: 26 }}>
+                  <img className="avatar-img" src={face} alt="" referrerPolicy="no-referrer" onError={(e) => { const el = e.currentTarget as HTMLImageElement; el.style.display = "none"; const p = el.parentElement; if (p) p.textContent = (uname?.charAt(0) || "用"); }} />
+                </span>
+              ) : (
+                <span className="avatar" style={{ width: 26, height: 26, fontSize: 12 }}>{uname?.charAt(0) || "用"}</span>
+              )}
+              <span className="nav-label">{uname || "已登录"}{preview ? " · " + preview : ""}</span>
             </button>
           ) : (
             <button type="button" className="nav-item" onClick={onLogin}>

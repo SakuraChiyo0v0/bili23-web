@@ -30,7 +30,7 @@ export function LoginDialog({ open, onClose }: { open: boolean; onClose: () => v
             setQrStatus(qrStatusText(r.status, r.loggedIn));
             if (r.loggedIn) {
               clearInterval(poll);
-              setAuth(true, "");
+              setAuth({ loggedIn: true, preview: "" });
               void useAuthStore.getState().refresh();
               toast("扫码登录成功", "ok");
               onClose();
@@ -54,7 +54,7 @@ export function LoginDialog({ open, onClose }: { open: boolean; onClose: () => v
     setSubmitting(true);
     try {
       const st = await loginCookie(v);
-      setAuth(st.loggedIn, st.preview);
+      setAuth(st);
       void useAuthStore.getState().refresh();
       toast("已登录，Cookie 有效", "ok");
       onClose();
