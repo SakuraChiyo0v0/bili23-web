@@ -39,6 +39,20 @@ export function ParseTree() {
 
   const visibleTree = search.trim() ? filtered.tree : tree;
 
+  // 当前可见（搜索后仍显示）的叶子/组 id：用于“全选匹配 / 清除匹配”
+  const visibleIds = useMemo(() => {
+    const ids = new Set<string>();
+    const walk = (ns: TreeNode[]): void => {
+      for (const n of ns) {
+        if (n.children) walk(n.children);
+        else if (n.item) ids.add(n.id);
+      }
+    };
+    walk(visibleTree);
+    return ids;
+  }, [visibleTree]);
+  const setNodeIdsChecked = useParseSession((s) => s.setNodeIdsChecked);
+
   const renderRow = (n: TreeNode, depth: number) => {
     const isLeaf = n.kind === "leaf";
     const checked = n.checked === true ? "on" : n.checked === "partial" ? "partial" : "";
@@ -86,6 +100,12 @@ export function ParseTree() {
         <Icon name="search" size={16} />
         <input className="text-input" placeholder="搜索标题…" value={search} onChange={(e) => setSearch(e.target.value)} />
         {search && <button type="button" className="btn sm ghost" onClick={() => setSearch("")}>清除</button>}
+        {search.trim() && (
+          <>
+            <button type="button" className="btn sm" onClick={() => setNodeIdsChecked(visibleIds, true)}>全选匹配</button>
+            <button type="button" className="btn sm" onClick={() => setNodeIdsChecked(visibleIds, false)}>清除匹配</button>
+          </>
+        )}
       </div>
       {visibleTree.length === 0 ? (
         <div className="empty-state"><p>无匹配结果</p></div>

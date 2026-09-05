@@ -821,7 +821,6 @@ export class DownloadManager {
       case "cheese":
       case "lesson":
       case "audio":
-      case "favlist":
       case "list":
       case "festival":
         // 这些类型直接接受链接（可多行/逗号分隔）
@@ -829,6 +828,16 @@ export class DownloadManager {
           .split(/\r?\n|,|;/)
           .map((s) => s.trim())
           .filter((s) => s.length > 0);
+      case "favlist": {
+        // 收藏夹支持站内搜索：原链接已带 keyword 则原样，否则拼接 ?keyword=（对齐引擎 keywordFromUrl）
+        const sep = (u: string) => (u.includes("?") ? "&" : "?");
+        const kw = keyword ? (kw: string) => `${sep(kw)}keyword=${encodeURIComponent(keyword)}` : null;
+        return query
+          .split(/\r?\n|,|;/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+          .map((u) => (kw ? (/[?&]keyword=/.test(u) ? u : u + kw(u)) : u));
+      }
       case "space": {
         const target = await this.#resolveSpaceTarget(query);
         const qs = keyword ? `?keyword=${encodeURIComponent(keyword)}` : "";

@@ -13,8 +13,10 @@ export function ParsePage() {
   const session = useParseSession();
   const [batchOpen, setBatchOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [serverSearchOpen, setServerSearchOpen] = useState(false);
   const { toast } = useToast();
   const parsePages = (t: string) => ["space","favlist","history","watch_later","list"].includes(t);
+  const serverSearchable = ["space","favlist","history","watch_later"].includes(session.parseType);
 
   const typePlaceholder = (t: string) => { if (t === "auto") return "粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…"; if (t === "space") return "UP 主 UID 或主页链接"; if (t === "favlist") return "收藏夹链接 / 列表 ID"; if (t === "watch_later") return "（自动）稍后再看"; if (t === "history") return "（自动）历史记录"; if (t === "popular") return "每周必看（可填期数）"; return "粘贴相应分类的链接"; };
 
@@ -144,6 +146,7 @@ export function ParsePage() {
           {session.state === "success" && (
             <>
               <span className="toolbar-ops">
+                {serverSearchable && <button type="button" className="btn sm" onClick={() => setServerSearchOpen(true)}>站内搜索…</button>}
                 <button type="button" className="btn sm" onClick={() => session.setAll(true)} title="Ctrl+A">全选</button>
                 <button type="button" className="btn sm" onClick={() => session.invertAll()} title="反选">反选</button>
                 <button type="button" className="btn sm" onClick={() => session.setAll(false)} title="Ctrl+D">全不选</button>
@@ -177,6 +180,7 @@ export function ParsePage() {
       )}
       <BatchSelectDialog open={batchOpen} onClose={() => setBatchOpen(false)} total={session.tree.length} onApply={(nums) => { session.setByIndices(new Set(nums)); setBatchOpen(false); }} />
       <BatchParseDialog open={bulkOpen} onClose={() => setBulkOpen(false)} onParsed={(urls, results, autoSelect) => { session.setInput(urls.join("\n")); session.setParseType("auto"); session.success(results); if (autoSelect) session.setAll(true); setBulkOpen(false); }} />
+      <ServerSearchDialog open={serverSearchOpen} onClose={() => setServerSearchOpen(false)} parseType={session.parseType} query={session.input} onDone={(results) => { session.success(results); setServerSearchOpen(false); }} />
       <DownloadOptionsDialog />
     </section>
   );
@@ -278,6 +282,50 @@ function BatchParseDialog({ open, onClose, onParsed }: {
           <div className="right">
             <button type="button" className="btn" onClick={onClose}>取消</button>
             <button type="button" className="btn primary" onClick={() => void start()} disabled={parsing}>{parsing ? "解析中…" : "开始解析"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function ServerSearchDialog({ open, onClose, parseType, query, onDone }: {
+  open: boolean; onClose: () => void; parseType: string; query: string;
+  onDone: (results: ParseResult[]) => void;
+}) {
+  const { toast } = useToast();
+  const [kw, setKw] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open) return null;
+  const search = async () => {
+    const k = kw.trim();
+    if (!k) { toast("请输入搜索关键词", "warn"); return; }
+    setBusy(true);
+    try {
+      // 服务端搜索当前收藏夹/空间/历史/稍后再看（接口带 keyword 会全量搜，翻页自动聚合）
+      const r = await parseUrl({ type: parseType as "space" | "favlist" | "history" | "watch_later", query, keyword: k });
+      if (!r.results.length) throw new Error("没有匹配结果");
+      toast(`站内搜索“${k}”完成`, "ok");
+      onDone(r.results);
+    } catch (e) {
+      toast("搜索失败：" + (e instanceof Error ? e.message : String(e)), "err");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal sm">
+        <div className="modal-head"><div className="modal-title">站内搜索</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p className="muted small">在已解析的“{parseType}”中按关键词搜索全部条目（服务端搜索，自动覆盖所有页）。</p>
+          <input className="text-input" style={{ width: "100%", marginTop: 8 }} value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void search(); }} placeholder="关键词" autoFocus />
+        </div>
+        <div className="modal-foot">
+          <div className="right">
+            <button type="button" className="btn" onClick={onClose}>取消</button>
+            <button type="button" className="btn primary" onClick={() => void search()} disabled={busy}>{busy ? "搜索中…" : "搜索"}</button>
           </div>
         </div>
       </div>
