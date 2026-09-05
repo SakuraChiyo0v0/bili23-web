@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createTasks, parseUrl } from "../services/client";
+import type { ParseResult } from "../services/types";
 import { useDownloadOptions } from "../store/useDownloadOptions";
 import { DownloadOptionsDialog } from "../components/DownloadOptionsDialog";
 import { useParseSession } from "../store/useParseSession";
@@ -11,6 +12,7 @@ import { Icon } from "../lib/icons";
 export function ParsePage() {
   const session = useParseSession();
   const [batchOpen, setBatchOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { toast } = useToast();
   const parsePages = (t: string) => ["space","favlist","history","watch_later","list"].includes(t);
 
@@ -120,6 +122,7 @@ export function ParsePage() {
           <button type="button" className="btn primary parse-btn" disabled={session.state === "parsing"} onClick={doParse}>
             {session.state === "parsing" ? "解析中…" : "解析"}
           </button>
+          <button type="button" className="btn parse-btn-ghost" onClick={() => setBulkOpen(true)} disabled={session.state === "parsing"}>批量解析</button>
         </div>
 
         <div className="toolbar">
@@ -173,6 +176,7 @@ export function ParsePage() {
         </div>
       )}
       <BatchSelectDialog open={batchOpen} onClose={() => setBatchOpen(false)} total={session.tree.length} onApply={(nums) => { session.setByIndices(new Set(nums)); setBatchOpen(false); }} />
+      <BatchParseDialog open={bulkOpen} onClose={() => setBulkOpen(false)} onParsed={(urls, results, autoSelect) => { session.setInput(urls.join("\n")); session.setParseType("auto"); session.success(results); if (autoSelect) session.setAll(true); setBulkOpen(false); }} />
       <DownloadOptionsDialog />
     </section>
   );
@@ -222,6 +226,58 @@ function BatchSelectDialog({ open, onClose, total, onApply }: {
           <div className="right">
             <button type="button" className="btn" onClick={onClose}>取消</button>
             <button type="button" className="btn primary" onClick={apply}>勾选</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function BatchParseDialog({ open, onClose, onParsed }: {
+  open: boolean; onClose: () => void;
+  onParsed: (urls: string[], results: ParseResult[], autoSelect: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [text, setText] = useState("");
+  const [autoSelect, setAutoSelect] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  if (!open) return null;
+  const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const start = async () => {
+    if (!lines.length) { toast("请粘贴要解析的链接（每行一个）", "warn"); return; }
+    setParsing(true);
+    const results: ParseResult[] = [];
+    let ok = 0; let failed = 0;
+    for (const url of lines) {
+      try {
+        const r = await parseUrl({ urls: [url] });
+        if (r.results.length) { results.push(...r.results); ok += 1; }
+        else failed += 1;
+      } catch { failed += 1; }
+    }
+    setParsing(false);
+    if (!results.length) { toast("全部解析失败，请检查链接", "err"); return; }
+    if (failed) toast(`批量解析完成：成功 ${ok}，失败 ${failed}`, "warn");
+    else toast(`批量解析完成：${ok} 条链接`, "ok");
+    onParsed(lines, results, autoSelect);
+  };
+  return (
+    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal md">
+        <div className="modal-head"><div className="modal-title">批量解析</div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <p className="muted small">粘贴视频/番剧等链接，每行一个；逐条解析，单条失败不影响其它。</p>
+          <textarea className="text-input batch-textarea" rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder={"链接数：0\n每行一个链接，如 BV1xx411c7mD"} />
+          <label className="batch-auto"><input type="checkbox" checked={autoSelect} onChange={(e) => setAutoSelect(e.target.checked)} /> 解析后自动全选（加入下载列表）</label>
+        </div>
+        <div className="modal-foot">
+          <div className="muted small">共 {lines.length} 条链接</div>
+          <div className="right">
+            <button type="button" className="btn" onClick={onClose}>取消</button>
+            <button type="button" className="btn primary" onClick={() => void start()} disabled={parsing}>{parsing ? "解析中…" : "开始解析"}</button>
           </div>
         </div>
       </div>

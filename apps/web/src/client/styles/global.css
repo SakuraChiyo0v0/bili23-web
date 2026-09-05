@@ -482,3 +482,9 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 .history-title{ font-weight:600; font-size:13.5px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .history-url{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:100%; }
 .history-count{ flex:none; }
+/* ===== Parse page: batch actions ===== */
+.parse-btn-ghost{ height:42px; padding:0 16px; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--ink-2); font-size:13.5px; white-space:nowrap; }
+.parse-btn-ghost:hover{ border-color:var(--accent); color:var(--accent); }
+.batch-textarea{ width:100%; height:auto; min-height:150px; padding:10px 12px; resize:vertical; font-family:var(--mono); font-size:12.5px; line-height:1.6; }
+.batch-auto{ display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:var(--ink-2); }
+.batch-auto input{ accent-color:var(--accent); }
