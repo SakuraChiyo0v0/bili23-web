@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useParseSession, type TreeNode } from "../store/useParseSession";
+import type { MediaItem } from "../services/types";
+import { useToast } from "../lib/toast";
 import { Icon } from "../lib/icons";
 
 function fmtDur(sec: number): string {
@@ -8,13 +10,14 @@ function fmtDur(sec: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function ParseTree() {
+export function ParseTree({ onDownloadOne }: { onDownloadOne?: (item: MediaItem) => void }) {
   const tree = useParseSession((s) => s.tree);
   const toggle = useParseSession((s) => s.toggle);
   const toggleCollapse = useParseSession((s) => s.toggleCollapse);
   const rangeToggle = useParseSession((s) => s.rangeToggle);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
 
   // 搜索过滤：命中标题(含父级) 的叶子保留；含命中的组自动展开
   const filtered = useMemo(() => {
@@ -67,6 +70,10 @@ export function ParseTree() {
             if (e.shiftKey && isLeaf && anchor) { rangeToggle(anchor, n.id); return; }
             toggle(n.id);
             if (isLeaf) setAnchor(n.id);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, node: n });
           }}
         >
           <div className="tree-cell">
@@ -127,6 +134,39 @@ export function ParseTree() {
           <div className="tree-body">{visibleTree.map((n) => renderRow(n, 0))}</div>
         </div>
       )}
+      {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} onDownloadOne={onDownloadOne} />}
+    </div>
+  );
+}
+
+function ContextMenu({ menu, onClose, onDownloadOne }: {
+  menu: { x: number; y: number; node: TreeNode };
+  onClose: () => void;
+  onDownloadOne?: (item: MediaItem) => void;
+}) {
+  const session = useParseSession();
+  const { toast } = useToast();
+  const { node, x, y } = menu;
+  const isLeaf = node.kind === "leaf";
+  const item = node.item;
+  const act = (fn: () => void) => { fn(); onClose(); };
+  return (
+    <div className="ctx-layer" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
+      <div className="ctx-menu" style={{ left: Math.min(x, window.innerWidth - 190), top: Math.min(y, window.innerHeight - 180) }} onClick={(e) => e.stopPropagation()}>
+        {isLeaf && item ? (
+          <>
+            <button type="button" className="ctx-item" onClick={() => act(() => { session.setAll(false); session.toggle(item.id); })}>仅勾选此项</button>
+            <button type="button" className="ctx-item" onClick={() => act(() => onDownloadOne?.(item))}>下载此项</button>
+            <button type="button" className="ctx-item" onClick={() => act(() => { void navigator.clipboard?.writeText(item.url); toast("链接已复制", "ok"); })}>复制链接</button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="ctx-item" onClick={() => act(() => { session.setAll(false); session.toggle(node.id); })}>仅勾选此组</button>
+            <button type="button" className="ctx-item" onClick={() => act(() => session.toggle(node.id))}>全选/取消整组</button>
+            <button type="button" className="ctx-item" onClick={() => act(() => session.toggleCollapse(node.id))}>展开/收起</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

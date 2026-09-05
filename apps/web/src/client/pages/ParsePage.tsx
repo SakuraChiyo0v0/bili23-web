@@ -163,7 +163,7 @@ export function ParsePage() {
       {session.state === "parsing" && (
         <div className="empty-state"><span className="spinner" /><p>正在解析…</p></div>
       )}
-      {session.state === "success" && <ParseTree />}
+      {session.state === "success" && <ParseTree onDownloadOne={(it) => openDialog([it])} />}
       {session.state === "idle" && (
         <div className="empty-state">
           <h3>等待解析</h3>
