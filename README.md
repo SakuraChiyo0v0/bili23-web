@@ -69,6 +69,7 @@ pnpm --filter @bili23-web/web dev:client    # http://localhost:5173（前端开�
 | DELETE | `/api/parse-history/:id` | 删除单条解析历史 |
 | GET  | `/api/files` | 产物目录 |
 | GET  | `/api/files/raw?path=...` | 产物文件下载（防目录穿越） |
+| GET  | `/api/dirs?path=...` | 目录选择器：列出给定绝对目录的子目录（下载目录浏览；路径不存在/越界返回空） |
 
 ### 配置 / 登录态
 
