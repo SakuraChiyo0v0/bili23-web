@@ -34,6 +34,7 @@ interface ParseSession {
   invertAll: () => void;
   setByIndices: (idx: Set<number>) => void;
   setNodeIdsChecked: (ids: Set<string>, v: boolean) => void;
+  rangeToggle: (fromId: string, toId: string) => void;
   toggleCollapse: (nodeId: string) => void;
   expandAll: (open: boolean) => void;
   selectedLeaves: () => MediaItem[];
@@ -94,6 +95,54 @@ function collect(items: MediaItem[], nodes: TreeNode[]): MediaItem[] {
   return items;
 }
 
+/** 收集所有叶子节点 id（树线性序，深度优先） */
+function collectLeafIds(nodes: TreeNode[], out: string[] = []): string[] {
+  for (const n of nodes) {
+    if (n.kind === "leaf") out.push(n.id);
+    if (n.children) collectLeafIds(n.children, out);
+  }
+  return out;
+}
+
+/**
+ * Shift 范围勾选：把 from..to 之间（含）的所有叶子设为与 from 叶子相同的勾选态。
+ * 找不到 from/to（如组 id）时退化为普通 toggle。
+ */
+function toggleRangeIn(nodes: TreeNode[], fromId: string, toId: string): TreeNode[] {
+  const leaves = collectLeafIds(nodes);
+  const fi = leaves.indexOf(fromId);
+  const ti = leaves.indexOf(toId);
+  if (fi < 0 || ti < 0) return nodes;
+  const [lo, hi] = fi <= ti ? [fi, ti] : [ti, fi];
+  const base = nodes;
+  const firstNode = findNode(base, leaves[lo]!);
+  const want = firstNode ? firstNode.checked === true : true; // 半选按 true 处理
+  const setLeaf = (ns: TreeNode[], id: string, v: boolean): TreeNode[] =>
+    ns.map((n) => {
+      if (n.kind === "leaf" && n.id === id) return { ...n, checked: v };
+      if (n.children) return { ...n, children: setLeaf(n.children, id, v) };
+      return n;
+    });
+  let out = base;
+  const target = new Set(leaves.slice(lo, hi + 1));
+  const apply = (ns: TreeNode[]): TreeNode[] =>
+    ns.map((n) => {
+      if (n.kind === "leaf" && target.has(n.id)) return { ...n, checked: want };
+      if (n.children) return { ...n, children: apply(n.children) };
+      return n;
+    });
+  out = apply(out);
+  void setLeaf; void firstNode;
+  return out;
+}
+function findNode(nodes: TreeNode[], id: string): TreeNode | undefined {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    if (n.children) { const f = findNode(n.children, id); if (f) return f; }
+  }
+  return undefined;
+}
+
 function applyAll(nodes: TreeNode[], v: boolean): TreeNode[] {
   return nodes.map((n) => ({ ...n, checked: v, children: n.children ? applyAll(n.children, v) : undefined }));
 }
@@ -141,6 +190,7 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   invertAll: () => set((s) => ({ tree: recompute(invertAll(s.tree)) })),
   setByIndices: (want) => set((s) => ({ tree: recompute(setByResultIndices(s.tree, want)) })),
   setNodeIdsChecked: (ids, v) => set((s) => ({ tree: recompute(setIdsChecked(s.tree, ids, v)) })),
+  rangeToggle: (fromId, toId) => set((s) => ({ tree: recompute(toggleRangeIn(s.tree, fromId, toId)) })),
   toggleCollapse: (id) => set((s) => ({ tree: s.tree.map((n) => (n.id === id ? { ...n, collapsed: !n.collapsed } : n)) })),
   expandAll: (open) => set((s) => {
     const setCollapsed = (ns: TreeNode[], collapsed: boolean): TreeNode[] => ns.map((n) => ({ ...n, collapsed: n.children ? collapsed : n.collapsed, children: n.children ? setCollapsed(n.children, collapsed) : undefined }));

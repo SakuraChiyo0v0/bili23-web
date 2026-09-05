@@ -12,6 +12,8 @@ export function ParseTree() {
   const tree = useParseSession((s) => s.tree);
   const toggle = useParseSession((s) => s.toggle);
   const toggleCollapse = useParseSession((s) => s.toggleCollapse);
+  const rangeToggle = useParseSession((s) => s.rangeToggle);
+  const [anchor, setAnchor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   // 搜索过滤：命中标题(含父级) 的叶子保留；含命中的组自动展开
@@ -61,7 +63,11 @@ export function ParseTree() {
       <div key={n.id}>
         <div
           className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}`}
-          onClick={() => toggle(n.id)}
+          onClick={(e) => {
+            if (e.shiftKey && isLeaf && anchor) { rangeToggle(anchor, n.id); return; }
+            toggle(n.id);
+            if (isLeaf) setAnchor(n.id);
+          }}
         >
           <div className="tree-cell">
             <span className="tree-indent" style={{ paddingLeft: depth * 20 }} />
