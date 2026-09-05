@@ -5,12 +5,14 @@ import {
 } from "../store/useTasksStore";
 import { Icon } from "../lib/icons";
 import { useToast } from "../lib/toast";
+import { useDownloadListPrefs, type SortField } from "../lib/downloadListPrefs";
 import type { TaskSummary } from "../services/types";
 import { TaskActions } from "../components/TaskActions";
 
 export function TasksPage() {
   const { tasks, activeTab, loading, error, setTab, refresh, upsert, remove } = useTasksStore();
   const { toast } = useToast();
+  const [sortPrefs, setSortPrefs] = useDownloadListPrefs();
 
   // 进入页面拉取全量
   useEffect(() => {
@@ -35,6 +37,34 @@ export function TasksPage() {
   const completed = useMemo(() => tasks.filter(isCompleted), [tasks]);
 
   const count = (t: TaskTab) => (t === "downloading" ? downloading.length : completed.length);
+
+  // 下载队列排序（创建时间/标题/进度/大小/状态；偏好持久化于本地）
+  const sortTasks = useMemo(() => {
+    const val = (t: TaskSummary): number | string => {
+      switch (sortPrefs.sort) {
+        case "title": return t.title.toLowerCase();
+        case "progress": return t.progress;
+        case "size": return t.totalBytes;
+        case "status": return t.status;
+        default: return t.createdAt;
+      }
+    };
+    const dir = sortPrefs.desc ? -1 : 1;
+    return (list: TaskSummary[]) => [...list].sort((a, b) => {
+      const va = val(a); const vb = val(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return (a.createdAt - b.createdAt) * dir;
+    });
+  }, [sortPrefs]);
+  const sortSel = <select className="text-input" style={{ height: 30, width: 132 }} value={sortPrefs.sort} onChange={(e) => setSortPrefs({ sort: e.target.value as SortField })} aria-label="排序字段">
+    <option value="created">按创建时间</option>
+    <option value="title">按标题</option>
+    <option value="progress">按进度</option>
+    <option value="size">按大小</option>
+    <option value="status">按状态</option>
+  </select>;
+  const dirBtn = <button type="button" className="btn sm ghost" onClick={() => setSortPrefs({ desc: !sortPrefs.desc })} title={sortPrefs.desc ? "降序" : "升序"}>{sortPrefs.desc ? "↓" : "↑"}</button>;
 
   const pauseAll = async () => {
     const targets = downloading.filter((t) => ["downloading", "queued", "parsing", "merging"].includes(t.status));
@@ -65,6 +95,7 @@ export function TasksPage() {
             </button>
           ))}
         </div>
+        <div className="sort-ctl">{sortSel}{dirBtn}</div>
         <div className="btn-group">
           {downloading.some((t) => t.status === "downloading" || t.status === "queued" || t.status === "parsing" || t.status === "merging") && (
             <button type="button" className="btn sm ghost" onClick={pauseAll}>全部暂停</button>
@@ -91,7 +122,7 @@ export function TasksPage() {
         </div>
       ) : (
         <div className="task-list">
-          {(activeTab === "downloading" ? downloading : completed).map((t) => (
+          {sortTasks(activeTab === "downloading" ? downloading : completed).map((t) => (
             <TaskCard key={t.id} task={t} onRemove={remove} />
           ))}
           {loading && <p className="muted small center">加载中…</p>}

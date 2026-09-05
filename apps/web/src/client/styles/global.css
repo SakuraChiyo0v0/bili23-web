@@ -498,3 +498,6 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
 .tree-row.zebra{ background:color-mix(in srgb, var(--surface-2) 60%, transparent); }
 .tree-row.zebra:hover{ background:var(--surface-2); }
 .tree-row.group.zebra{ background:transparent; }
+/* ===== Download list sort ===== */
+.sort-ctl{ display:flex; align-items:center; gap:4px; }
+.sort-ctl select{ border-radius:8px; }
