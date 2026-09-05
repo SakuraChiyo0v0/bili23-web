@@ -92,6 +92,14 @@ export function listHistory(): Promise<{ history: Array<{ taskId: string; title:
 export function deleteHistory(taskId: string): Promise<{ ok: boolean }> {
   return request(`/history/${encodeURIComponent(taskId)}`, { method: "DELETE" });
 }
+
+export interface ParseHistoryItem { id: number; url: string; title: string; type: string; itemCount: number; createdAt: number }
+export function listParseHistory(): Promise<{ history: ParseHistoryItem[] }> {
+  return request("/parse-history");
+}
+export function deleteParseHistory(id: number): Promise<{ ok: boolean }> {
+  return request(`/parse-history/${id}`, { method: "DELETE" });
+}
 export function taskLog(id: string): Promise<{ lines: string[] }> {
   return request(`/tasks/${encodeURIComponent(id)}/log`);
 }

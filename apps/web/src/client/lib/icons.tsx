@@ -1,5 +1,5 @@
 import {
-  Search, Download, Star, Info, Settings, User, Moon, X, Check, Play, Pause, Folder, ExternalLink, Eye, Sun, ChevronDown, ChevronRight,
+  Search, Download, Star, Info, Settings, User, Moon, X, Check, Play, Pause, Folder, ExternalLink, Eye, Sun, ChevronDown, ChevronRight, History,
   type LucideProps,
 } from "lucide-react";
 
@@ -19,6 +19,7 @@ const ICONS = {
   folder: Folder,
   external: ExternalLink,
   eye: Eye,
+  history: History,
   sun: Sun,
   chevD: ChevronDown,
   chevR: ChevronRight,
