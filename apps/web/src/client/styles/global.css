@@ -164,7 +164,11 @@ select:focus, .text-input:focus{ border-color:var(--accent); box-shadow:0 0 0 3p
 
 /* ===== Toast ===== */
 .toast-root{ position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:300; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; width:min(92vw,480px); }
-.toast{ background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px; box-shadow:var(--shadow-md); padding:10px 16px; font-size:13.5px; pointer-events:auto; display:flex; align-items:center; gap:9px; max-width:100%; animation:toastIn .22s var(--ease); }
+.toast{ background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:10px; box-shadow:var(--shadow-md); padding:10px 16px; font-size:13.5px; pointer-events:auto; display:flex; align-items:center; gap:9px; max-width:100%; animation:toastIn .22s var(--ease);
+  /* 退场要做的两件事：淡出 + 折叠自身高度（栈里其余的自然往上收） */
+  max-height:220px; overflow:hidden;
+  transition:opacity .16s var(--ease), transform .16s var(--ease), max-height .2s var(--ease), padding .2s var(--ease), margin .2s var(--ease); }
+.toast.closing{ opacity:0; transform:translateY(-6px); max-height:0; padding-top:0; padding-bottom:0; }
 .toast.ok{ border-left-color:var(--success); } .toast.err{ border-left-color:var(--danger); } .toast.warn{ border-left-color:var(--warning); }
 .toast-dot{ width:8px; height:8px; border-radius:50%; flex:none; background:var(--accent); }
 .toast.ok .toast-dot{ background:var(--success); } .toast.err .toast-dot{ background:var(--danger); } .toast.warn .toast-dot{ background:var(--warning); }
