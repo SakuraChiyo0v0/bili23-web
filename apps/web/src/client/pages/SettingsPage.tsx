@@ -659,8 +659,7 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
       <LogViewerDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }} />
-      {resetOpen && (
-        <Overlay open dismissable={false} size="sm">
+      <Overlay open={resetOpen} onClose={() => setResetOpen(false)} dismissable={false} size="sm">
             <div className="modal-head">
               <div className="modal-title">{tr("重置配置")}</div>
               <button type="button" className="icon-btn" onClick={() => setResetOpen(false)} aria-label={tr("关闭")}>
@@ -675,7 +674,6 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
               </div>
             </div>
           </Overlay>
-      )}
     </Group>
   );
 }

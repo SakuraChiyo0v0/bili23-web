@@ -112,8 +112,7 @@ export function McpCardBody({
         </>
       )}
 
-      {confirmRegen && (
-        <Overlay open dismissable={false} size="sm">
+      <Overlay open={confirmRegen} onClose={() => setConfirmRegen(false)} dismissable={false} size="sm">
             <div className="modal-head">
               <div className="modal-title">{tr("重新生成访问令牌")}</div>
               <button type="button" className="icon-btn" onClick={() => setConfirmRegen(false)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -128,7 +127,6 @@ export function McpCardBody({
               </div>
             </div>
           </Overlay>
-      )}
     </>
   );
 }

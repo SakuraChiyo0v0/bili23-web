@@ -17,7 +17,9 @@ import { Overlay } from "./Overlay";
  * 语义与原版一致，又不需要阻塞线程。父组件用 `key={itemId}` 渲染，换下一条时组件重挂，
  * 「不再询问」自然回到未勾选（等同原版每次都新建弹窗）。
  */
-export function DuplicateDialog({ duplicate, remaining, onContinue, onSkip }: {
+export function DuplicateDialog({ open, duplicate, remaining, onContinue, onSkip }: {
+  /** 由父组件传开关（**不再用 `&&` 门控组件挂载**）：只有这样关闭时 Overlay 才播得到退场动画 */
+  open: boolean;
   /** 当前这一条 */
   duplicate: { itemId: string; title: string };
   /** 队列里还剩几条（含当前这条）—— 原版没有这个计数，是我们给队列加的一行小字 */
@@ -27,7 +29,7 @@ export function DuplicateDialog({ duplicate, remaining, onContinue, onSkip }: {
 }) {
   const [neverAsk, setNeverAsk] = useState(false);
   return (
-    <Overlay open dismissable={false} size="sm" sheetOnMobile centerOnMobile>
+    <Overlay open={open} dismissable={false} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("检测到重复下载")}</div>
         </div>

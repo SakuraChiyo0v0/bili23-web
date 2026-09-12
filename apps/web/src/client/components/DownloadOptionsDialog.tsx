@@ -269,15 +269,14 @@ export function DownloadOptionsDialog() {
         onCancel={() => setNotice(null)}
       />
       {/* 逐条询问重复项（原版 DuplicateDownloadDialog）；key 让换下一条时组件重挂、「不再询问」复位 */}
-      {dupHead && (
-        <DuplicateDialog
-          key={dupHead.itemId}
-          duplicate={dupHead}
-          remaining={dupQueue.length}
-          onContinue={(neverAsk) => void resolveDuplicates(true, neverAsk)}
-          onSkip={(neverAsk) => void resolveDuplicates(false, neverAsk)}
-        />
-      )}
+      <DuplicateDialog
+        key={dupHead?.itemId ?? "none"}
+        open={dupHead !== null}
+        duplicate={dupHead ?? { itemId: "", title: "" }}
+        remaining={dupQueue.length}
+        onContinue={(neverAsk) => void resolveDuplicates(true, neverAsk)}
+        onSkip={(neverAsk) => void resolveDuplicates(false, neverAsk)}
+      />
       {/* 「有关编号设置的说明」（原版 `card.py:435-442` 的超链接） */}
       <GuideDialog open={numberingGuideOpen} title={tr("有关编号设置的说明")} text={NUMBERING_GUIDE} onClose={() => setNumberingGuideOpen(false)} />
     </Overlay>
