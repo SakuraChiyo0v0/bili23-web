@@ -191,7 +191,18 @@ export function FavoritesPage({
           )}
 
           {loading ? (
-            <div className="fav-empty"><span className="spinner" /><p className="muted">{tr("加载中…")}</p></div>
+            <div className="fav-scroll" aria-hidden="true">
+              <div className="fav-grid">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div className="fav-cell" key={i}>
+                    <div className="fav-item">
+                      <div className="sk fav-thumb" />
+                      <span className="fav-item-text"><span className="sk sk-line w80" /><span className="sk sk-line w40" /></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : error ? (
             <div className="fav-empty">
               <p className="muted">{error}</p>

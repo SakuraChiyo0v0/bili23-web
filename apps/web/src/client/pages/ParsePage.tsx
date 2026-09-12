@@ -487,7 +487,18 @@ export function ParsePage() {
       )}
 
       {session.state === "parsing" && (
-        <div className="empty-state"><span className="spinner" /><p>{tr("正在解析…")}</p></div>
+        <div className="empty-state">
+              {/* 解析中：用骨架行画出"结果即将出现"的形状（以前只转一个圈） */}
+              <div className="sk-rows" aria-hidden="true">
+                {[0, 1, 2, 3].map((i) => (
+                  <div className="sk-row" key={i}>
+                    <div className="sk sk-thumb" />
+                    <div className="sk-lines"><div className="sk sk-line w80" /><div className="sk sk-line w40" /></div>
+                  </div>
+                ))}
+              </div>
+              <p>{tr("正在解析…")}</p>
+            </div>
       )}
       {session.state === "success" && (
         <ParseTree

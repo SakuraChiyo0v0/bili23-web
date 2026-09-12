@@ -367,7 +367,7 @@ function MediaPane({ media, loading, error, form, patchForm, videoQualityId, aud
             所以要把"取自哪个"写出来，否则用户看到的画质可能与自己要下的那条对不上。 */}
         {sourceLabel ? <div className="muted small">{tr("媒体信息来源")}：{sourceLabel}</div> : null}
         {media && <span className={`badge dl-type${media.mediaType === "dash" ? "" : " mp4"}`}>{media.mediaType === "dash" ? tr("DASH 流") : tr("单文件/MP4")}</span>}
-        {loading ? <div className="muted small">{tr("正在获取...")}</div>
+        {loading ? <div aria-hidden="true"><div className="sk sk-line w60" /><div className="sk sk-line w80" /><div className="sk sk-line w40" /></div>
           : error ? <div className="muted small">{tr("加载失败：")}{error}</div>
           : null}
         <div className="dl-selects">

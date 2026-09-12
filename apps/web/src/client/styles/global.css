@@ -263,6 +263,21 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .toolbar-ops{ display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center; }
 .toolbar-label b{ color:var(--ink); }
 .parse-card{ padding:18px; }
+/* 骨架屏：加载中的占位块（等着的时候不再只转一个圈）。
+   开了「精简动效」时全局会把动画关掉 → 退化成静态灰块，不会闪 */
+.sk{ background:var(--surface-3); border-radius:6px; position:relative; overflow:hidden; }
+.sk::after{ content:""; position:absolute; inset:0; transform:translateX(-100%);
+  background:linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 70%, transparent), transparent);
+  animation:skShine 1.2s var(--ease) infinite; }
+@keyframes skShine{ to{ transform:translateX(100%); } }
+.sk-line{ height:12px; margin:6px 0; }
+.sk-line.w40{ width:40%; } .sk-line.w60{ width:60%; } .sk-line.w80{ width:80%; }
+.sk-block{ height:72px; }
+/* 解析中的骨架列表：几条模拟"行 + 缩略图"的形状 */
+.sk-rows{ width:100%; max-width:640px; display:flex; flex-direction:column; gap:10px; }
+.sk-row{ display:flex; align-items:center; gap:12px; }
+.sk-thumb{ width:96px; height:54px; flex:none; }
+.sk-row .sk-lines{ flex:1; display:flex; flex-direction:column; gap:7px; }
 .spinner{ width:22px; height:22px; border:3px solid var(--surface-3); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin{ to{ transform:rotate(360deg); } }
 
