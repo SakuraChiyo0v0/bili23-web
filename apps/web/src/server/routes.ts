@@ -101,6 +101,10 @@ export interface ApiDeps {
   listFavFolders?(kind?: "created" | "collected"): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number; cover: string; url: string }> }>;
   /** 逐个取「我创建的」收藏夹封面（限并发 + 缓存；见实现注释里 412 的坑） */
   listFavFolderCovers?(ids: number[]): Promise<Record<number, string>>;
+  /** 「保存到本机」：按任务 id 解析投递产物（三重校验，见实现） */
+  deliverFilePath?(taskId: string): string | undefined;
+  /** 投递完成后删除服务器副本 */
+  removeDelivered?(taskId: string, abs: string): Promise<void>;
   /** 追番/追剧：type=1 追番 / 2 追剧；status=0 全部 / 1 想看 / 2 在看 / 3 看过；pn 分页 */
   listFollowBangumi?(type?: string, status?: number, pn?: number): Promise<{
     follow: Array<{ seasonId: number; title: string; cover: string; type: string; newEp: string; progress: string; desc: string; isFinish: number; url: string }>;
@@ -435,6 +439,38 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
         await s.write(chunk as Uint8Array);
       }
       rs.destroy();
+    });
+  });
+
+  /**
+   * 「保存到本机」：把投递目录里的产物推给浏览器。
+   *
+   * 与 `/api/files/raw` 的区别：① 只能按**任务 id** 取（不接受任意路径）；
+   * ② 只能取投递目录里的文件（`deliverFilePath` 三重校验）；
+   * ③ **推完即删服务器副本** —— 用户选「本机」就不在服务器上留一份。
+   *
+   * 删除放在流结束之后：读流 loop 走完说明字节都已交给响应；若此时删不掉
+   *（Windows 上句柄可能还没释放），留给 `sweepDeliverDir` 的 24h 清理兜底，不影响用户。
+   */
+  app.get("/api/deliver/raw", async (c) => {
+    const manager = getManager();
+    const taskId = c.req.query("taskId") ?? "";
+    if (!taskId) return c.json({ error: { code: "INVALID_PATH", message: "缺少 taskId" } }, 400);
+    const abs = manager.deliverFilePath?.(taskId);
+    if (!abs) return c.json({ error: { code: "NOT_FOUND", message: "投递产物不存在或已被取走" } }, 404);
+    const name = basename(abs);
+    c.header("Content-Type", "application/octet-stream");
+    c.header(
+      "Content-Disposition",
+      `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "'")}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    );
+    return stream(c, async (s) => {
+      const rs = createReadStream(abs);
+      for await (const chunk of rs) {
+        await s.write(chunk as Uint8Array);
+      }
+      rs.destroy();
+      await manager.removeDelivered?.(taskId, abs);
     });
   });
 

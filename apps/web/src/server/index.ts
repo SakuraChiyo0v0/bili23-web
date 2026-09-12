@@ -28,6 +28,13 @@ function getDefaultManager(): DownloadManager {
       dataDir,
       ...(downloadDir ? { downloadDir } : {}),
     });
+    /**
+     * 「保存到本机」的投递目录：启动扫一次 + 每小时扫一次，把超过 24h 还没被拉走的产物清掉
+     *（用户选了「本机」却一直没取回时，别让它在服务器上一直占空间）。
+     * `unref()` 让这个定时器不阻塞进程退出。
+     */
+    void defaultManager.sweepDeliverDir();
+    setInterval(() => { void defaultManager?.sweepDeliverDir(); }, 60 * 60 * 1000).unref?.();
   }
   return defaultManager;
 }

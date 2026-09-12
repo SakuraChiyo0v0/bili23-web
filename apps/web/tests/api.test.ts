@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { BiliError } from "@bili23-web/engine";
 import type { MediaItem, ParseResult } from "@bili23-web/engine";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createApp } from "../src/server/index.js";
 import type { ApiDeps } from "../src/server/routes.js";
 import { defaultAppConfig } from "../src/server/config.js";
@@ -58,6 +59,9 @@ function makeDeps(): ApiDeps & {
   retried: string[];
   deleted: string[];
   historyDeleted: string[];
+  /** `/api/deliver/raw` 用例用的：投递文件路径 + "已删除副本"的记录 */
+  deliverFile: string;
+  deliveredRemoved: string[];
 } {
   const cancelled: string[] = [];
   const created: Array<{ ids: string[]; options: DownloadOptions; force: boolean }> = [];
@@ -66,6 +70,11 @@ function makeDeps(): ApiDeps & {
   const retried: string[] = [];
   const deleted: string[] = [];
   const historyDeleted: string[] = [];
+  /** `/api/deliver/raw` 用的临时文件与"已删除"记录 */
+  const deliverDir = mkdtempSync(join(tmpdir(), "bili23-deliver-"));
+  const deliverFile = join(deliverDir, "投递视频.mp4");
+  writeFileSync(deliverFile, Buffer.from("DELIVER-BYTES"));
+  const deliveredRemoved: string[] = [];
   const deps: ApiDeps = {
     async parseUrls(urls) {
       const results: ParseResult[] = urls.map((url) => ({
@@ -138,11 +147,18 @@ function makeDeps(): ApiDeps & {
     resolveDownloadFile() {
       return undefined;
     },
+    /** 「保存到本机」：stub 里指向一个真实临时文件（路由会流式读它） */
+    deliverFilePath(taskId: string) {
+      return taskId === "deliver-1" ? deliverFile : undefined;
+    },
+    async removeDelivered(taskId: string) {
+      deliveredRemoved.push(taskId);
+    },
     async listFiles(): Promise<FileEntry[]> {
       return [{ name: "a.mp4", path: "视频A/a.mp4", size: 100, mtime: 1 }];
     },
   };
-  return { ...deps, cancelled, created, paused, resumed, retried, deleted, historyDeleted };
+  return { ...deps, cancelled, created, paused, resumed, retried, deleted, historyDeleted, deliverFile, deliveredRemoved };
 }
 
 describe("Web API 路由", () => {
@@ -440,5 +456,29 @@ describe("/api/dirs 目录选择接口", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("「保存到本机」投递接口", () => {
+  it("GET /api/deliver/raw?taskId=… 返回文件字节、带文件名，并在推完之后删服务器副本", async () => {
+    const stub = makeDeps();
+    const app = createApp({ manager: stub as never });
+    const res = await app.request("/api/deliver/raw?taskId=deliver-1");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("DELIVER-BYTES");
+    // 文件名要给出（否则浏览器会存成 raw）
+    const cd = res.headers.get("content-disposition") ?? "";
+    expect(cd).toContain("attachment;");
+    expect(cd).toContain("filename*=UTF-8''");
+    // 推完即删：服务端不留副本
+    expect(stub.deliveredRemoved).toEqual(["deliver-1"]);
+  });
+
+  it("taskId 缺失或不是投递任务 → 404/400，不泄露其它文件", async () => {
+    const stub = makeDeps();
+    const app = createApp({ manager: stub as never });
+    expect((await app.request("/api/deliver/raw")).status).toBe(400);
+    expect((await app.request("/api/deliver/raw?taskId=别的任务")).status).toBe(404);
+    expect(stub.deliveredRemoved).toEqual([]);
   });
 });

@@ -118,6 +118,13 @@ export interface DownloadOptions {
   /** 是否下载视频流（缺省 true） */
   downloadVideo?: boolean;
   /**
+   * 产物送到哪里（用户在下载选项里选）：
+   * - `server`（默认）= 下到「下载路径」，进产物库、可长期留存（**下到 NAS** 就是这个）
+   * - `local` = 下到**投递目录**，不进产物库；用户点「保存到本机」时流式推给浏览器，
+   *   **推完即删服务器上的副本**（不在服务器留一份）
+   */
+  deliver?: "server" | "local";
+  /**
    * **本次任务**的下载目录（原版下载选项弹窗页签3「下载设置 → 下载目录卡」，save=False）。
    * 只影响这一次任务，不写回全局配置；留空 = 用全局下载目录。
    */
@@ -152,6 +159,8 @@ export interface TaskSummary {
   totalBytes: number;
   outputPath?: string | undefined;
   error?: string | undefined;
+  /** 产物落点：server=下载路径（产物库）/ local=投递目录（拉到本机后即删） */
+  deliver?: "server" | "local";
   createdAt: number;
   updatedAt: number;
   qualityLabel: string;
@@ -388,6 +397,8 @@ class ManagedTask {
       etaSec: this.status === "downloading" ? this.etaSec : undefined,
       cover: this.item.cover || undefined,
       url: this.item.url || undefined,
+      // 产物送到哪里：local 的任务完成后由客户端点「保存到本机」拉走，服务端不留副本
+      deliver: this.options.deliver === "local" ? "local" : "server",
     };
   }
 
@@ -511,6 +522,8 @@ export class DownloadManager {
   /** 匿名会话引导（buvid/bili_ticket 等指纹 cookie），首次解析前就绪（最佳努力，不失败） */
   #sessionReady: Promise<void>;
   #rootDir: string;
+  /** 「保存到本机」的临时投递目录；产物被浏览器拉走后就删掉，不留副本 */
+  #deliverDir: string;
   /** 收藏夹封面缓存（folder id → 封面 URL；失败也缓存，短 TTL，避免 412 后立刻重试） */
   #coverCache = new Map<number, { cover: string; at: number }>();
   #tmpDir: string;
@@ -551,6 +564,8 @@ export class DownloadManager {
     this.#sessionReady = ensureAnonymousSession(this.ctx);
     this.#dataDir = opts.dataDir;
     this.#rootDir = opts.downloadDir ?? join(opts.dataDir, "downloads");
+    // 「保存到本机」的投递目录：**刻意放在下载目录之外**，否则它会出现在产物库列表里
+    this.#deliverDir = join(opts.dataDir, "deliver");
     this.#tmpDir = join(this.#rootDir, ".tmp");
     // 同步建目录：TaskStore/ConfigStore 打开 SQLite 前目录必须已存在
     mkdirSync(opts.dataDir, { recursive: true });
@@ -1344,9 +1359,20 @@ export class DownloadManager {
         // 否则固化创建任务那一刻的全局目录（原版 `manager.py:105`
         // `task_info.File.download_path = config.get(config.download_path)`）。
         // 固化之后，用户再改全局目录不会把已排队任务的落盘位置一起搬走。
-        ...(options.downloadDir && options.downloadDir.trim() !== "" ? {} : { downloadDir: this.#rootDir }),
+        // 「保存到本机」的任务：先给投递根目录，下面拿到 task.id 再收到自己的子目录里
+        ...(options.deliver === "local"
+          ? { downloadDir: this.#deliverDir }
+          : options.downloadDir && options.downloadDir.trim() !== ""
+            ? {}
+            : { downloadDir: this.#rootDir }),
+        ...(options.deliver === "local" ? { deliver: "local" as const } : {}),
       };
       const task = new ManagedTask(item, resolved);
+      // 每个投递任务一个独立子目录（任务 id）：删的时候只删自己那一份，互不影响
+      if (options.deliver === "local") {
+        mkdirSync(join(this.#deliverDir, task.id), { recursive: true });
+        task.options.downloadDir = join(this.#deliverDir, task.id);
+      }
       task.duplicate = duplicates.some((d) => d.itemId === item.id);
       this.#tasks.set(task.id, task);
       // 进入等待队列：先持久化 queued，再由调度器按并发上限启动
@@ -1540,6 +1566,89 @@ export class DownloadManager {
   /** 规范化下载根内相对路径并防目录穿越；越界/非法返回 undefined */
   resolveDownloadFile(relPath: string): string | undefined {
     return resolveDownloadPath(this.#rootDir, relPath);
+  }
+
+  /**
+   * 「保存到本机」：按任务 id 取投递文件（给 `/api/deliver/raw` 用）。
+   *
+   * 三重校验，避免把任意文件读出去：
+   * ① 任务存在且 `deliver === "local"`；② 产物路径**必须落在投递目录内**；③ 文件确实存在。
+   */
+  deliverFilePath(taskId: string): string | undefined {
+    const live = this.#tasks.get(taskId);
+    let deliver: "server" | "local" | undefined;
+    let file: string | undefined;
+    if (live) {
+      deliver = live.options.deliver;
+      file = live.outputPath;
+    } else {
+      // 进程重启后 #tasks 里没有了 → 从历史快照里取（快照存了 outputPath 与 options）
+      const rec = this.#store.getCompleted(taskId);
+      const data = rec?.data as (Partial<TaskSnapshot> & { outputPath?: string; options?: DownloadOptions }) | null;
+      deliver = data?.options?.deliver;
+      file = data?.outputPath;
+    }
+    if (deliver !== "local" || !file) return undefined;
+    const root = resolve(this.#deliverDir);
+    const abs = resolve(file);
+    if (abs !== root && !abs.startsWith(root + sep)) return undefined;
+    if (!existsSync(abs)) return undefined;
+    return abs;
+  }
+
+
+  /**
+   * 投递完成后删掉服务器上的副本（「保存到本机」就不在服务器留一份）。
+   * 只删**这一个文件**，删完顺手清空它自己的目录 —— 绝不递归删目录。
+   */
+  async removeDelivered(taskId: string, abs: string): Promise<void> {
+    try {
+      await rm(abs, { force: true });
+      // 逐级向上清空目录（命名规则可能建了子目录）：**只删空目录**，到投递根为止，绝不递归
+      const root = resolve(this.#deliverDir);
+      let dir = dirname(abs);
+      while (resolve(dir) !== root && resolve(dir).startsWith(root + sep)) {
+        const rest = await readdir(dir).catch(() => ["x"]);
+        if (rest.length > 0) break;
+        await rm(dir, { force: true }).catch(() => undefined);
+        dir = dirname(dir);
+      }
+      logInfo("download", `投递完成，已删除服务器副本：${basename(abs)}`);
+    } catch (err) {
+      // 删不掉（比如 Windows 上还有句柄）就留给清理任务，不影响用户已拿到的文件
+      logWarn("download", `投递副本删除失败（留待清理）：${String(err)}（task=${taskId}）`);
+    }
+  }
+
+  /**
+   * 扫投递目录：把超过 `maxAgeMs` 还没被拉走的产物清掉（用户选「本机」但一直没取回时）。
+   * 启动时跑一次 + 每小时一次。
+   *
+   * ⚠️ 命名规则会建子目录（`<deliver>/<taskId>/<分类>/xxx.mp4`），所以必须**递归往下走**；
+   * 但**只删文件、绝不 `rm -r` 目录** —— 空目录自底向上删（`rm` 非递归，删不掉就跳过）。
+   */
+  async sweepDeliverDir(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
+    const deadline = Date.now() - maxAgeMs;
+    let removed = 0;    /** 自底向上：先清这一层的过期文件，再递归子目录，最后尝试删空目录 */
+    const walk = async (dir: string): Promise<void> => {
+      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      for (const e of entries) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) { await walk(full); continue; }
+        if (!e.isFile()) continue;
+        const st = await stat(full).catch(() => null);
+        if (!st || st.mtimeMs > deadline) continue;
+        await rm(full, { force: true }).catch(() => undefined);
+        removed += 1;
+      }
+      // 子目录都处理完了：空了就删掉（非递归，只会删空目录）
+      if (resolve(dir) === resolve(this.#deliverDir)) return;
+      const rest = await readdir(dir).catch(() => ["x"]);
+      if (rest.length === 0) await rm(dir, { force: true }).catch(() => undefined);
+    };
+    await walk(this.#deliverDir);
+    if (removed > 0) logInfo("download", `投递目录清理：删除 ${removed} 个过期产物`);
+    return removed;
   }
 
   /** 产物目录浏览（不含 .tmp 临时目录） */

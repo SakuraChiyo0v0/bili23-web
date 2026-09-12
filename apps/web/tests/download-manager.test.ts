@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
-import { stat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readdir, stat, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { MediaItem } from "@bili23-web/engine";
 
 // 离线测试：mock @bili23-web/engine 的网络/ffmpeg 入口，
@@ -160,6 +161,21 @@ async function waitFor(fn: () => boolean, timeoutMs = 8000): Promise<void> {
 }
 
 let tmpRoot = "";
+
+/** 递归列出目录下的**文件**（绝对路径）；目录不存在返回空数组 */
+async function readdirRecursive(root: string): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) await walk(full);
+      else if (e.isFile()) out.push(full);
+    }
+  };
+  await walk(root);
+  return out;
+}
 
 async function makeManager(dataDir?: string): Promise<DownloadManagerType> {
   const dir = dataDir ?? (await mkdtemp(join(tmpRoot, "mgr-")));
@@ -439,6 +455,71 @@ describe("DownloadManager 队列/暂停/恢复/重启恢复", () => {
         10000,
       );
       await waitFor(() => mgr.listHistory().length === 3, 10000);
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+    }
+  });
+
+  it("deliver=local：产物落**投递目录**（而不是下载目录），且 summary 里标了 local", async () => {
+    const dir = await mkdtemp(join(tmpRoot, "deliver-"));
+    const mgr = await makeManager(dir);
+    try {
+      const items = await seedThree(mgr);
+      const created = await mgr.createTasks([items[0]!.id], { deliver: "local" });
+      const id = created.tasks[0]!.id;
+      expect(created.tasks[0]!.deliver).toBe("local");
+      await waitFor(() => statusOf(mgr, id)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, id)?.status === "completed", 10000);
+
+      const out = statusOf(mgr, id)?.outputPath ?? "";
+      // 落在 <dataDir>/deliver/<taskId>/… 里，而不是 <dataDir>/downloads/…
+      expect(out.replace(/\\/g, "/")).toContain(`/deliver/${id}/`);
+      expect(out.replace(/\\/g, "/")).not.toContain("/downloads/");
+      // 投递文件能被按 taskId 解析出来（给 /api/deliver/raw 用）
+      expect(mgr.deliverFilePath(id)).toBe(out);
+      // 而普通下载任务解析不到（deliver !== local）
+      const normal = await mgr.createTasks([items[1]!.id], {});
+      expect(mgr.deliverFilePath(normal.tasks[0]!.id)).toBeUndefined();
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+    }
+  });
+
+  it("投递副本：removeDelivered 删掉文件与**空**目录；sweepDeliverDir 只清过期的", async () => {
+    const dir = await mkdtemp(join(tmpRoot, "deliver-sweep-"));
+    const mgr = await makeManager(dir);
+    try {
+      const items = await seedThree(mgr);
+      const created = await mgr.createTasks([items[0]!.id], { deliver: "local" });
+      const id = created.tasks[0]!.id;
+      await waitFor(() => statusOf(mgr, id)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, id)?.status === "completed", 10000);
+      const out = mgr.deliverFilePath(id)!;
+      expect(out).toBeTruthy();
+
+      // 过期的（mtime 设成 25 小时前）会被清掉
+      const old = join(dir, "deliver", "stale-task", "old.mp4");
+      await mkdir(dirname(old), { recursive: true });
+      await writeFile(old, Buffer.alloc(8));
+      const past = (Date.now() - 25 * 60 * 60 * 1000) / 1000;
+      await utimes(old, past, past);
+      expect(await mgr.sweepDeliverDir()).toBe(1);
+      expect(existsSync(old)).toBe(false);
+      // 新鲜的（刚下的那份）保留
+      expect(existsSync(out)).toBe(true);
+
+      // 取走后删除：文件没了，且该任务的投递目录下**不再有任何文件**（空目录可留，清理任务会收）
+      await mgr.removeDelivered(id, out);
+      expect(existsSync(out)).toBe(false);
+      expect(mgr.deliverFilePath(id)).toBeUndefined();
+      const restFiles = await readdirRecursive(join(dir, "deliver", id)).catch(() => []);
+      expect(restFiles.length).toBe(0);
     } finally {
       mgr.close();
       h.state.downloads.length = 0;
