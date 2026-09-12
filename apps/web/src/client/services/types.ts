@@ -134,6 +134,8 @@ export interface AppConfig {
   behavior: {
     language: string;
     theme: string;
+    /** 动效偏好：smooth 流畅 / reduced 精简（服务端 config.ts 的 behavior.motion，默认 smooth） */
+    motion?: "smooth" | "reduced";
     saveParseHistory: boolean;
     showDownloadOptionsDialog: boolean;
     /** 下载前预分配文件空间（桌面 `preallocate_file_space`，默认开） */

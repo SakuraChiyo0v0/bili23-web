@@ -207,6 +207,12 @@ function InterfaceGroup({ config, onPatch }: { config: any; onPatch: (p: any) =>
         <Row label={tr("主题")} desc={tr("选择应用程序主题")} control={
           <ThemeSwitcher value={b.theme} onChange={(v) => onPatch({ behavior: { theme: v } })} />
         }/>
+        {/* 动效偏好（我们自己的设置，原版没有）。改这里就写回配置并镜像到 localStorage，
+            下次首屏在 React 渲染前就能用上（见 App.tsx / main.tsx） */}
+        <Row label={tr("动效")} desc={tr("界面过渡与动画的强弱；系统开启「减少动态效果」时会自动精简")} control={
+          <Seg value={b.motion ?? "smooth"} options={[["smooth", tr("流畅")], ["reduced", tr("精简")]]}
+            onChange={(v) => onPatch({ behavior: { motion: v } })} />
+        }/>
       </Card>
       {/* 原版是 ComboBoxSettingCard（100%–200%），桌面缩放概念在 Web 端不适用 */}
       <Card icon="eye" title={tr("显示缩放")} desc={tr("调整应用界面的缩放比例")} />

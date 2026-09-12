@@ -18,6 +18,9 @@ import { TasksPage } from "./pages/TasksPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { FilesPage } from "./pages/FilesPage";
 import { t as tr, resolveLang, setCurrentLang, type Lang } from "./lib/i18n";
+import { applyMotion } from "./lib/theme";
+import { saveJSON } from "./lib/storage";
+import { MOTION_KEY } from "./lib/useUiSettings";
 
 export function App() {
   return (
@@ -44,6 +47,7 @@ function Shell() {
   const parseSession = useParseSession();
   const loadConfig = useSettingsStore((s) => s.load);
   const cfgLang = useSettingsStore((s) => s.config?.behavior?.language);
+  const cfgMotion = useSettingsStore((s) => s.config?.behavior?.motion);
   /**
    * 语言（i18n）。两个要点：
    * 1. **在渲染期**调用 `setCurrentLang` —— 它是模块级状态，`t()` 在子组件渲染时读它；
@@ -52,6 +56,16 @@ function Shell() {
    * 2. 下面给 `.app` 挂 `key={lang}`：换语言时整棵树**重挂**，各处静态调用自然重算，
    *    省掉在 48 个文件里逐处订阅 store。
    */
+  /**
+   * 动效偏好以**配置**为准（与主题同一条路子）：配置同步到 localStorage 镜像 `ui.motion`，
+   * 给下次首屏在 React 渲染前用（见 main.tsx）。原先它只存在 localStorage、且启动时不应用。
+   */
+  useEffect(() => {
+    if (!cfgMotion) return;
+    applyMotion(cfgMotion);
+    saveJSON(MOTION_KEY, cfgMotion);
+  }, [cfgMotion]);
+
   const lang: Lang = resolveLang(cfgLang, typeof navigator !== "undefined" ? navigator.language : undefined);
   setCurrentLang(lang);
   // 全局配置要在解析之前就位：解析成功的"自动勾选"策略（behavior.autoSelectMode）由它决定，

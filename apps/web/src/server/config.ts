@@ -79,6 +79,12 @@ export interface AutoSelectConditions {
 export interface BehaviorConfig {
   language: "zh-CN" | "zh-TW" | "en" | "system";
   theme: "light" | "dark" | "system";
+  /**
+   * 动效偏好（我们自己的设置，原版没有）：`smooth` 流畅 / `reduced` 精简。
+   * 放在 config 里与 theme 同样待遇 —— 跨设备同步；localStorage 只做首屏镜像
+   *（`ui.motion`，给 React 渲染前的第一帧用）。
+   */
+  motion: "smooth" | "reduced";
   /** 解析成功后是否写入解析历史（对齐桌面 Behavior > 保存解析历史，默认开） */
   saveParseHistory: boolean;
   /** 点下载后是否自动弹出“下载选项”弹窗（对齐桌面 Behavior > 下载前弹下载选项框，默认开） */
@@ -199,6 +205,7 @@ const DUPLICATE_POLICIES = ["prompt", "skip", "force"] as const;
 const CONTAINERS = ["mp4", "mkv"] as const;
 const LANGUAGES = ["zh-CN", "zh-TW", "en", "system"] as const;
 const THEMES = ["light", "dark", "system"] as const;
+const MOTIONS = ["smooth", "reduced"] as const;
 const AUTO_SELECT_MODES = ["manual", "all", "conditional"] as const;
 
 export function defaultAppConfig(): AppConfig {
@@ -225,6 +232,7 @@ export function defaultAppConfig(): AppConfig {
     behavior: {
       language: "system",
       theme: "system",
+      motion: "smooth",
       saveParseHistory: true,
       showDownloadOptionsDialog: true,
       preallocateFileSpace: true,
@@ -315,6 +323,7 @@ function sanitizeBehavior(raw: unknown): BehaviorConfig {
   return {
     language: isOneOf(o.language, LANGUAGES) ? o.language : def.language,
     theme: isOneOf(o.theme, THEMES) ? o.theme : def.theme,
+    motion: isOneOf(o.motion, MOTIONS) ? o.motion : def.motion,
     saveParseHistory: typeof o.saveParseHistory === "boolean" ? o.saveParseHistory : def.saveParseHistory,
     showDownloadOptionsDialog:
       typeof o.showDownloadOptionsDialog === "boolean" ? o.showDownloadOptionsDialog : def.showDownloadOptionsDialog,
@@ -453,6 +462,7 @@ export function validateConfig(next: AppConfig): string[] {
   if (typeof be.preallocateFileSpace !== "boolean") errors.push("behavior.preallocateFileSpace 需为布尔值");
   if (typeof be.monitorClipboard !== "boolean") errors.push("behavior.monitorClipboard 需为布尔值");
   if (!isOneOf(be.theme, THEMES)) errors.push("behavior.theme 需为 light、dark 或 system");
+  if (!isOneOf(be.motion, MOTIONS)) errors.push("behavior.motion 需为 smooth 或 reduced");
   if (typeof be.saveParseHistory !== "boolean") errors.push("behavior.saveParseHistory 需为布尔值");
   if (typeof be.showDownloadOptionsDialog !== "boolean") errors.push("behavior.showDownloadOptionsDialog 需为布尔值");
   if (typeof be.showAutoParseDialog !== "boolean") errors.push("behavior.showAutoParseDialog 需为布尔值");

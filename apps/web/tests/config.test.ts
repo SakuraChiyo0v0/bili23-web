@@ -44,6 +44,8 @@ describe("ConfigStore 设置存储（download/behavior/advanced 组）", () => {
       expect(cfg.behavior).toEqual({
         language: "system",
         theme: "system",
+        // 动效偏好（我们自己的设置，默认流畅）
+        motion: "smooth",
         saveParseHistory: true,
         showDownloadOptionsDialog: true,
         // 预分配文件空间（桌面 Behavior 组，默认开）
