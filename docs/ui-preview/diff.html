@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>像素差异尺</title>
+<style>
+  body { margin: 0; background: #fff; font: 13px Consolas, monospace; }
+  canvas { display: block; }
+  #report { padding: 10px 16px; white-space: pre; }
+</style>
+</head>
+<body>
+<canvas id="heat"></canvas>
+<div id="report">计算中…</div>
+<script>
+// 像素差异尺：把「我们的实现」与「原版基准」逐像素比对。
+//   白 = 一致，越红 = 差得越多。
+// 为什么放在浏览器里做：PowerShell 逐点 GetPixel 太慢，
+// 而 .NET 10 下 Add-Type 引用 System.Drawing 的编译链走不通。
+// 用法：chrome --headless=new --allow-file-access-from-files --screenshot=... diff.html
+// 基准图与待比对图都从查询串取，这样可以按窗口尺寸比对不同的基准：
+//   diff.html?ref=ref/parse-1200x700.png&mine=preview-parse-1200x700.png
+const Q = new URLSearchParams(location.search);
+const A_SRC = Q.get("ref") || "ref/parse-950x600.png";   // 原版基准
+const B_SRC = Q.get("mine") || "preview-parse.png";      // 我们的实现
+const TILE = 32, TOPN = 12;
+
+function load(src) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error("加载失败: " + src));
+    im.src = src;
+  });
+}
+
+(async () => {
+  const rep = document.getElementById("report");
+  let a, b;
+  try { [a, b] = await Promise.all([load(A_SRC), load(B_SRC)]); }
+  catch (e) { rep.textContent = String(e); return; }
+
+  const w = Math.min(a.width, b.width), h = Math.min(a.height, b.height);
+  const get = (im) => {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(im, 0, 0);
+    return g.getImageData(0, 0, w, h).data;
+  };
+  const pa = get(a), pb = get(b);
+
+  const heat = document.getElementById("heat");
+  heat.width = w; heat.height = h;
+  const hg = heat.getContext("2d");
+  const out = hg.createImageData(w, h);
+  const od = out.data;
+
+  const tw = Math.ceil(w / TILE), th = Math.ceil(h / TILE);
+  const sum = new Float64Array(tw * th);
+  let total = 0, big = 0;
+
+  for (let y = 0; y < h; y++) {
+    const ty = ((y / TILE) | 0) * tw;
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const d = Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]);
+      total += d;
+      if (d > 60) big++;
+      sum[ty + ((x / TILE) | 0)] += d;
+      const v = d > 255 ? 255 : d;
+      od[i] = 255; od[i + 1] = 255 - v; od[i + 2] = 255 - v; od[i + 3] = 255;
+    }
+  }
+  hg.putImageData(out, 0, 0);
+
+  const n = w * h;
+  const lines = [];
+  lines.push(`比对区域 : ${w} x ${h}`);
+  lines.push(`平均色差 : ${(total / n).toFixed(2)} / 765     (越小越像)`);
+  lines.push(`差异像素 : ${(big / n * 100).toFixed(2)}%          (单像素色差 > 60 的占比)`);
+  lines.push("");
+  lines.push(`── 差异最大的 ${TOPN} 个区块（${TILE}×${TILE}）──`);
+  const idx = Array.from({ length: tw * th }, (_, i) => i);
+  idx.sort((p, q) => sum[q] - sum[p]);
+  for (let k = 0; k < TOPN && k < idx.length; k++) {
+    const t = idx[k];
+    const tx = (t % tw) * TILE, tyy = ((t / tw) | 0) * TILE;
+    lines.push(`   (${String(tx).padStart(4)}, ${String(tyy).padStart(4)})   平均色差 ${(sum[t] / (TILE * TILE)).toFixed(1)}`);
+  }
+  rep.textContent = lines.join("\n");
+})();
+</script>
+</body>
+</html>

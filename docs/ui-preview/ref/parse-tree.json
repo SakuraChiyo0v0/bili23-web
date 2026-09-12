@@ -1,0 +1,250 @@
+{
+  "url": "https://space.bilibili.com/23947287/lists/7022339?type=season",
+  "tree": {
+    "depth": 0,
+    "number": "",
+    "title": "",
+    "attribute": 0,
+    "bits": [],
+    "checked": 0,
+    "children": [
+      {
+        "depth": 1,
+        "number": "合集",
+        "title": "世纪风暴",
+        "attribute": 32768,
+        "bits": [
+          "TREE_NODE"
+        ],
+        "checked": 0,
+        "children": [
+          {
+            "depth": 2,
+            "number": 1,
+            "title": "赠予沙阿（上）  伊朗·1951",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 2,
+            "title": "赠予沙阿（下）  伊朗·1953",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 3,
+            "title": "灿烂阴云 伊朗·1963",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 4,
+            "title": "意外风暴 伊朗·1978",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 5,
+            "title": "愤怒波斯 伊朗·1978",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 6,
+            "title": "打翻王冠（上） 伊朗·1978",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 7,
+            "title": "打翻王冠（下） 伊朗·1979",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 8,
+            "title": "风暴之鸟  伊朗·1979",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 9,
+            "title": "隐秘刺客  伊朗·1979",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 10,
+            "title": "德黑兰之囚（上）  伊朗·1979",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 11,
+            "title": "德黑兰之囚（下）  伊朗·1980",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 12,
+            "title": "吉米·卡特的败局",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 13,
+            "title": "文化革命  伊朗·1980",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 14,
+            "title": "虚空一击  伊朗·1980",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 15,
+            "title": "绝望同盟  伊朗·1988",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          },
+          {
+            "depth": 2,
+            "number": 16,
+            "title": "告别伊玛目  伊朗篇（终）",
+            "attribute": 1169,
+            "bits": [
+              "VIDEO",
+              "COLLECTION_LIST",
+              "NEED_PARSE",
+              "COLLECTION"
+            ],
+            "checked": 0,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "total_downloadable": 16
+}

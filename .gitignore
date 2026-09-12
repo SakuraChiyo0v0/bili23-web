@@ -28,5 +28,8 @@ coverage/
 
 # --- UI reference screenshots (local only) ---
 .ui-ref/
+# 原版参考图与对照截图（docs/ui-preview 下的 PNG）：与 .ui-ref/ 同一约定，只留本地；
+# 该目录里的脚本、预览页、抓取的 JSON 仍然入库
+docs/ui-preview/**/*.png
 
 mock/*.png

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>响应式预览台</title>
+<style>
+/* ==========================================================================
+   响应式预览台 —— 为什么需要它：
+
+   ⚠️ Chrome 的窗口有**最小宽度（实测约 528px）**，`--window-size=414` 会被夹住：
+      截图仍是 414 宽，但页面的 innerWidth 是 528 —— 媒体查询按 528 生效，
+      超出的部分被裁掉。**所以用 --window-size 预览手机宽度是行不通的**
+      （我因为这个得出过"底部导航第三项没渲染"的错误结论，实际是截图裁掉了）。
+
+   正确做法：把页面放进**指定宽度的 iframe** 里 —— iframe 自己的视口宽度就是
+   它的宽度，媒体查询会据此正确响应。外层浏览器窗口开大即可。
+   ========================================================================== */
+html,body{margin:0;background:#dc2828;font:12px/1.4 Consolas,monospace;color:#fff}
+.row{display:flex;gap:10px;padding:10px;align-items:flex-start}
+.cell{background:#fff;color:#000}
+.cap{padding:4px 8px;font-weight:700}
+iframe{border:0;display:block;background:#fff}
+</style></head>
+<body>
+<div class="row">
+  <div class="cell"><div class="cap">桌面 · 1440×860</div>
+    <iframe src="shell.html" width="1440" height="860"></iframe></div>
+  <div class="cell"><div class="cap">平板 · 900×860</div>
+    <iframe src="shell.html" width="900" height="860"></iframe></div>
+  <div class="cell"><div class="cap">手机 · 375×760</div>
+    <iframe src="shell.html" width="375" height="760"></iframe></div>
+</div>
+<script>
+// 把每个 iframe 里**真实生效的视口宽度**写回来，避免再靠看图猜
+addEventListener('load', () => {
+  const out = [...document.querySelectorAll('iframe')].map((f, i) =>
+    `#${i + 1}=${f.contentWindow.innerWidth}`).join('  ');
+  document.title = 'iframe 实际视口: ' + out;
+});
+</script>
+</body></html>

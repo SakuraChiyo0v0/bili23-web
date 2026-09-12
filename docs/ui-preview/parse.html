@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Bili23 Downloader — 解析页视觉稿</title>
+<style>
+/* ==========================================================================
+   解析页视觉稿 —— 复刻原版 Bili23-Downloader v2.15.0
+   原版 = PySide6 + PySide6-Fluent-Widgets 1.11.3
+   ── 本文件全部使用「逻辑像素」，与原版源码常量一一对应 ──
+     窗口 950×600（源码 main_window.py:384）· 标题栏 48
+     导航条宽 72（4+64+4）· 按钮 64×58 · 图标 20 · 标签 11px
+     解析页内边距 25/15/25/15 · 控件间距 6
+     输入框/按钮高 32 · 「解析」按钮宽 80（parse.py:363）
+     表格列宽 160/350/90/90/130（config.py:30-56）· 表头 35 · 行高 32
+     勾选框 19×19 圆角 4.5 · 缩进 20/级
+     强调色 #009FAA（库默认，源码未写死）
+   ⚠️ 原版截图是 150% 缩放截的（1424×900 = 950×600 × 1.5）。
+      所以截图本页时必须加 --force-device-scale-factor=1.5 才能对齐。
+   ========================================================================== */
+* { box-sizing: border-box; }
+/* ==========================================================================
+   配色变量。浅色 / 深色两套值都是**从原版基准图上量出来的**（不是猜的）：
+   深色那套与源码公式吻合（卡片 = rgba(255,255,255,.0314) 叠在窗口底上）。
+   注意 --zebra 用 0.047 而不是 0.05：Qt 会把 alpha 取整成 12/255。
+   ========================================================================== */
+:root {
+  --win:#f0f4f9; --card:#f7f9fc; --card-bd:rgba(0,0,0,.068);
+  --text:#1f1f1f; --text-dim:#606060; --icon:#4a4a4a; --winbtn:#333;
+  --accent:#009faa; --on-accent:#fff; --split-line:#3eabb3;
+  --nav-sel:#ffffff;
+  --thead-line:#dcdcdc; --thead-col-line:rgba(0,0,0,.059);
+  --zebra:rgba(0,0,0,.047); --row-sel:#e3e5e8;
+  --input-bg:#ffffff; --input-bd:rgba(0,0,0,.05); --input-bd-b:rgba(0,0,0,.39);
+  --cb-bg:#fff; --cb-bd:rgba(0,0,0,.48); --check:#fff;
+  --btn-disabled:#cdcdcd; --btn-disabled-fg:rgba(255,255,255,.9); --placeholder:#8a8a8a;
+}
+[data-theme="dark"] {
+  --win:#202020; --card:#272727; --card-bd:rgba(0,0,0,.18);
+  --text:#ffffff; --text-dim:#cbcbcb; --icon:#cbcbcb; --winbtn:#ffffff;
+  --accent:#29f1ff; --on-accent:#000000; --split-line:#1fc9d6;
+  --nav-sel:#454545;
+  --thead-line:rgba(255,255,255,.09); --thead-col-line:rgba(255,255,255,.06);
+  --zebra:#383838; --row-sel:#3f3f3f;
+  --input-bg:#343434; --input-bd:rgba(255,255,255,.08); --input-bd-b:rgba(255,255,255,.5442);
+  --cb-bg:#232323; --cb-bd:rgba(255,255,255,.557); --check:#000000;
+  --btn-disabled:#343434; --btn-disabled-fg:rgba(0,0,0,.9); --placeholder:#9a9a9a;
+}
+/* 原版窗口可缩放（最小 950×600），所以这里也用满视口而不是写死尺寸，
+   这样能拿 1200×700 / 1424×900 的基准图直接验证缩放行为 */
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+  /* 字体族顺序照抄 qfluentwidgets 的默认：拉丁走 Segoe UI、中文回落雅黑。
+     顺序写反会让拉丁字母用雅黑渲染，宽出 10%。 */
+  font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-size: 13.3px; color: var(--text);
+  background: var(--win);                      /* 库源码：Mica 关闭时的窗口底色 */
+  -webkit-font-smoothing: antialiased;
+}
+.shell { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- 标题栏（源码：高 48，自绘） ---------- */
+.titlebar {
+  height: 48px; flex: none; display: flex; align-items: center; padding-left: 20px;
+}
+/* 标题栏图标直接用原版的 assets/app.svg（B 站电视机图标，B 站蓝 #00a1d6）。
+   之前我画了个纯色圆角方块 —— 空状态下一比就露馅。 */
+.titlebar .logo { width: 18px; height: 18px; margin-right: 15px; display: block; }
+.titlebar .title { font-size: 13px; color: var(--text); }
+.titlebar .grow { flex: 1; }
+.titlebar .winbtn { width: 46px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--winbtn); }
+.titlebar .winbtn svg { width: 10px; height: 10px; }
+
+.body { flex: 1; display: flex; min-height: 0; }
+
+/* ---------- 左侧导航条（宽 72 = 4 + 64 + 4） ---------- */
+.navbar { width: 72px; flex: none; padding: 5px 4px; display: flex; flex-direction: column; gap: 4px; }
+.navbtn {
+  width: 64px; height: 58px; flex: none; border-radius: 5px;
+  display: flex; flex-direction: column; align-items: center;
+  position: relative; color: var(--text);
+}
+.navbtn .ico { width: 20px; height: 20px; margin-top: 13px; display: flex; opacity: .6; }  /* 未选中图标 0.6 */
+.navbtn.active .ico { opacity: 1; }
+.navbtn .ico svg { width: 20px; height: 20px; }
+.navbtn .ico img { width: 20px; height: 20px; display: block; }
+.navbtn .txt { height: 26px; line-height: 24px; font-size: 11px; }
+.navbtn.active { background: var(--nav-sel); }
+.navbtn.active .txt { color: var(--accent); }
+.navbtn.active::before {           /* 源码：4×24 @(0,16)，圆角 2 */
+  content: ""; position: absolute; left: 0; top: 16px; width: 4px; height: 24px;
+  background: var(--accent); border-radius: 2px;
+}
+.nav-spacer { flex: 1; }
+/* 头像项：NavigationLargeAvatarWidget，64×64，头像直径 38 */
+.navavatar { width: 64px; height: 64px; flex: none; display: flex; align-items: center; justify-content: center; }
+.navavatar .ring { width: 38px; height: 38px; border-radius: 50%; overflow: hidden; }
+
+/* ---------- 内容区（原版是白色圆角卡片） ---------- */
+.page {
+  flex: 1; min-width: 0;
+  background: var(--card);                          /* 源码 = rgba(255,255,255,.5) 叠在 #F0F4F9 上 */
+  border: 1px solid var(--card-bd); border-right: none; border-bottom: none;
+  border-top-left-radius: 10px;
+  padding: 15px 25px;
+  display: flex; flex-direction: column;
+}
+
+/* 输入行 */
+.topbar { display: flex; align-items: center; gap: 6px; flex: none; }
+.url-input {
+  flex: 1; height: 33px; border: 1px solid var(--input-bd);
+  border-bottom: 1px solid var(--input-bd-b);
+  border-radius: 5px; background: var(--input-bg);
+  display: flex; align-items: center; padding: 0 0 0 14px;
+  font-size: 14px; white-space: nowrap; overflow: hidden;
+}
+.url-input .txt { flex: 1; overflow: hidden; }
+/* 输入框右端的「粘贴并解析」动作按钮（源码 Action(FluentIcon.PASTE)） */
+.url-input .act {
+  width: 30px; height: 100%; flex: none; display: flex;
+  align-items: center; justify-content: center; color: var(--icon);
+}
+.url-input .act svg { width: 15px; height: 15px; }
+/* 「解析」是拆分按钮：主按钮宽 80（parse.py:363）+ 下拉箭头 30 = 110
+   （基准图实测按钮区间 814..924，正好 110） */
+.parse-btn { flex: none; display: flex; height: 32px; border-radius: 5px; overflow: hidden; }
+.parse-btn .main {
+  width: 80px; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--on-accent); font-size: 14px;
+}
+.parse-btn .arrow {
+  width: 30px; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--on-accent); border-left: 1px solid var(--split-line);
+}
+.parse-btn .arrow svg { width: 12px; height: 12px; }
+
+/* 纵向节奏照源码：输入框页内 y15（高 33）→ 状态行 y54（高 28）→ 树 y88（表头 35）
+   即绝对坐标 63..96 / 102..130 / 136..171，首行落在 171 */
+.statusbar { flex: none; display: flex; align-items: center; gap: 6px; height: 28px; margin-top: 6px; font-size: 14px; }
+.statusbar .grow { flex: 1; }
+.statusbar .icon-btn {
+  width: 28px; height: 28px; border-radius: 5px; color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+}
+.statusbar .icon-btn svg { width: 16px; height: 16px; }
+.statusbar .icon-btn img { width: 16px; height: 16px; display: block; }
+
+/* 表格 */
+/* 表格：源码 QSS 给树控件加了 padding-right:5px，列宽基线因此比内容区窄 5px。
+   少了这 5px，「备注/时长/发布时间」三列的居中会整体右偏 6px（实测）。 */
+.table { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 6px; padding-right: 5px; }
+.thead {
+  flex: none; display: flex; align-items: center; height: 35px;
+  border-bottom: 1px solid var(--thead-line); color: var(--text-dim); font-size: 13px;
+}
+.tbody { flex: 1; min-height: 0; overflow: hidden; }
+
+/* 列宽：源码默认 160/350/90/90/130，标题列拉伸 */
+.c-idx   { width: 160px; flex: none; }
+/* QSS 给每个 item 单元格加了 padding-left:20px，标题列文字因此从列首 +24 起
+   （基准图实测：标题文字起于 x281，列首在 257） */
+.c-title { flex: 1; padding-left: 22px; }
+.c-note  { width: 90px; flex: none; text-align: center; }
+.c-dur   { width: 90px; flex: none; text-align: center; }
+.c-date  { width: 130px; flex: none; text-align: center; }
+.thead .c-idx { position: relative; }
+.thead .c-idx, .thead .c-title { text-align: center; }
+/* ⚠️ 表头不能吃 .c-title 的那个 padding-left:22px —— 它会把居中的表头文字挤偏 11px。
+   那个 padding 是给**数据行单元格**用的（QSS item{padding-left:20px} 只作用于数据行）。 */
+.thead .c-title { padding-left: 0; }
+/* 表头列分隔竖线：QSS 给每个 section 加 border-left，首个不加（rgba(0,0,0,15)） */
+.thead > div + div { border-left: 1px solid var(--thead-col-line); }
+/* 排序箭头由 QSS 定位在表头格子最右侧（center right, margin-right 6），
+   不是跟在文字后面 —— 跟在后面会把文字挤偏 */
+.sort-arrow { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; color: var(--text-dim); }
+.sort-arrow svg { width: 12px; height: 12px; }
+
+/* 行高 32（源码 uniformRowHeights）
+   padding-bottom:2px 是为了把垂直居中的内容整体**上移 1px**：
+   实测原版文字占 310..322，浏览器居中是 311..323，每行都低 1 像素。
+   1 像素的错位会让每个字形的边缘都对不上，是这块差异的主要来源。 */
+.row { display: flex; align-items: center; height: 32px; padding-bottom: 2px; font-size: 13px; flex: none; }
+/* 斑马纹：**按全局行号交替，群组行也参与**（基准图实测）
+     行0 合集 #f7f9fc · 行1 章节 #ebedf0 · 行2 分P #f7f9fc
+     行3 叶子1(选中) #e3e5e8 · 行4 叶子2 #f7f9fc · 行5 叶子3 #ebedf0
+   #ebedf0 = rgba(0,0,0,.05) 叠在卡片底上，与源码 QSS 一致。
+   注意 nth-child 从 1 计数，所以「even」= 行号 1/3/5…（正是要着色的那些）。 */
+/* ⚠️ 这里必须写 0.047 而不是 0.05：
+   源码写的是 rgba(0,0,0,0.05)，但 Qt 会把 alpha 换算成**整数 12/255 = 0.0471**，
+   而 CSS 的 0.05 是精确值（12.75/255）。差这一点点，蓝色通道就会差 1 个色阶
+   （实测：原版 #ebedf0 vs 用 0.05 得到的 #eaecef）。 */
+.tbody > .row:nth-child(even) { background: var(--zebra); }
+/* 选中行的权重与上一条相同，靠写在后面生效，压过斑马纹 */
+.tbody > .row.selected { background: var(--row-sel); position: relative; }
+.row.selected::before {                          /* 源码：3×15 @(4, y+9)，圆角 1.5 */
+  content: ""; position: absolute; left: 4px; top: 9px; width: 3px; height: 15px;
+  background: var(--accent); border-radius: 1.5px;
+}
+
+/* 缩进：源码 QSS `item{padding-left:20px}` + 每级 20，勾选框画在 item.x+23。
+   还要算上 .cb 自身的 margin-left:7 —— 实测勾选框左缘：
+     群组 L0/L1/L2 = 140/160/180，叶子 = 200（基准图逐个量出来的） */
+.tree { display: flex; align-items: center; flex: none; }
+.lv0 { padding-left: 18px; }
+.lv1 { padding-left: 38px; }
+.lv2 { padding-left: 58px; }
+.lv3 { padding-left: 95px; }
+.chev { width: 16px; display: flex; justify-content: center; align-items: center; color: var(--icon); flex: none; }
+.chev svg { width: 11px; height: 11px; }
+
+/* 勾选框 19×19 圆角 4.5 */
+.cb {
+  width: 19px; height: 19px; flex: none; margin-left: 7px;
+  border: 1px solid var(--cb-bd); border-radius: 4.5px;
+  background: var(--cb-bg); position: relative;
+}
+.cb.on, .cb.partial { background: var(--accent); border-color: var(--accent); }
+.cb.on::after {
+  content: ""; position: absolute; left: 6px; top: 2.5px; width: 4.5px; height: 9px;
+  border: solid var(--check); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.cb.partial::after {
+  content: ""; position: absolute; left: 4.5px; top: 8px; width: 9px; height: 2px;
+  background: var(--check); border-radius: 1px;
+}
+/* 群组标签与勾选框之间留 6px（基准图：勾选框 140..159，标签起于 165）；
+   叶子行的序号则是紧贴（勾选框 200..219，数字 222），所以两者不能用同一个间距 */
+.glabel { color: var(--text); margin-left: 6px; }
+/* 序号紧跟勾选框（基准图：勾选框 200..219，数字 222..230），左对齐、不居中 */
+.seq { margin-left: 3px; text-align: left; color: var(--text); flex: none; }
+
+/* 右下角按钮（源码 setMinimumWidth(120)；未勾选任何项时是 disabled 灰色） */
+.footer { flex: none; display: flex; justify-content: flex-end; }
+.download-btn {
+  min-width: 120px; height: 32px; padding: 0 14px; border-radius: 5px;
+  background: var(--accent); color: var(--on-accent); font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+/* disabled：浅色主题下背景 rgb(205,205,205)，文字 rgba(255,255,255,.9)（库 qss button.qss） */
+.download-btn.disabled { background: var(--btn-disabled); color: var(--btn-disabled-fg); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="titlebar">
+    <img class="logo" src="icons/app.svg" alt="">
+    <div class="title">Bili23 Downloader</div>
+    <div class="grow"></div>
+    <div class="winbtn"><svg viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.6"><path d="M1 6h10"/></svg></div>
+    <div class="winbtn"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="9" height="9"/></svg></div>
+    <div class="winbtn"><svg viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.6"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></div>
+  </div>
+
+  <div class="body">
+    <nav class="navbar">
+      <div class="navbtn active">
+        <span class="ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="8.6" cy="8.6" r="5.8"/><path d="M12.9 12.9 L17 17"/></svg></span>
+        <span class="txt">解析</span>
+      </div>
+      <div class="navbtn">
+        <span class="ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v9.5"/><path d="M6.2 8.7 L10 12.5 L13.8 8.7"/><path d="M3.2 15.8h13.6"/></svg></span>
+        <span class="txt">下载</span>
+      </div>
+      <div class="navbtn">
+        <span class="ico"><img src="icons/favorite.svg" alt=""></span>
+        <span class="txt">收藏</span>
+      </div>
+      <div class="navbtn">
+        <span class="ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="7.4"/><path d="M10 9v4.6"/><circle cx="10" cy="6.4" r=".95" fill="currentColor" stroke="none"/></svg></span>
+        <span class="txt">关于</span>
+      </div>
+      <div class="nav-spacer"></div>
+      <div class="navavatar"><span class="ring"><svg viewBox="0 0 32 32" width="38" height="38"><rect width="32" height="32" fill="#dbe1e9"/><circle cx="16" cy="12" r="5.4" fill="#6b7a90"/><path d="M5 35c1.5-7.5 5.4-10.6 11-10.6S25.5 27.5 27 35z" fill="#6b7a90"/></svg></span></div>
+      <div class="navbtn">
+        <span class="ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.7"/><path d="M16.2 12.5a1.35 1.35 0 0 0 .27 1.5l.05.05a1.65 1.65 0 1 1-2.33 2.33l-.05-.05a1.35 1.35 0 0 0-2.3.96v.13a1.65 1.65 0 1 1-3.3 0v-.07a1.35 1.35 0 0 0-2.34-.93l-.05.05a1.65 1.65 0 1 1-2.33-2.33l.05-.05a1.35 1.35 0 0 0-.96-2.3h-.13a1.65 1.65 0 1 1 0-3.3h.07a1.35 1.35 0 0 0 .93-2.34l-.05-.05a1.65 1.65 0 1 1 2.33-2.33l.05.05a1.35 1.35 0 0 0 1.5.27h.07a1.35 1.35 0 0 0 .82-1.24v-.13a1.65 1.65 0 1 1 3.3 0v.07a1.35 1.35 0 0 0 2.3.96l.05-.05a1.65 1.65 0 1 1 2.33 2.33l-.05.05a1.35 1.35 0 0 0-.27 1.5v.07a1.35 1.35 0 0 0 1.24.82h.13a1.65 1.65 0 1 1 0 3.3h-.07a1.35 1.35 0 0 0-1.24.82z"/></svg></span>
+        <span class="txt">设置</span>
+      </div>
+    </nav>
+
+    <div class="page">
+      <div class="topbar">
+        <div class="url-input">
+          <span class="txt" id="urlText">https://www.bilibili.com/video/BV1Z34y1r7ZV</span>
+          <span class="act" title="粘贴并解析"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="3.5" width="9" height="12" rx="1.6"/><path d="M13.5 3.5h-2a1.5 1.5 0 0 0-3 0h-2A1.5 1.5 0 0 0 5 5v9.5A1.5 1.5 0 0 0 6.5 16h6"/></svg></span>
+        </div>
+        <div class="parse-btn">
+          <span class="main">解析</span>
+          <span class="arrow"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4 L6 7.8 L9.4 4.4"/></svg></span>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span id="statusText">投稿视频（已选择 1 项，共 133 项）</span>
+        <span class="grow"></span>
+        <span class="icon-btn" title="搜索"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8.6" cy="8.6" r="5.6"/><path d="M12.7 12.7 L17 17"/></svg></span>
+        <span class="icon-btn" title="解析记录"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.2"/><path d="M10 5.6V10l3 1.9"/></svg></span>
+        <span class="icon-btn" title="批量选择"><img src="icons/todo.svg" alt=""></span>
+        <span class="icon-btn" title="下载选项"><img src="icons/options.svg" alt=""></span>
+      </div>
+
+      <div class="table">
+        <div class="thead">
+          <div class="c-idx">序号<span class="sort-arrow"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 4.4 L6 7.8 L9.4 4.4"/></svg></span></div>
+          <div class="c-title">标题</div>
+          <div class="c-note">备注</div>
+          <div class="c-dur">时长</div>
+          <div class="c-date">发布时间</div>
+        </div>
+        <div class="tbody" id="tbody"></div>
+      </div>
+
+      <div class="footer"><div class="download-btn" id="downloadBtn">下载所选项目</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 页面尺寸由查询串给定（?w=1200&h=700）—— 原版窗口多大，这里就渲染多大。
+// 必须与 Chrome 的 --window-size 一起用：少了 --window-size，视口会退回默认的 752×479。
+// （这条是做了 a/b/c 三组对照实验才定下来的，别凭直觉改。）
+(function () {
+  const q = new URLSearchParams(location.search);
+  const w = (parseInt(q.get("w"), 10) || 950) + "px";
+  const h = (parseInt(q.get("h"), 10) || 600) + "px";
+  // 主题：?theme=dark 时套用深色变量（原版默认跟随系统，两套都得能看）
+  if ((q.get("theme") || "light") === "dark") {
+    document.documentElement.dataset.theme = "dark";
+  }
+  for (const el of [document.documentElement, document.body, document.querySelector(".shell")]) {
+    el.style.width = w;
+    el.style.height = h;
+  }
+})();
+</script>
+<script>
+const CHEV = '<span class="chev"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 L6 8 L9.5 4.5"/></svg></span>';
+const groups = [
+  { lv: 0, label: "合集", title: "艾尔登法环白金攻略" },
+  { lv: 1, label: "章节", title: "艾尔登法环" },
+  { lv: 2, label: "分P",  title: "全收集、全剧情白金攻略" },
+];
+// 示例数据照抄原版基准图（ref/parse-1424x900.png 里能看到 01–18 行的真实标题与时长）。
+// 行数要给够，否则大窗口下会出现原版没有的空白区。
+const leaves = [
+  ["01【宁姆格福】", "34:09"], ["02【圆桌厅堂】", "39:46"], ["03【开图+收集】", "32:53"],
+  ["04【拿神器猎犬刀、NPC剧情】", "31:23"], ["05【摩恩城】", "31:07"],
+  ["06【啜泣半岛地毯式全清】", "01:11:51"], ["07【宁姆格福地毯式全清-上】", "45:09"],
+  ["08【宁姆格福地毯式全清-下】", "59:06"], ["09【史东薇尔城-上】", "01:02:33"],
+  ["10【史东薇尔城-下】", "01:04:51"], ["11【利耶尼亚东-上】", "01:10:22"],
+  ["12【利耶尼亚东-下】", "01:15:53"], ["13【利耶尼亚西-上】", "44:10"],
+  ["14【利耶尼亚西-下】", "32:49"], ["15【卡利亚城寨】", "42:41"],
+  ["16【利耶尼亚全清-上】", "01:07:38"], ["17【利耶尼亚全清-下】", "39:02"],
+  ["18【魔法学院雷亚卢卡利亚】", "01:16:17"],
+];
+let html = "";
+groups.forEach((g) => {
+  html += `<div class="row">
+    <div class="c-idx" style="display:flex;align-items:center">
+      <span class="tree lv${g.lv}">${CHEV}<span class="cb partial"></span></span>
+      <span class="glabel">${g.label}</span>
+    </div>
+    <div class="c-title">${g.title}</div>
+    <div class="c-note"></div><div class="c-dur"></div><div class="c-date"></div>
+  </div>`;
+});
+leaves.forEach(([title, dur], i) => {
+  html += `<div class="row${i === 0 ? " selected" : ""}">
+    <div class="c-idx" style="display:flex;align-items:center">
+      <span class="tree lv3"><span class="cb${i === 0 ? " on" : ""}"></span></span>
+      <span class="seq">${i + 1}</span>
+    </div>
+    <div class="c-title">${title}</div>
+    <div class="c-note"></div><div class="c-dur">${dur}</div><div class="c-date">2022-02-25</div>
+  </div>`;
+});
+document.getElementById("tbody").innerHTML = html;
+
+// state=empty：刚打开程序、还没解析过的样子。
+// 与「已解析」的差别（源码 parse.py）：
+//   url_box 为空 → 显示 placeholder；item_count_label 是空串；
+//   表格只有表头；下载按钮 setEnabled(False) → 灰色。
+const STATE = new URLSearchParams(location.search).get("state") || "parsed";
+if (STATE === "empty") {
+  document.getElementById("tbody").innerHTML = "";
+  const u = document.getElementById("urlText");
+  u.textContent = "链接 / av / BV / ep / ss / md / 收藏夹 / 个人空间";
+  u.style.color = "var(--placeholder)";
+  document.getElementById("statusText").textContent = "";
+  document.getElementById("downloadBtn").classList.add("disabled");
+}
+</script>
+</body>
+</html>

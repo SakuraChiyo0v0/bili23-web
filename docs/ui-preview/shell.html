@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新 UI 骨架原型 · 响应式</title>
+<style>
+/* ==========================================================================
+   新 UI 骨架原型 —— 验证「响应式承载方式」这一件事
+   ── 令牌全部来自 ui-preview/parse.html 的实测值，不重新量 ──
+      （青绿 #009faa / 窗口底 #f0f4f9 / 卡片 #f7f9fc / 行高 32 / 勾选框 19×19）
+
+   三种承载方式（导航项集合不变，只换形态 —— 这是「展示方式一致、UI 可变」的落地）：
+     ≥1024 : 左侧 72px 竖排（图标在上、文字在下）常驻
+     768–1023 : 同一竖排，但只留图标
+     <768  : 底部 TabBar（解析/下载/设置）+ 顶栏放头像与「更多」
+   ========================================================================== */
+*{box-sizing:border-box}
+:root{
+  --win:#f0f4f9; --card:#f7f9fc; --card-bd:rgba(0,0,0,.068);
+  --text:#1f1f1f; --text-dim:#606060; --icon:#4a4a4a;
+  --accent:#009faa; --on-accent:#fff;
+  --nav-sel:#ffffff; --line:#dcdcdc; --line-2:rgba(0,0,0,.059);
+  --zebra:rgba(0,0,0,.047); --row-sel:#e3e5e8;
+  --input-bg:#fff; --input-bd:rgba(0,0,0,.05); --input-bd-b:rgba(0,0,0,.39);
+  --cb-bg:#fff; --cb-bd:rgba(0,0,0,.48); --check:#fff;
+  --radius:5px;
+}
+[data-theme="dark"]{
+  --win:#202020; --card:#272727; --card-bd:rgba(0,0,0,.18);
+  --text:#fff; --text-dim:#cbcbcb; --icon:#cbcbcb;
+  --accent:#29f1ff; --on-accent:#000;
+  --nav-sel:#454545; --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.06);
+  --zebra:#383838; --row-sel:#3f3f3f;
+  --input-bg:#343434; --input-bd:rgba(255,255,255,.08); --input-bd-b:rgba(255,255,255,.5442);
+  --cb-bg:#232323; --cb-bd:rgba(255,255,255,.557); --check:#000;
+}
+html,body{margin:0;height:100%}
+body{
+  font:13px/1.5 "Microsoft YaHei UI","Segoe UI",system-ui,sans-serif;
+  color:var(--text); background:var(--win);
+}
+.app{display:flex;height:100vh}
+
+/* ---------- 左侧导航（≥768） ---------- */
+.nav{width:72px;flex:none;display:flex;flex-direction:column;align-items:center;
+     padding:14px 0;gap:4px}
+.nav-item{width:64px;height:58px;flex:none;border-radius:var(--radius);position:relative;
+          display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+          color:var(--text);cursor:pointer}
+.nav-item .ico{width:20px;height:20px;opacity:.6}
+.nav-item .txt{font-size:11px;line-height:1}
+.nav-item.active{background:var(--nav-sel)}
+.nav-item.active .ico{opacity:1;color:var(--accent)}
+.nav-item.active .txt{color:var(--accent)}
+.nav-item.active::before{content:"";position:absolute;left:0;top:16px;width:4px;height:24px;
+                         background:var(--accent);border-radius:2px}
+.nav-spacer{flex:1}
+.avatar{width:38px;height:38px;border-radius:50%;background:#c9d2de;
+        display:flex;align-items:center;justify-content:center;overflow:hidden}
+
+/* ---------- 内容面 ---------- */
+.main{flex:1;min-width:0;background:var(--card);border:1px solid var(--card-bd);
+      border-right:none;border-bottom:none;border-top-left-radius:10px;
+      padding:15px 25px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+
+/* 移动端顶栏（<768 才显示） */
+.topbar{display:none;align-items:center;gap:10px;padding:4px 0 8px;border-bottom:1px solid var(--line)}
+.topbar .ttl{font-size:15px;font-weight:600}
+.topbar .grow{flex:1}
+
+.row-top{display:flex;gap:6px}
+.input{flex:1;height:33px;display:flex;align-items:center;padding:0 14px;font-size:14px;
+       background:var(--input-bg);border:1px solid var(--input-bd);
+       border-bottom:1px solid var(--input-bd-b);border-radius:var(--radius);
+       color:var(--text-dim);overflow:hidden;white-space:nowrap}
+.btn-parse{width:110px;height:32px;flex:none;border-radius:var(--radius);background:var(--accent);
+           color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:14px}
+.toolbar{display:flex;align-items:center;height:28px;margin-top:6px;gap:6px}
+.toolbar .status{font-size:14px}
+.toolbar .grow{flex:1}
+.tool{width:28px;height:28px;border-radius:var(--radius);display:flex;align-items:center;
+      justify-content:center;color:var(--icon)}
+
+/* 表格 */
+.table{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:6px;padding-right:5px}
+.thead{display:flex;align-items:center;height:35px;flex:none;border-bottom:1px solid var(--line);
+       color:var(--text-dim);font-size:13px}
+.thead>div+div{border-left:1px solid var(--line-2)}
+.c-idx{width:160px;flex:none;text-align:center;position:relative}
+.c-title{flex:1;padding-left:22px}
+.c-note{width:90px;flex:none;text-align:center}
+.c-dur{width:90px;flex:none;text-align:center}
+.c-date{width:130px;flex:none;text-align:center}
+.thead .c-idx,.thead .c-title{text-align:center}
+.thead .c-title{padding-left:0}
+.tbody{flex:1;overflow:hidden}
+.trow{display:flex;align-items:center;height:32px;padding-bottom:2px;font-size:13px}
+.tbody>.trow:nth-child(even){background:var(--zebra)}
+.tbody>.trow.sel{background:var(--row-sel);position:relative}
+.tbody>.trow.sel::before{content:"";position:absolute;left:4px;top:9px;width:3px;height:15px;
+                         background:var(--accent);border-radius:1.5px}
+.cb{width:19px;height:19px;flex:none;margin-left:7px;border:1px solid var(--cb-bd);
+    border-radius:4.5px;background:var(--cb-bg);position:relative}
+.cb.on{background:var(--accent);border-color:var(--accent)}
+.cb.on::after{content:"";position:absolute;left:6px;top:2.5px;width:4.5px;height:9px;
+              border:solid var(--check);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.footer{flex:none;display:flex;justify-content:flex-end;padding-top:13px}
+.btn-dl{min-width:120px;height:32px;padding:0 14px;border-radius:var(--radius);background:var(--accent);
+        color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:13px}
+
+/* ---------- 底部 TabBar（<768 才显示） ---------- */
+.tabbar{display:none;position:fixed;left:0;right:0;bottom:0;height:56px;
+        background:var(--card);border-top:1px solid var(--line);z-index:9}
+.tabbar .items{display:flex;height:100%}
+/* ⚠️ min-width:0 不能省：flex 项默认 min-width:auto，
+   不会缩到「内容最小宽度」以下 → 三个项加起来超过屏宽时，最后一项被挤到屏幕外。
+   实测：414 宽下三个项各占 176px（合计 528），第三项完全不可见。 */
+.tabbar .item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+              gap:3px;color:var(--text);font-size:11px}
+.tabbar .item .ico{width:22px;height:22px;opacity:.6}
+.tabbar .item.active{color:var(--accent)}
+.tabbar .item.active .ico{opacity:1}
+.tabbar .badge{position:absolute;top:6px;margin-left:16px;background:#c42b1c;color:#fff;
+               font-size:10px;line-height:14px;padding:0 5px;border-radius:8px}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width:1023px){
+  .nav-item .txt{display:none}          /* 平板：只留图标 */
+  .nav-item{height:48px}
+}
+@media (max-width:767px){
+  .nav{display:none}
+  .topbar{display:flex}
+  .tabbar{display:block}
+  .main{padding:10px 12px 66px;border-radius:0;border:none}
+  .c-note,.c-dur,.c-date{display:none}   /* 手机：只留 序号 + 标题 两列 */
+  .c-idx{width:88px}
+  .btn-parse{width:64px}
+  .toolbar .tool{display:none}           /* 工具按钮收进「⋯」 */
+  .row-top{flex-direction:column}
+  .btn-parse{width:100%;margin-top:6px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 左侧导航（桌面/平板） -->
+  <nav class="nav">
+    <div class="nav-item active"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="7"/><path d="M15.6 15.6 21 21"/></svg><span class="txt">解析</span></div>
+    <div class="nav-item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v11M7.5 10.5 12 15l4.5-4.5M4 19h16"/></svg><span class="txt">下载</span></div>
+    <div class="nav-item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg><span class="txt">收藏夹</span></div>
+    <div class="nav-item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10.8v5.6"/></svg><span class="txt">关于</span></div>
+    <div class="nav-spacer"></div>
+    <div class="avatar"><svg viewBox="0 0 38 38" width="38" height="38"><rect width="38" height="38" fill="#dbe1e9"/><circle cx="19" cy="15" r="6" fill="#6b7a90"/><path d="M6 40c1.5-8 6-11.5 13-11.5S30.5 32 32 40z" fill="#6b7a90"/></svg></div>
+    <div class="nav-item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1 2 2 0 1 1-2.8-2.8A1.6 1.6 0 0 0 3.5 14a2 2 0 1 1 0-4 1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8 2 2 0 1 1 2.8-2.8A1.6 1.6 0 0 0 9 4.6a2 2 0 1 1 4 0 1.6 1.6 0 0 0 2.7 1.1 2 2 0 1 1 2.8 2.8 1.6 1.6 0 0 0 1.1 2.7 2 2 0 1 1 0 4 1.6 1.6 0 0 0-1.1 1.5z"/></svg><span class="txt">设置</span></div>
+  </nav>
+
+  <div class="main">
+    <!-- 移动端顶栏 -->
+    <div class="topbar">
+      <span class="ttl">解析</span><span class="grow"></span>
+      <span class="tool">⋯</span>
+      <span class="avatar" style="width:28px;height:28px"><svg viewBox="0 0 38 38" width="28" height="28"><rect width="38" height="38" fill="#dbe1e9"/><circle cx="19" cy="15" r="6" fill="#6b7a90"/><path d="M6 40c1.5-8 6-11.5 13-11.5S30.5 32 32 40z" fill="#6b7a90"/></svg></span>
+    </div>
+
+    <div class="row-top">
+      <div class="input">粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…</div>
+      <div class="btn-parse">解析</div>
+    </div>
+
+    <div class="toolbar">
+      <span class="status">投稿视频（已选择 1 项，共 133 项）</span>
+      <span class="grow"></span>
+      <span class="tool">🔍</span><span class="tool">🕘</span><span class="tool">☑</span><span class="tool">⚙</span>
+    </div>
+
+    <div class="table">
+      <div class="thead">
+        <div class="c-idx">序号</div><div class="c-title">标题</div>
+        <div class="c-note">备注</div><div class="c-dur">时长</div><div class="c-date">发布时间</div>
+      </div>
+      <div class="tbody">
+        <div class="trow"><div class="c-idx" style="text-align:left;padding-left:33px"><span class="cb" style="background:var(--accent);border-color:var(--accent)"></span></div><div class="c-title">艾尔登法环白金攻略</div><div class="c-note"></div><div class="c-dur"></div><div class="c-date"></div></div>
+        <div class="trow sel"><div class="c-idx" style="display:flex;align-items:center;padding-left:155px"><span class="cb on"></span><span style="margin-left:3px">1</span></div><div class="c-title">01【宁姆格福】</div><div class="c-note"></div><div class="c-dur">34:09</div><div class="c-date">2022-02-25</div></div>
+        <div class="trow"><div class="c-idx" style="display:flex;align-items:center;padding-left:155px"><span class="cb"></span><span style="margin-left:3px">2</span></div><div class="c-title">02【圆桌厅堂】</div><div class="c-note"></div><div class="c-dur">39:46</div><div class="c-date">2022-02-25</div></div>
+        <div class="trow"><div class="c-idx" style="display:flex;align-items:center;padding-left:155px"><span class="cb"></span><span style="margin-left:3px">3</span></div><div class="c-title">03【开图+收集】</div><div class="c-note"></div><div class="c-dur">32:53</div><div class="c-date">2022-02-25</div></div>
+        <div class="trow"><div class="c-idx" style="display:flex;align-items:center;padding-left:155px"><span class="cb"></span><span style="margin-left:3px">4</span></div><div class="c-title">04【拿神器猎犬刀、NPC剧情】</div><div class="c-note"></div><div class="c-dur">31:23</div><div class="c-date">2022-02-25</div></div>
+      </div>
+    </div>
+
+    <div class="footer"><div class="btn-dl">下载所选项目</div></div>
+  </div>
+</div>
+
+<!-- 底部 TabBar（手机） -->
+<nav class="tabbar">
+  <div class="items">
+    <div class="item active"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="7"/><path d="M15.6 15.6 21 21"/></svg><span>解析</span></div>
+    <div class="item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v11M7.5 10.5 12 15l4.5-4.5M4 19h16"/></svg><span>下载</span></div>
+    <div class="item"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1 2 2 0 1 1-2.8-2.8A1.6 1.6 0 0 0 3.5 14a2 2 0 1 1 0-4 1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8 2 2 0 1 1 2.8-2.8A1.6 1.6 0 0 0 9 4.6a2 2 0 1 1 4 0 1.6 1.6 0 0 0 2.7 1.1 2 2 0 1 1 2.8 2.8 1.6 1.6 0 0 0 1.1 2.7 2 2 0 1 1 0 4 1.6 1.6 0 0 0-1.1 1.5z"/></svg><span>设置</span></div>
+  </div>
+</nav>
+</body>
+</html>

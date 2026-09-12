@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>解析页实时验证台</title>
+<!--
+  ============================================================================
+  解析页实时验证台：在**真实前端**里填入链接、点解析，再把树的结构写进页眉，
+  这样截图本身就是证据。
+
+  用法：
+    1) 构建并启动（cwd 必须是 apps/web）：
+         pnpm --filter @bili23-web/web check
+         cd apps/web ; node dist/server/index.js
+    2) 复制到前端产物目录（必须同源才能操作 iframe 的 DOM）：
+         copy docs\ui-preview\parse-live.html apps\web\dist\client\_parselive.html
+    3) 截图：
+         chrome --headless=new --disable-gpu --hide-scrollbars --window-size=1480,1030 \
+                --virtual-time-budget=90000 --user-data-dir=%TEMP%\p1 \
+                --screenshot=out.png "http://127.0.0.1:8787/_parselive.html?url=<encodeURIComponent 的链接>"
+
+  可选参数：
+    url   要解析的链接（默认一个含 ugc_season 合集的投稿视频）
+    theme light | dark
+  ============================================================================
+-->
+<style>
+  html,body{margin:0;background:#2b2f36;color:#ddd;font:12px/1.4 monospace}
+  body{padding:10px}
+  iframe{border:0;background:#fff;display:block}
+  #log{position:fixed;left:0;top:0;right:0;z-index:9;background:#000;color:#0f0;padding:4px 8px;font:13px/1.4 monospace}
+</style>
+</head>
+<body>
+<div id="log">boot…</div>
+<div style="height:34px"></div>
+<iframe id="app" width="1460" height="920" src="/"></iframe>
+<script>
+localStorage.setItem('bili23.web.accepted_terms', 'true');
+const q = new URLSearchParams(location.search);
+localStorage.setItem('bili23.web.ui.theme', JSON.stringify(q.get('theme') || 'light'));
+
+const targetUrl = q.get('url') || 'https://www.bilibili.com/video/BV1Z34y1r7ZV';
+const lines = [];
+function say(s) { lines.push(s); document.getElementById('log').textContent = lines.join('   |   '); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const fr = document.getElementById('app');
+fr.addEventListener('load', () => { void main(); });
+
+async function main() {
+  const doc = fr.contentDocument;
+  const win = fr.contentWindow;
+
+  // step=files：产物浏览页（原版「打开下载目录」的 Web 对应物）
+  if (q.get('step') === 'files') {
+    win.location.hash = '#/files';
+    await sleep(2500);
+    const rows = [...doc.querySelectorAll('.files-row')];
+    const first = rows[0];
+    const head = [...doc.querySelectorAll('.files-th')].map((b) => b.textContent.trim());
+    say('表头=[' + head.join(' / ') + '] 文件数=' + rows.length);
+    say('首行=[' + (first ? [...first.children].map((c) => c.textContent.trim()).join(' | ') : '（空）') + ']');
+    // 排序：点「大小」表头，看首行是否变化
+    const sizeTh = [...doc.querySelectorAll('.files-th')].find((b) => b.textContent.includes('大小'));
+    if (sizeTh && rows.length > 1) {
+      const before = first.querySelector('.files-name')?.textContent?.trim();
+      sizeTh.click();
+      await sleep(400);
+      const after = doc.querySelector('.files-row .files-name')?.textContent?.trim();
+      say('点「大小」排序: 前="' + before + '" 后="' + after + '"');
+    }
+    return;
+  }
+
+  // step=downloads：只看下载页（任务卡字段 + 工具栏）
+  if (q.get('step') === 'downloads') {
+    win.location.hash = '#/downloads';
+    await sleep(2000);
+    const tabs = [...doc.querySelectorAll('.tabs .tab')].map((b) => b.textContent.trim());
+    const btns = [...doc.querySelectorAll('.btn-group button')].map((b) => b.textContent.trim());
+    // ⚠️ 切页签必须在读卡片**之前** —— 否则读到的是另一个页签的（我第一版就写反了）
+    if (q.get('tab') === 'completed') {
+      const t = [...doc.querySelectorAll('.tabs .tab')].find((b) => b.textContent.includes('下载完成'));
+      t?.click();
+      await sleep(700);
+    }
+    const cards = doc.querySelectorAll('.task-card');
+    const first = cards[0];
+    const info = first ? {
+      title: first.querySelector('.task-title')?.textContent?.trim(),
+      info: first.querySelector('.task-info')?.textContent?.trim(),
+      size: first.querySelector('.task-size')?.textContent?.trim(),
+      status: first.querySelector('.status-chip')?.textContent?.trim(),
+    } : null;
+    const empty = doc.querySelector('.empty-state h3')?.textContent?.trim();
+    say('页签=[' + tabs.join(' / ') + '] 按钮=[' + btns.join(' / ') + '] 卡片=' + cards.length
+        + (info ? ' 首卡=' + JSON.stringify(info) : '') + (empty ? ' 空态="' + empty + '"' : ''));
+    // menu=1：在第一条任务卡上右键，把菜单项列出来
+    if (q.get('menu') === '1' && first) {
+      const r = first.getBoundingClientRect();
+      first.dispatchEvent(new win.MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 60, clientY: r.top + 40 }));
+      await sleep(400);
+      const items = [...doc.querySelectorAll('.ctx-menu .ctx-item')].map((b) => b.textContent.trim());
+      say('任务行菜单=[' + (items.length ? items.join(' / ') : 'FAIL 没弹出') + ']');
+    }
+    // open=1：点「打开下载目录」，确认真的跳到产物页
+    if (q.get('open') === '1') {
+      const btn = [...doc.querySelectorAll('.btn-group button')].find((b) => b.textContent.includes('打开下载目录'));
+      if (!btn) { say('FAIL: 工具栏没有「打开下载目录」'); return; }
+      btn.click();
+      await sleep(2000);
+      const hash = win.location.hash;
+      const hasTable = Boolean(doc.querySelector('.files-head'));
+      const title = doc.querySelector('.panel-title')?.textContent?.trim();
+      say('点「打开下载目录」→ hash=' + hash + ' 产物表=' + hasTable + ' 标题="' + title + '"');
+    }
+    return;
+  }
+  // step=settings：看设置页的分组 / 卡片 / 展开
+  if (q.get('step') === 'settings') {
+    win.location.hash = '#/settings';
+    await sleep(2000);
+    const groups = [...doc.querySelectorAll('.settings-group h2')].map((h) => h.textContent.trim());
+    const cards = [...doc.querySelectorAll('.setting-card')];
+    const titles = cards.map((c) => c.querySelector('.s-title')?.textContent?.trim());
+    const chev = cards.filter((c) => c.querySelector('.card-chev')).length;
+    const bodies = doc.querySelectorAll('.card-body').length;
+    say('分组=[' + groups.join(' / ') + '] 卡片=' + cards.length + ' 可展开=' + chev + ' 展开中的body=' + bodies);
+    say('卡片=[' + titles.join(' / ') + ']');
+    // expand=1：展开第一张可展开的卡片，验证 card-body 里确实是子选项
+    if (q.get('expand') === '1') {
+      const head = cards.find((c) => c.querySelector('.card-chev'))?.querySelector('.card-head');
+      head?.click();
+      await sleep(500);
+      const rows = [...doc.querySelectorAll('.card-body .setting-row .s-title')].map((el) => el.textContent.trim());
+      say('展开后子选项=[' + rows.join(' / ') + ']');
+      // 强调色：改颜色后应写到 documentElement 的 --accent 上（覆盖两套主题令牌）
+      const picker = doc.querySelector('.accent-picker');
+      if (picker) {
+        const set = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+        set.call(picker, '#ff0000');
+        picker.dispatchEvent(new win.Event('input', { bubbles: true }));
+        await sleep(500);
+        const v = win.getComputedStyle(doc.documentElement).getPropertyValue('--accent').trim();
+        const navActive = doc.querySelector('.nav-item.active, .nav-item[aria-current], nav .active');
+        const navBg = navActive ? win.getComputedStyle(navActive.querySelector('.nav-txt') ?? navActive).getPropertyValue('color').trim() : '(找不到激活导航项)';
+        const navBar = doc.querySelector('.nav-item.active::before') ? 'has' : '';
+        say('强调色控件存在=true 改成 #ff0000 后 --accent="' + v + '" on-accent="' + win.getComputedStyle(doc.documentElement).getPropertyValue('--on-accent').trim() + '" 激活导航项底色=' + navBg);
+      } else { say('FAIL: 没有强调色控件'); }
+    }
+    // prio=1：展开「画质、音质和编码优先级」→ 打开「自定义…」→ 上移一项 → 确定 → 查接口确认落盘
+    if (q.get('prio') === '1' || q.get('prio') === '2') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.includes('优先级'));
+      if (!card) { say('FAIL: 没找到优先级卡片'); return; }
+      card.querySelector('.card-head')?.click();
+      await sleep(500);
+      const rows = [...card.querySelectorAll('.card-body .setting-row')].map((r) => r.querySelector('.s-title')?.textContent?.trim());
+      say('优先级卡片展开行=[' + rows.join(' / ') + ']');
+      const before = await (await fetch('/api/config')).json();
+      const beforeList = before.config.download.videoQualityPriority;
+      card.querySelector('.card-body .setting-row .btn')?.click();
+      await sleep(500);
+      const title = doc.querySelector('.modal-title')?.textContent?.trim();
+      const items = [...doc.querySelectorAll('.prio-list .col-row .col-check span')].map((s) => s.textContent.trim());
+      say('弹窗标题="' + title + '" 列表=' + items.length + '项 前三=[' + items.slice(0, 3).join(' / ') + ']');
+      // 第 2 行的第一个按钮 = 上移
+      [...doc.querySelectorAll('.prio-list .col-row .col-ops .icon-btn')][2]?.click();
+      await sleep(300);
+      const afterMove = [...doc.querySelectorAll('.prio-list .col-row .col-check span')].slice(0, 3).map((s) => s.textContent.trim());
+      say('上移后前三=[' + afterMove.join(' / ') + ']');
+      if (q.get('prio') === '2') return;   // prio=2：停在弹窗打开的样子，供截图
+      [...doc.querySelectorAll('.modal-foot .btn')].find((b) => b.textContent.trim() === '确定')?.click();
+      await sleep(1500);
+      const after = await (await fetch('/api/config')).json();
+      const afterList = after.config.download.videoQualityPriority;
+      say('落盘核对: 前=' + JSON.stringify(beforeList.slice(0, 3)) + ' 后=' + JSON.stringify(afterList.slice(0, 3))
+          + ' 长度=' + beforeList.length + '→' + afterList.length);
+    }
+    // adv=1：展开「CDN 设置」与「其他高级设置」，看代理行/区域行/UA 行
+    if (q.get('adv') === '1') {
+      for (const want of ['CDN 设置', '其他高级设置']) {
+        const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === want);
+        card?.querySelector('.card-head')?.click();
+        await sleep(400);
+      }
+      const cdn = [...doc.querySelectorAll('.card-body .setting-row .s-title')].map((e) => e.textContent.trim());
+      say('展开行=[' + cdn.join(' / ') + ']');
+      // 代理卡：模式 Seg + 按钮
+      const proxyCard = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === '代理设置');
+      const segs = [...(proxyCard?.querySelectorAll('.seg-btn') ?? [])].map((b) => b.textContent.trim());
+      const proxyBtn = [...(proxyCard?.querySelectorAll('.btn') ?? [])].map((b) => b.textContent.trim());
+      say('代理设置: 模式=[' + segs.join('/') + '] 按钮=[' + proxyBtn.join('/') + ']');
+      // 打开代理弹窗 → 点测试（用一个必然不通的代理，验证失败路径）
+      proxyBtn.length && [...proxyCard.querySelectorAll('.btn')].find((b) => b.textContent.includes('设置代理服务器'))?.click();
+      await sleep(500);
+      const title = doc.querySelector('.modal-title')?.textContent?.trim();
+      const fields = [...doc.querySelectorAll('.modal-body .dl-field span')].map((s) => s.textContent.trim());
+      say('代理弹窗标题="' + title + '" 字段=[' + fields.join('/') + ']');
+      const inputs = [...doc.querySelectorAll('.modal-body .text-input')];
+      if (inputs[0]) {   // 地址填一个不通的
+        const set = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+        set.call(inputs[0], '127.0.0.1');
+        inputs[0].dispatchEvent(new win.Event('input', { bubbles: true }));
+        if (inputs[1]) { set.call(inputs[1], '9'); inputs[1].dispatchEvent(new win.Event('input', { bubbles: true })); }
+        await sleep(200);
+      }
+      [...doc.querySelectorAll('.modal-body .btn')].find((b) => b.textContent.includes('测试'))?.click();
+      await sleep(6000);
+      const res = doc.querySelector('.proxy-result')?.textContent?.trim() ?? '(无结果)';
+      say('测试结果="' + res.replace(/\s+/g, ' ').slice(0, 90) + '"');
+      // 关掉代理弹窗，再验另外两个弹窗能开
+      [...doc.querySelectorAll('.modal-foot .btn')].find((b) => b.textContent.trim() === '取消')?.click();
+      await sleep(400);
+      const areaBtn = [...doc.querySelectorAll('.card-body .setting-row')].find((r) => r.querySelector('.s-title')?.textContent?.includes('地理位置'))?.querySelector('.btn');
+      areaBtn?.click();
+      await sleep(400);
+      say('区域弹窗标题="' + (doc.querySelector('.modal-title')?.textContent?.trim() ?? '没开') + '" 选项=['
+        + [...doc.querySelectorAll('.radio-row span')].map((s) => s.textContent.trim()).join(' / ') + ']');
+      [...doc.querySelectorAll('.modal-foot .btn')].find((b) => b.textContent.trim() === '取消')?.click();
+      await sleep(400);
+      const uaBtn = [...doc.querySelectorAll('.card-body .setting-row')].find((r) => r.querySelector('.s-title')?.textContent?.includes('User-Agent'))?.querySelector('.btn');
+      uaBtn?.click();
+      await sleep(400);
+      const uaInput = doc.querySelector('.modal-body .text-input');
+      say('UA 弹窗标题="' + (doc.querySelector('.modal-title')?.textContent?.trim() ?? '没开') + '" 当前值前40="'
+        + (uaInput?.value?.slice(0, 40) ?? '') + '…"');
+    }
+    // mcp=1：展开 MCP 卡片 → 打开开关 → 报告令牌/配置/状态
+    if (q.get('mcp') === '1') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === 'MCP 服务器');
+      if (!card) { say('FAIL: 没找到 MCP 卡片'); return; }
+      card.querySelector('.card-head')?.click();
+      await sleep(500);
+      const rows0 = [...card.querySelectorAll('.card-body .setting-row .s-title')].map((e) => e.textContent.trim());
+      say('未启用时的行=[' + rows0.join(' / ') + ']');
+      // 幂等：只在关着的时候点开（否则第二次跑会把它关掉，看起来像"没启动"）
+      const sw = card.querySelector('.card-body .switch');
+      if (sw?.getAttribute('aria-checked') !== 'true') sw?.click();
+      await sleep(9000);   // 状态是 5 秒轮询的，等短了会读到上一轮的值
+      const rows1 = [...card.querySelectorAll('.card-body .setting-row .s-title')].map((e) => e.textContent.trim());
+      const status = card.querySelector('.card-body .status-chip')?.textContent?.trim();
+      const tokenText = card.querySelector('.mcp-token-text')?.textContent?.trim();
+      const cfgText = card.querySelector('.mcp-config .meta-pre')?.textContent?.trim().replace(/\s+/g, ' ');
+      say('启用后行=[' + rows1.join(' / ') + ']');
+      say('状态="' + status + '" 令牌显示="' + tokenText + '" 配置="' + (cfgText ?? '').slice(0, 90) + '"');
+      card.scrollIntoView({ block: 'center' });   // 让截图真的拍到这张卡
+    }
+    // logs=1：打开「日志」窗口，验证列表/搜索/详情
+    if (q.get('logs') === '1') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === '日志');
+      if (!card) { say('FAIL: 没找到日志卡'); return; }
+      card.querySelector('.btn')?.click();
+      await sleep(1200);
+      const rows = [...doc.querySelectorAll('.log-row')];
+      say('日志窗口: 标题="' + (doc.querySelector('.modal-title')?.textContent?.trim() ?? '没开') + '" 条数=' + rows.length
+        + ' 提示="' + (doc.querySelector('.log-viewer .muted')?.textContent?.trim() ?? '') + '"');
+      say('首行级别=' + (rows[0]?.querySelector('.log-level')?.textContent?.trim() ?? '?')
+        + ' 正文="' + (rows[0]?.querySelector('.log-msg')?.textContent?.trim().slice(0, 60) ?? '') + '"');
+      // 点第一条 → 详情
+      rows[0]?.click();
+      await sleep(600);
+      const detail = doc.querySelector('.meta-pre')?.textContent ?? '';
+      say('详情标题="' + (doc.querySelector('.modal-title')?.textContent?.trim() ?? '没开') + '" 正文前60="'
+        + detail.replace(/\s+/g, " ").slice(0, 60) + '"');
+      say('详情含 Timestamp/Level/Name/Message: '
+        + (/Timestamp:/.test(detail) && /Level:/.test(detail) && /Name:/.test(detail) && /Message:/.test(detail)));
+    }
+    // pc=1：展开「解析设置」卡，验证「监听剪贴板」行
+    if (q.get('pc') === '1') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === '解析设置');
+      if (!card) { say('FAIL: 没找到解析设置卡'); return; }
+      card.querySelector('.card-head')?.click();
+      await sleep(500);
+      const rows = [...card.querySelectorAll('.card-body .setting-row')].map((r) => (r.querySelector('.s-title')?.textContent?.trim() ?? '')
+        + (r.querySelector('.s-desc')?.textContent?.trim() ? `（${r.querySelector('.s-desc').textContent.trim().slice(0, 40)}…）` : ""));
+      say('解析设置卡行=[' + rows.join(' / ') + ']');
+      card.scrollIntoView({ block: 'center' });
+    }
+    // pre=1：展开「下载处理」卡，验证「预分配文件空间」行 + 说明弹窗
+    if (q.get('pre') === '1') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === '下载处理');
+      if (!card) { say('FAIL: 没找到下载处理卡'); return; }
+      card.querySelector('.card-head')?.click();
+      await sleep(400);
+      const rows = [...card.querySelectorAll('.card-body .setting-row')].map((r) => (r.querySelector('.s-title')?.textContent?.trim() ?? '')
+        + (r.querySelector('.s-desc')?.textContent?.trim() ? `（${r.querySelector('.s-desc').textContent.trim()}）` : ""));
+      say('下载处理卡行=[' + rows.join(' / ') + ']');
+      const row = [...card.querySelectorAll('.card-body .setting-row')].find((r) => r.querySelector('.s-title')?.textContent?.includes('预分配'));
+      const on = row?.querySelector('.switch')?.getAttribute('aria-checked');
+      say('预分配开关默认=' + on);
+      [...(row?.querySelectorAll('.btn') ?? [])].find((b) => b.textContent.includes('说明'))?.click();
+      await sleep(500);
+      const body = doc.querySelector('.modal-body')?.textContent?.replace(/\s+/g, '') ?? '';
+      say('说明弹窗标题="' + (doc.querySelector('.modal-title')?.textContent?.trim() ?? '没开') + '" 含FAT32警告='
+        + body.includes('FAT32'));
+      [...doc.querySelectorAll('.modal-foot .btn')].find((b) => b.textContent.trim() === '关闭')?.click();
+      await sleep(300);
+      card.scrollIntoView({ block: 'center' });
+    }
+    // fmt=1：展开「下载格式」卡，验证 M4A→MP3 行
+    if (q.get('fmt') === '1') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === '下载格式');
+      if (!card) { say('FAIL: 没找到下载格式卡'); return; }
+      card.querySelector('.card-head')?.click();
+      await sleep(400);
+      const rows = [...card.querySelectorAll('.card-body .setting-row')].map((r) => (r.querySelector('.s-title')?.textContent?.trim() ?? '')
+        + (r.querySelector('.s-desc')?.textContent?.trim() ? `（${r.querySelector('.s-desc').textContent.trim()}）` : ""));
+      const sw = [...card.querySelectorAll('.card-body .setting-row')].find((r) => r.querySelector('.s-title')?.textContent?.includes('M4A'));
+      say('下载格式卡行=[' + rows.join(' / ') + '] M4A开关存在=' + Boolean(sw?.querySelector('.switch')));
+      card.scrollIntoView({ block: 'center' });
+    }
+    // subs=1：展开字幕卡 → 打开「下载字幕」→ 验证「字幕语言」入口
+    if (q.get('subs') === '1') {
+      const card = [...doc.querySelectorAll('.setting-card')].find((c) => c.querySelector('.s-title')?.textContent?.trim() === '字幕下载设置');
+      if (!card) { say('FAIL: 没找到字幕卡'); return; }
+      card.querySelector('.card-head')?.click();
+      await sleep(400);
+      const sw = card.querySelector('.card-body .switch');
+      if (sw?.getAttribute('aria-checked') !== 'true') sw?.click();
+      await sleep(1500);
+      const rows = [...card.querySelectorAll('.card-body .setting-row')].map((r) => (r.querySelector('.s-title')?.textContent?.trim() ?? '')
+        + (r.querySelector('.s-desc')?.textContent?.trim() ? `（${r.querySelector('.s-desc').textContent.trim()}）` : ""));
+      say('字幕卡行=[' + rows.join(' / ') + ']');
+      const langRow = [...card.querySelectorAll('.card-body .setting-row')].find((r) => r.querySelector('.s-title')?.textContent?.includes('字幕语言'));
+      langRow?.querySelector('.btn')?.click();
+      await sleep(500);
+      say('字幕语言弹窗标题="' + (doc.querySelector('.modal-title')?.textContent?.trim() ?? '没开') + '" 语言数='
+        + doc.querySelectorAll('.lang-chip').length);
+      [...doc.querySelectorAll('.modal-foot .btn')].find((b) => b.textContent.trim() === '取消')?.click();
+      await sleep(300);
+      card.scrollIntoView({ block: 'center' });
+    }
+    return;
+  }
+
+  let input = null;
+  for (let i = 0; i < 60 && !input; i++) { await sleep(200); input = doc.querySelector('.url-input-wrap input'); }
+  if (!input) { say('FAIL: 没找到输入框'); return; }
+
+  // React 受控 input：必须走原生 setter + input 事件
+  const setter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+  setter.call(input, targetUrl);
+  input.dispatchEvent(new win.Event('input', { bubbles: true }));
+  await sleep(200);
+
+  // type/query：分页型解析（space/favlist/…）要先选类型，再填 query
+  const wantType = q.get('type');
+  if (wantType) {
+    const sel = doc.querySelector('.type-select');
+    if (sel) {
+      const sset = Object.getOwnPropertyDescriptor(win.HTMLSelectElement.prototype, 'value').set;
+      sset.call(sel, wantType);
+      sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+      await sleep(200);
+    }
+    setter.call(input, q.get('query') || '');
+    input.dispatchEvent(new win.Event('input', { bubbles: true }));
+    await sleep(200);
+  }
+
+  const btn = [...doc.querySelectorAll('button')].find((b) => b.textContent.trim() === '解析' && b.classList.contains('primary'));
+  if (!btn) { say('FAIL: 没找到解析按钮'); return; }
+  btn.click();
+  say('解析中… ' + targetUrl);
+
+  let rows = [];
+  for (let i = 0; i < 300 && rows.length === 0; i++) { await sleep(300); rows = [...doc.querySelectorAll('.tree-row')]; }
+  if (!rows.length) { say('FAIL: 没有解析出行（可能超时或接口报错）'); return; }
+  await sleep(600);
+
+  rows = [...doc.querySelectorAll('.tree-row')];
+  const layers = rows.map((r) => r.querySelector('.tree-num.layer')?.textContent?.trim()).filter(Boolean);
+  const leaves = rows.filter((r) => !r.classList.contains('group'));
+  const checked = leaves.filter((r) => r.querySelector('.checkbox.on'));
+  const count = [...doc.querySelectorAll('.tree-num')].filter((n) => !n.classList.contains('layer')).length;
+  say('行=' + rows.length + ' 叶子=' + leaves.length + ' 层名=[' + layers.join(',') + ']'
+      + ' 默认勾选=' + checked.length + ' 序号列数字数=' + count);
+  // 顶部：状态行文案 + 四个图标按钮 + 拆分按钮
+  const status = doc.querySelector('.parse-status .toolbar-label')?.textContent?.replace(/\s+/g, ' ').trim();
+  const statusBtns = [...doc.querySelectorAll('.parse-status .icon-btn')].map((b) => b.getAttribute('title'));
+  const hasSplit = Boolean(doc.querySelector('.split-btn .split-caret'));
+  const paste = Boolean(doc.querySelector('.url-input-wrap .in-input-btn'));
+  say('状态行="' + status + '" 图标按钮=[' + statusBtns.join('/') + '] 拆分按钮=' + hasSplit + ' 粘贴按钮=' + paste
+      + ' 底部按钮="' + (doc.querySelector('.parse-bottom .btn')?.textContent?.trim() || '?') + '"');
+
+  // page=1：点分页器的第 2 页，验证"换页会重新解析并替换结果"
+  if (q.get('page') === '1') {
+    const pager = doc.querySelector('.parse-bottom .pager');
+    if (!pager) { say('FAIL: 底部没有分页器'); return; }
+    say('分页器="' + pager.textContent.replace(/\s+/g, ' ').trim() + '"');
+    const before = [...doc.querySelectorAll('.tree-row .tree-title-text')].slice(0, 2).map((e) => e.textContent.trim()).join(' | ');
+    const nums = [...pager.querySelectorAll('.pager-num')];
+    const two = nums.find((b) => b.textContent.trim() === '2');
+    if (!two) { say('FAIL: 分页器里没有第 2 页'); return; }
+    two.click();
+    say('点了第2页，等结果…');
+    for (let i = 0; i < 200; i++) { await sleep(300); if (!doc.querySelector('.spinner')) break; }
+    await sleep(800);
+    const after = [...doc.querySelectorAll('.tree-row .tree-title-text')].slice(0, 2).map((e) => e.textContent.trim()).join(' | ');
+    const pager2 = doc.querySelector('.parse-bottom .pager');
+    say('换页前前两项="' + before + '" 换页后前两项="' + after + '" 分页器="' + (pager2?.textContent.replace(/\s+/g, ' ').trim() || '?') + '"');
+  }
+
+  // 点第 N 个表头排序（sort=1 起），验证"点表头递归排序整棵树"
+  const sortIdx = Number(q.get('sort') || 0);
+  if (sortIdx > 0) {
+    const ths = [...doc.querySelectorAll('.tree-header .sortable')];
+    const th = ths[sortIdx - 1];
+    if (!th) { say('FAIL: 没有第 ' + sortIdx + ' 个表头'); return; }
+    th.click();
+    await sleep(400);
+    const head = ths.map((t) => t.textContent.trim()).join(' | ');
+    const leaves2 = [...doc.querySelectorAll('.tree-row')].filter((r) => !r.classList.contains('group'));
+    const dur = leaves2.slice(0, 4).map((r) => [...r.querySelectorAll('.tree-cell.muted')].map((c) => c.textContent.trim())[0]).join(',');
+    say('表头=[' + head + '] 点第' + sortIdx + '列后前4个叶子的时长=' + dur);
+  }
+
+  // menu=1：点某一行的「⋯」，把菜单项列出来；sub=查看元数据|查看封面 时可再点进去
+  if (q.get('menu') === '1') {
+    const rowIdx = Number(q.get('row') || 0);
+    const leafRows = [...doc.querySelectorAll('.tree-row')].filter((r) => !r.classList.contains('group'));
+    const row = leafRows[rowIdx];
+    if (!row) { say('FAIL: 没有第 ' + rowIdx + ' 个叶子行'); return; }
+    const more = row.querySelector('.row-more');
+    if (!more) { say('FAIL: 这一行没有「⋯」（悬浮命令栏关掉了？）'); return; }
+    more.click();
+    await sleep(400);
+    const items = [...doc.querySelectorAll('.ctx-menu .ctx-item')].map((b) => b.textContent.trim());
+    say('行菜单(' + items.length + '项)=[' + items.join(' / ') + ']');
+    const sub = q.get('sub');
+    if (sub) {
+      const target = [...doc.querySelectorAll('.ctx-menu .ctx-item')].find((b) => b.textContent.trim() === sub);
+      if (!target) { say('FAIL: 菜单里没有 ' + sub); return; }
+      target.click();
+      await sleep(600);
+      const lines = doc.querySelector('.meta-pre')?.textContent?.split('\n').length ?? 0;
+      const hasCover = Boolean(doc.querySelector('.cover-preview'));
+      // 「解析此项」会重新解析并替换结果：此时输入框应变成该项自己的链接
+      for (let i = 0; i < 200; i++) { await sleep(300); if (!doc.querySelector('.spinner')) break; }
+      await sleep(500);
+      const inputNow = doc.querySelector('.url-input-wrap input')?.value ?? '';
+      const rowsNow = doc.querySelectorAll('.tree-row').length;
+      say('已点「' + sub + '」→ 元数据行数=' + lines + ' 有封面图=' + hasCover
+          + ' 输入框="' + inputNow + '" 行数=' + rowsNow);
+    }
+  }
+  // guide=1：解析完成后打开下载选项弹窗，点两张卡的「说明」
+  if (q.get('guide') === '1') {
+    [...doc.querySelectorAll('.parse-bottom .btn')].find((b) => b.textContent.includes('下载所选项目'))?.click();
+    await sleep(3000);
+    const btns = [...doc.querySelectorAll('.dl-card-title .btn')].filter((b) => b.textContent.trim() === '说明');
+    say('下载选项弹窗「说明」按钮数=' + btns.length + ' 卡片=[' + [...doc.querySelectorAll('.dl-card-title')].map((t) => t.textContent.replace('说明','').trim()).join('/') + ']');
+    for (const b of btns.slice(0, 2)) {
+      b.click();
+      await sleep(400);
+      const title = doc.querySelector('.modal-title')?.textContent?.trim();
+      const paras = doc.querySelectorAll('.guide-body p').length;
+      const first = doc.querySelector('.guide-body p')?.textContent?.slice(0, 36);
+      say('说明弹窗: "' + title + '" 段数=' + paras + ' 首段="' + first + '…"');
+      [...doc.querySelectorAll('.modal-foot .btn')].find((x) => x.textContent.trim() === '关闭')?.click();
+      await sleep(300);
+    }
+  }
+}
+</script>
+</body>
+</html>

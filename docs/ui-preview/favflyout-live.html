@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>收藏夹浮层实时验证台</title>
+<!--
+  ============================================================================
+  收藏夹浮层实时验证台：在**真实前端**里点开浮层、切分类，再把结果写进页眉，
+  这样截图本身就是证据（不需要额外读 DOM 的通道）。
+
+  用法：
+    1) 构建并启动（cwd 必须是 apps/web，见 docs/parity/07 §六 的坑）：
+         pnpm --filter @bili23-web/web check
+         cd apps/web ; node dist/server/index.js          # 默认 8787
+    2) 复制到前端产物目录（必须同源，才能操作 iframe 的 DOM）：
+         copy docs\ui-preview\favflyout-live.html apps\web\dist\client\_favfly.html
+    3) 截图：
+         chrome --headless=new --disable-gpu --hide-scrollbars --window-size=1480,1030 \
+                --virtual-time-budget=45000 --user-data-dir=%TEMP%\p1 \
+                --screenshot=out.png "http://127.0.0.1:8787/_favfly.html?cat=follow"
+
+  cat=favorite | subscription | follow
+  ============================================================================
+-->
+<style>
+  html,body{margin:0;background:#2b2f36;color:#ddd;font:12px/1.4 monospace}
+  body{padding:10px}
+  iframe{border:0;background:#fff;display:block}
+  #log{position:fixed;left:0;top:0;right:0;z-index:9;background:#000;color:#0f0;padding:4px 8px;font:13px/1.4 monospace}
+</style>
+</head>
+<body>
+<div id="log">boot…</div>
+<div style="height:34px"></div>
+<iframe id="app" width="1460" height="920" src="/"></iframe>
+<script>
+localStorage.setItem('bili23.web.accepted_terms', 'true');
+localStorage.setItem('bili23.web.ui.theme', JSON.stringify(new URLSearchParams(location.search).get('theme') || 'light'));
+
+const cat = new URLSearchParams(location.search).get('cat') || 'favorite';
+const lines = [];
+function say(s) { lines.push(s); document.getElementById('log').textContent = lines.join('   |   '); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const fr = document.getElementById('app');
+fr.addEventListener('load', () => { void main(); });
+
+async function main() {
+  const doc = fr.contentDocument;
+  const win = fr.contentWindow;
+
+  let navBtn = null;
+  for (let i = 0; i < 60 && !navBtn; i++) {
+    await sleep(200);
+    navBtn = [...doc.querySelectorAll('.nav-item')].find((b) => b.textContent.includes('收藏夹'));
+  }
+  if (!navBtn) { say('FAIL: 没找到导航项「收藏夹」'); return; }
+  navBtn.click();
+
+  let cats = [];
+  for (let i = 0; i < 80 && cats.length === 0; i++) { await sleep(250); cats = [...doc.querySelectorAll('.fav-cat')]; }
+  if (!cats.length) { say('FAIL: 浮层没出现'); return; }
+
+  if (cat !== 'favorite') {
+    const label = { subscription: '订阅合集', follow: '追番追剧' }[cat] || cat;
+    const target = cats.find((b) => b.textContent.includes(label));
+    if (!target) { say('FAIL: 没有该分类 ' + label); return; }
+    target.click();
+    await sleep(500);
+  }
+
+  for (let i = 0; i < 100; i++) {
+    await sleep(250);
+    if (!doc.querySelector('.fav-main .spinner')) break;
+  }
+  await sleep(800);
+
+  // menu=1：点开第一条的「⋯」，验证条目右键菜单（解析 / 在浏览器中打开）
+  if (new URLSearchParams(location.search).get('menu') === '1') {
+    const more = doc.querySelector('.fav-more');
+    if (more) {
+      more.click();
+      await sleep(400);
+      const items = [...doc.querySelectorAll('.ctx-menu .ctx-item')].map((b) => b.textContent.trim());
+      say('条目菜单=' + (items.length ? items.join(' / ') : 'FAIL 没弹出'));
+    } else {
+      say('FAIL: 没找到 .fav-more');
+    }
+  }
+
+  const items = doc.querySelectorAll('.fav-main .fav-item');
+  const withImg = [...items].filter((b) => b.querySelector('img')).length;
+  const pager = doc.querySelector('.fav-pager');
+  const tools = doc.querySelectorAll('.fav-tools .icon-btn');
+  say('分类=' + cat + ' 卡片=' + items.length + ' 有封面=' + withImg + ' 左栏工具=' + tools.length
+      + (pager ? ' 分页="' + pager.textContent.replace(/\s+/g, ' ').trim() + '"' : ''));
+}
+</script>
+</body>
+</html>
