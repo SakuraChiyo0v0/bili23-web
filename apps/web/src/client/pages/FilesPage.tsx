@@ -102,7 +102,8 @@ export function FilesPage() {
                   <span className="files-c-size muted small">{fmtBytes(f.size)}</span>
                   <span className="files-c-time muted small">{new Date(f.mtime * 1000).toLocaleString()}</span>
                   <span className="files-c-op">
-                    <a className="btn sm" href={fileRawUrl(f.path)} target="_blank" rel="noreferrer" download>{tr("下载")}</a>
+                    {/* download 带文件名：即使服务端没给 Content-Disposition，也不会被存成 "raw" */}
+                <a className="btn sm" href={fileRawUrl(f.path)} download={f.name}>{tr("下载")}</a>
                   </span>
                 </div>
               );

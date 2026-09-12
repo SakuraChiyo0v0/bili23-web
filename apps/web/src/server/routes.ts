@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { stream, streamSSE } from "hono/streaming";
 import { createReadStream } from "node:fs";
+import { basename } from "node:path";
 import { stat } from "node:fs/promises";
 import { BiliError } from "@bili23-web/engine";
 import { previewNamingRule } from "./naming-preview.js";
@@ -417,6 +418,17 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
       return c.json({ error: { code: "INVALID_PATH", message: "不能下载目录" } }, 400);
     }
     c.header("Content-Type", "application/octet-stream");
+    /**
+     * 必须显式给文件名：不给的话浏览器只能按 URL 末段取名 —— 我们的下载地址是
+     * `/api/files/raw?path=…`，于是**下下来就是一个叫 `raw`、没有扩展名的文件**
+     *（实测踩到：用户在下载文件夹里只看到一个 495 MB 的 `raw`，双击打不开）。
+     * 中文名走 RFC 5987 的 `filename*`，同时给一个 ASCII 兜底。
+     */
+    const name = basename(abs);
+    c.header(
+      "Content-Disposition",
+      `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "'")}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    );
     return stream(c, async (s) => {
       const rs = createReadStream(abs);
       for await (const chunk of rs) {
