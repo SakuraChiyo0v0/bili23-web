@@ -23,7 +23,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
+// Chrome 路径优先取 CHROME_PATH；否则用 %ProgramFiles%（不写死盘符，跨机可用）
+const CHROME = process.env.CHROME_PATH ?? join(process.env.ProgramFiles ?? "C:/Program Files", "Google/Chrome/Application/chrome.exe");
 
 const [url, waitMsRaw, ...exprs] = process.argv.slice(2);
 if (!url) {

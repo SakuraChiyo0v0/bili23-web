@@ -19,7 +19,24 @@ import tempfile
 import traceback
 from collections import OrderedDict
 
-APP_SRC = r"C:\LocalSpace\Projects\Github-Proj\Bili23-Downloader\src"
+def _ref_dir() -> pathlib.Path:
+    """原版仓库根目录：第二个参数 > 环境变量 BILI23_REF_DIR > 仓库同级的 Bili23-Downloader。
+
+    刻意**不写死本机绝对路径** —— 这些脚本会跨机用（本机用户名与目录布局和别的机器不一样）。
+    """
+    if len(sys.argv) > 2:
+        return pathlib.Path(sys.argv[2]).resolve()
+    env = os.environ.get("BILI23_REF_DIR")
+    if env:
+        return pathlib.Path(env).resolve()
+    # __file__ = <repo>/docs/parity/_dumpstrings.py → parents[3] 是仓库根
+    return (pathlib.Path(__file__).resolve().parents[3] / "Bili23-Downloader").resolve()
+
+APP_SRC = _ref_dir() / "src"
+if not APP_SRC.is_dir():
+    sys.exit(f"找不到原版仓库：{APP_SRC}\n"
+             f"请用第二个参数或环境变量 BILI23_REF_DIR 指定 Bili23-Downloader 的根目录")
+
 REAL_APPDATA = os.environ.get("APPDATA", "")
 DEFAULT_URL = "https://www.bilibili.com/video/BV1Z34y1r7ZV"
 
@@ -40,8 +57,8 @@ os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
 sys.path.insert(0, APP_SRC)
 os.chdir(APP_SRC)
 
-FONTS = [r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\msyhbd.ttc",
-         r"C:\Windows\Fonts\segoeui.ttf"]
+FONTS = [str(pathlib.Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "msyh.ttc"),
+         str(pathlib.Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "segoeui.ttf")]
 
 
 def top_level_name(w):

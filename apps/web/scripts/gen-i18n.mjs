@@ -15,16 +15,20 @@
  *
  * 用法（仓库根目录）：node apps/web/scripts/gen-i18n.mjs
  * 环境变量：
- *   BILI23_REF_DIR  原版仓库根目录（默认 C:/LocalSpace/Projects/Github-Proj/Bili23-Downloader）
+ *   BILI23_REF_DIR  原版仓库根目录（默认取**仓库同级**的 Bili23-Downloader；不写死本机路径）
  *   SKIP_COVERAGE=1 跳过覆盖率扫描（只生成字典）
  */
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
-const refDir = process.env.BILI23_REF_DIR ?? "C:/LocalSpace/Projects/Github-Proj/Bili23-Downloader";
+const refDir = process.env.BILI23_REF_DIR ?? join(repoRoot, "..", "Bili23-Downloader");
+if (!existsSync(refDir)) {
+  console.error(`找不到原版仓库：${refDir}\n请用环境变量 BILI23_REF_DIR 指定 Bili23-Downloader 的根目录`);
+  process.exit(1);
+}
 const outPath = join(repoRoot, "apps", "web", "src", "client", "lib", "i18nDict.ts");
 
 /** Qt .ts 里出现过的 XML 实体（只这几个，工具确认过） */
