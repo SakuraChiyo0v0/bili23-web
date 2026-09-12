@@ -82,12 +82,14 @@ function Shell() {
     );
   }
 
-  /** 收藏夹页点条目 → 去解析页解析它 */
+  /** 收藏夹页点条目 → 去解析页**并直接开始解析**（原版浮层点条目就是直接解析，不该再让用户点一下） */
   const gotoParse = useCallback((url: string) => {
     // 收藏夹页给的都是自描述链接（收藏夹 / 合集 / 追番 / bili23:// 伪协议），一律走自动识别，
     // 不要在进解析页后还沿用用户上次选的类型
     parseSession.setParseType("auto");
     parseSession.setInput(url);
+    // 一次性标志：ParsePage 挂载后自己调用与「解析」按钮同一个 doParse()
+    parseSession.requestAutoRun();
     navigate("parse");
   }, [parseSession, navigate]);
 

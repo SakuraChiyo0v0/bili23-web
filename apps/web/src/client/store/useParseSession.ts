@@ -21,6 +21,14 @@ interface ParseSession {
   /** 每周必看期数（popular 专用；服务端 weekNum，缺省第 1 期） */
   weekNum: number;
   error?: string;
+  /**
+   * 「到了解析页就自动开始解析」的一次性请求。
+   * 收藏夹页点条目时置上（原版浮层点条目就是**直接解析**，不该再让用户手动点一下「解析」）；
+   * ParsePage 挂载后消费掉它并调用与按钮同一个 `doParse()` —— 不为自动解析另开一条代码路径。
+   */
+  pendingAutoRun: boolean;
+  requestAutoRun: () => void;
+  consumeAutoRun: () => void;
   setInput: (v: string) => void;
   setParseType: (t: string) => void;
   setAutoPages: (n: number) => void;
@@ -152,6 +160,9 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   page: 1,
   weekNum: 1,
   error: undefined,
+  pendingAutoRun: false,
+  requestAutoRun: () => set({ pendingAutoRun: true }),
+  consumeAutoRun: () => set({ pendingAutoRun: false }),
   setInput: (v) => set({ input: v }),
   setParseType: (t) => set({ parseType: t }),
   setAutoPages: (n) => set({ autoPages: n }),

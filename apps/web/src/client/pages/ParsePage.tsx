@@ -107,6 +107,18 @@ export function ParsePage() {
     }
   }, [session, toast]);
 
+  /**
+   * 从收藏夹页点条目过来时**直接开解析**（原版浮层点条目就是这个行为）。
+   * 走的是与「解析」按钮同一个 `doParse()` —— 不另开一条"自动解析"路径，
+   * 免得两套逻辑慢慢长歪。
+   */
+  useEffect(() => {
+    if (!session.pendingAutoRun) return;
+    session.consumeAutoRun();
+    void doParse();
+    /* eslint-disable-next-line */
+  }, [session.pendingAutoRun]);
+
   const { openDialog } = useDownloadOptions();
   const cfg = useSettingsStore((st) => st.config);
   const saveConfig = useSettingsStore((st) => st.save);
