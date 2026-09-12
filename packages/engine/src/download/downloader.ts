@@ -143,6 +143,14 @@ export interface DownloadFileOptions {
   maxRetries?: number;
   /** 限速（字节/秒），0 不限，默认 0 */
   rateLimitBps?: number;
+  /**
+   * 下载前预分配文件空间（对齐桌面 `preallocate_file_space`，默认 **开**）。
+   *
+   * 桌面的实现是 `f.seek(size-1); f.write(b"\0")` —— 即**稀疏**地预置逻辑大小，
+   * 不是 `fallocate` 那种真占块。所以这里的 `truncate(size)` 与原版语义等价。
+   * 关掉它就完全不做这一步（文件随写入自然增长）。
+   */
+  preallocate?: boolean;
   /** 共享限速门（跨调用/任务共享、可即时调整）；有 gate 时优先于 rateLimitBps */
   gate?: SpeedGate;
   /** 取流 Referer（CDN 校验来源），缺省用 http 默认 */
@@ -364,7 +372,8 @@ export async function downloadFile(options: DownloadFileOptions): Promise<Downlo
   }
 
   await mkdir(dirnameOf(destPath), { recursive: true });
-  await ensureFileSize(destPath, fileSize);
+  // 预分配（默认开）：与原版一致地"先占好逻辑大小"；关掉时文件随写入自然增长
+  if (options.preallocate !== false) await ensureFileSize(destPath, fileSize);
   if (signal?.aborted) throw new DownloadAbortedError();
 
   const totalChunks = Math.max(1, Math.ceil(fileSize / chunkSize));

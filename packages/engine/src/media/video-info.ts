@@ -14,6 +14,8 @@ export interface StreamRef {
   codecs: string;
   width?: number;
   height?: number;
+  /** 帧率（playurl 的 rameRate 是字符串，如 "60"；原版媒体信息行会显示它） */
+  frameRate?: string;
 }
 
 export type VideoMediaType = "dash" | "mp4";
@@ -65,6 +67,7 @@ export interface PlayPayload {
       codecs?: string;
       width?: number;
       height?: number;
+      frameRate?: string | number;
     }>;
     audio?: Array<{
       id: number;
@@ -107,6 +110,7 @@ interface DashStreamEntry {
   codecs?: string;
   width?: number;
   height?: number;
+  frameRate?: string | number;
 }
 
 /** 收集条目可用的直链候选（对齐桌面 query_worker：baseUrl/base_url/backupUrl/backup_url/url） */
@@ -128,6 +132,7 @@ function toStreamRef(e: DashStreamEntry): StreamRef {
     codecs: e.codecs ?? "",
     ...(e.width !== undefined ? { width: e.width } : {}),
     ...(e.height !== undefined ? { height: e.height } : {}),
+    ...(e.frameRate !== undefined ? { frameRate: String(e.frameRate) } : {}),
   };
 }
 

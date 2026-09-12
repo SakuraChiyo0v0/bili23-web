@@ -33,4 +33,17 @@ describe("TaskStore 解析历史", () => {
     store.addParseHistory({ url: "u2", title: "B", type: "video", itemCount: 1 });
     expect(store.listParseHistory(1)).toHaveLength(1);
   });
+
+  it("写入后只保留最近 100 条（原版提示「仅保留最近 100 条记录」要名副其实）", () => {
+    const store = makeStore();
+    for (let i = 1; i <= 105; i += 1) {
+      store.addParseHistory({ url: "u" + i, title: "T" + i, type: "video", itemCount: 1 });
+    }
+    const list = store.listParseHistory();
+    expect(list).toHaveLength(TaskStore.PARSE_HISTORY_LIMIT);
+    // 留下的是**最新**的：第 105 条在、第 1 条已经被裁掉
+    expect(list[0]?.url).toBe("u105");
+    expect(list.some((x) => x.url === "u1")).toBe(false);
+    expect(list[list.length - 1]?.url).toBe("u6");
+  });
 });

@@ -183,11 +183,22 @@ export class TaskStore {
   /** 统计任务数 */
   // ---- 解析历史（parse_history） ----
 
+  /** 解析历史只保留最近这么多条（原版 `ParseHistoryDialog` 的那句提示：「仅保留最近 100 条记录」） */
+  static readonly PARSE_HISTORY_LIMIT = 100;
+
   addParseHistory(entry: { url: string; title?: string; type?: string; itemCount?: number }): number {
     const time = Math.floor(Date.now() / 1000);
     const res = this.#db
       .prepare("INSERT INTO parse_history (url, title, type, item_count, created_time) VALUES (?, ?, ?, ?, ?)")
       .run(entry.url, entry.title ?? "", entry.type ?? "", entry.itemCount ?? 0, time);
+    // 写入后裁剪：只留最近 LIMIT 条（原版就是这么提示的，之前只是提示、没有真的裁）
+    this.#db
+      .prepare(
+        `DELETE FROM parse_history WHERE id NOT IN (
+           SELECT id FROM parse_history ORDER BY created_time DESC, id DESC LIMIT ?
+         )`,
+      )
+      .run(TaskStore.PARSE_HISTORY_LIMIT);
     return Number(res.lastInsertRowid);
   }
 

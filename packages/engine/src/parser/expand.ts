@@ -21,7 +21,9 @@ const CONCURRENCY = 4;
 export async function expandVideoRows(ctx: ParseContext, rows: readonly ExpandRow[]): Promise<MediaItem[]> {
   const groups = await mapLimit(rows, CONCURRENCY, async (row) => {
     try {
-      const view = await fetchViewItems(ctx, { bvid: row.bvid });
+      // 二次解析语义：只展开这一行指名的稿件（onlyBvid）。否则收藏夹里一个"属于某合集"的视频
+      // 会把整个合集都拉进来 —— 原版靠 `target_episode_info` 做的正是这件事。
+      const view = await fetchViewItems(ctx, { bvid: row.bvid }, { onlyBvid: row.bvid });
       if (view.redirectUrl) return [];
       const badge = row.badge ?? "";
       return badge ? view.items.map((item) => ({ ...item, badge })) : view.items;

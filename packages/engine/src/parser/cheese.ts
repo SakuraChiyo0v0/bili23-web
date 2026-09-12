@@ -113,6 +113,16 @@ export class CheeseParser implements Parser {
       }
     }
 
-    return { type: "cheese", title: data.title ?? "", items };
+    // 链接指向的那一集（对齐桌面 parser/cheese.py：链接带 ep 时把它注入 current_ep_id，
+    // episode/cheese.py:get_ep_id 优先用它，否则取正片第一集）
+    const epIdFromUrl = /^ep/i.test(token) ? Number(token.replace(/^ep/i, "")) : undefined;
+    const targetEpId = epIdFromUrl ?? items[0]?.epId;
+
+    return {
+      type: "cheese",
+      title: data.title ?? "",
+      items,
+      ...(targetEpId !== undefined ? { target: { key: "ep_id" as const, value: targetEpId } } : {}),
+    };
   }
 }

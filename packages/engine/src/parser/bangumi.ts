@@ -101,7 +101,7 @@ export class BangumiParser implements Parser {
       throw new BiliError("API_ERROR", "番剧 season 接口缺少 result");
     }
 
-    return this.#toResult(result);
+    return this.#toResult(result, token);
   }
 
   async #seasonIdFromMedia(ctx: ParseContext, mediaId: string): Promise<string> {
@@ -117,7 +117,7 @@ export class BangumiParser implements Parser {
     return String(seasonId);
   }
 
-  #toResult(result: SeasonResult): ParseResult {
+  #toResult(result: SeasonResult, token: string): ParseResult {
     const seasonTitle = result.season_title ?? "";
     const owner = {
       mid: result.up_info?.mid ?? 0,
@@ -130,6 +130,11 @@ export class BangumiParser implements Parser {
       { title: "正片", episodes: result.episodes ?? [] },
       ...(result.section ?? []).map((s) => ({ title: s.title ?? "", episodes: s.episodes ?? [] })),
     ].filter((s) => s.episodes.every((ep) => ep.bvid && ep.cid));
+
+    // 链接指向的那一集（对齐桌面 parser/bangumi.py + episode/bangumi.py:get_ep_id）：
+    // 链接带 ep 时以链接为准，否则用接口回的 current_ep_id，再退回正片第一集
+    const epIdFromUrl = /^ep/i.test(token) ? Number(token.replace(/^ep/i, "")) : undefined;
+    const targetEpId = epIdFromUrl ?? result.current_ep_id ?? result.episodes?.[0]?.ep_id;
 
     // 剧集序号：对正片按"非预告"计数（预告片与正片混排时不影响序号）
     const episodeNumberMap = new Map<number, number>();
@@ -172,7 +177,7 @@ export class BangumiParser implements Parser {
       }
     }
 
-    return { type: "bangumi", title: seasonTitle, items };
+    return { type: "bangumi", title: seasonTitle, items, ...(targetEpId !== undefined ? { target: { key: "ep_id" as const, value: targetEpId } } : {}) };
   }
 }
 

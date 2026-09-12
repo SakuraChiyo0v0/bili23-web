@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HttpClient } from "../src/api/http.js";
-import { VideoParser } from "../src/parser/video.js";
+import { VideoParser, buildSeasonItems } from "../src/parser/video.js";
 import { parseUrl } from "../src/parser/index.js";
 import { BiliError } from "../src/errors.js";
 import type { ParseContext } from "../src/parser/types.js";
@@ -128,6 +128,60 @@ describe("VideoParser", () => {
     expect(result.items[0]?.interactive).toBeUndefined();
   });
 
+  it("expandInteractiveNodes=false 时只回报 interactiveDetected，不展开分支节点", async () => {
+    // 探测阶段不该碰 edgeinfo_v2：不该发生任何 BFS 请求
+    const calls: string[] = [];
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/x/web-interface/nav")) {
+        return json({ code: 0, data: { wbi_img: { img_url: "https://i0.hdslb.com/bfs/wbi/abc.png", sub_url: "https://i0.hdslb.com/bfs/wbi/def.png" } } });
+      }
+      if (url.includes("/x/web-interface/view")) {
+        return json({ code: 0, data: { ...VIEW_MULTI_P.data, rights: { is_stein_gate: 1 }, pages: undefined } });
+      }
+      return json({ code: -404, message: "not found", data: null });
+    };
+    const ctx: ParseContext = { http: new HttpClient({ fetchImpl: fetchImpl as typeof fetch }) };
+    const result = await new VideoParser().parse(ctx, "BV1xx411c7mD", { expandInteractiveNodes: false });
+    expect(result.interactiveDetected).toBe(true);
+    // 稿件本身仍是可下载条目（原版探测阶段列表为空，这里给 1 条更实用，见实现注释）
+    expect(result.items).toHaveLength(1);
+    expect(calls.some((u) => u.includes("/x/stein/edgeinfo_v2"))).toBe(false);
+  });
+
+  it("ignoreSeason=true 时忽略 ugc_season，只解析稿件自己的分P", async () => {
+    const body = {
+      code: 0,
+      data: {
+        bvid: "BV1AAA", aid: 1, cid: 100, title: "主稿件标题", pic: "main.jpg",
+        duration: 10, pubdate: 1600000000, desc: "描述",
+        owner: { mid: 1, name: "UP主", face: "" },
+        pages: [
+          { cid: 100, page: 1, part: "P1", duration: 10 },
+          { cid: 101, page: 2, part: "P2", duration: 11 },
+        ],
+        ugc_season: {
+          id: 9,
+          title: "我的合集",
+          sections: [
+            { id: 1, title: "第一章", episodes: [{ aid: 9, bvid: "BV1ZZZ", cid: 900, title: "别人的稿件", arc: { pic: "z.jpg", pubdate: 1 } }] },
+          ],
+        },
+      },
+    };
+    const ctx: ParseContext = { http: httpWithJson(body) };
+    // 默认（不忽略合集）：展开整个合集（合集章节列表才是权威来源），标题取合集名
+    const withSeason = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA");
+    expect(withSeason.title).toBe("我的合集");
+    expect(withSeason.items.map((i) => i.id)).toEqual(["video:BV1ZZZ:p1"]);
+
+    // ignoreSeason（= 原版 MultiPartListsDialog 里 del ugc_season 的那句）：只要本稿件的分P
+    const partsOnly = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA", { ignoreSeason: true });
+    expect(partsOnly.title).toBe("主稿件标题");
+    expect(partsOnly.items.map((i) => i.id)).toEqual(["video:BV1AAA:p1", "video:BV1AAA:p2"]);
+  });
+
   it("充电专属置角标", async () => {
     const body = {
       code: 0,
@@ -203,5 +257,146 @@ describe("parseUrl 分发入口", () => {
     const result = await parseUrl(ctx, "https://www.bilibili.com/festival/2024");
     expect(result.type).toBe("video");
     expect(result.items).toHaveLength(2);
+  });
+});
+
+describe("合集 ugc_season 展开（对齐桌面 episode/video.py:107-214）", () => {
+  /** 两个章节：第一章里一个单P稿件 + 一个双P稿件，第二章里一个单P稿件 */
+  function seasonBody(sections: unknown[] = [
+    {
+      id: 1, title: "第一章",
+      episodes: [
+        { aid: 1, bvid: "BV1AAA", cid: 100, title: "单P稿件", arc: { pic: "a.jpg", pubdate: 1600000000 } },
+        {
+          aid: 2, bvid: "BV1BBB", title: "多P稿件", arc: { pic: "b.jpg", pubdate: 1600000001 },
+          pages: [{ cid: 201, page: 1, part: "上", duration: 5 }, { cid: 202, page: 2, part: "下", duration: 6 }],
+        },
+      ],
+    },
+    { id: 2, title: "第二章", episodes: [{ aid: 3, bvid: "BV1CCC", cid: 300, title: "另一个", arc: { pic: "c.jpg", pubdate: 1600000002 } }] },
+  ]) {
+    return {
+      code: 0,
+      data: {
+        bvid: "BV1AAA", aid: 1, cid: 100, title: "主稿件标题", pic: "main.jpg",
+        duration: 10, pubdate: 1600000000, desc: "描述",
+        owner: { mid: 1, name: "UP主", face: "" },
+        pages: [{ cid: 100, page: 1, part: "P1", duration: 10 }],
+        ugc_season: { id: 9, title: "我的合集", sections },
+      },
+    };
+  }
+
+  it("属于合集时展开整个合集，结果标题取合集名", async () => {
+    const ctx: ParseContext = { http: httpWithJson(seasonBody()) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA");
+    expect(result.title).toBe("我的合集");
+    // 单P + 双P(2) + 单P = 4 个叶子
+    expect(result.items.map((i) => i.id)).toEqual([
+      "video:BV1AAA:p1", "video:BV1BBB:p1", "video:BV1BBB:p2", "video:BV1CCC:p1",
+    ]);
+  });
+
+  it("多章节时给 section_title；合集名落 collection_title", async () => {
+    const ctx: ParseContext = { http: httpWithJson(seasonBody()) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA");
+    const first = result.items[0]!;
+    expect(first.collectionTitle).toBe("我的合集");
+    expect(first.sectionTitle).toBe("第一章");
+    expect(result.items[3]!.sectionTitle).toBe("第二章");
+  });
+
+  it("只有一个章节时不给 section_title（原版 `if section_count > 1`）", async () => {
+    const one = [{ id: 1, title: "唯一章", episodes: [{ aid: 1, bvid: "BV1AAA", cid: 100, title: "只有一个", arc: { pic: "a.jpg", pubdate: 1 } }] }];
+    const ctx: ParseContext = { http: httpWithJson(seasonBody(one)) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.sectionTitle).toBeUndefined();
+    expect(result.items[0]!.collectionTitle).toBe("我的合集");
+  });
+
+  it("多P 稿件给出 parent_title（= containerTitle）与 partCount，单P 不给", async () => {
+    const ctx: ParseContext = { http: httpWithJson(seasonBody()) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA");
+    const multi = result.items.filter((i) => i.bvid === "BV1BBB");
+    expect(multi.map((i) => i.title)).toEqual(["上", "下"]);
+    expect(multi.every((i) => i.containerTitle === "多P稿件")).toBe(true);
+    expect(multi.every((i) => i.partCount === 2)).toBe(true);
+    expect(result.items[0]!.containerTitle).toBeUndefined();
+  });
+
+  it("合集叶子带 containerType=list（→ 命名分类 COLLECTION，对应原版 COLLECTION_BIT）", async () => {
+    const ctx: ParseContext = { http: httpWithJson(seasonBody()) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1AAA");
+    expect(result.items.every((i) => i.containerType === "list")).toBe(true);
+  });
+
+  it("target 只认链接那个稿件：BV1BBB?p=2 → cid 202，而不是别的稿件的第 2 个分P", async () => {
+    // 注意：真实接口会按请求的 bvid 回对应的 data.bvid，mock 必须照做 ——
+    // 否则 ownBvid 永远是第一个稿件，窄化失效（我第一版就是这么写错的）
+    const body = seasonBody();
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = String(input);
+      const m = /bvid=([A-Za-z0-9]+)/.exec(url);
+      const asked = m?.[1] ?? body.data.bvid;
+      return new Response(JSON.stringify({ ...body, data: { ...body.data, bvid: asked } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const ctx: ParseContext = { http: new HttpClient({ fetchImpl: fetchImpl as typeof fetch }) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1BBB?p=2");
+    expect(result.target).toEqual({ key: "cid", value: 202 });
+  });
+
+  it("没有 ugc_season 时仍走分P 展开（行为不变）", async () => {
+    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1xx411c7mD");
+    expect(result.title).toBe("测试视频标题");
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]!.containerType).toBeUndefined();
+  });
+
+  it("onlyBvid（二次解析语义）：只保留指名的那一个稿件，不展开整个合集", () => {
+    // 这条防的是：收藏夹里一个"属于某合集"的视频，解析时会顺带把整个合集都拉进来
+    const data = seasonBody().data as NonNullable<Parameters<typeof buildSeasonItems>[0]>;
+    const narrowed = buildSeasonItems(data, "BV1BBB");
+    expect(narrowed.map((i) => i.id)).toEqual(["video:BV1BBB:p1", "video:BV1BBB:p2"]);
+    // 但层级元数据仍然保留（原版收窄后仍挂在合集/章节节点下）
+    expect(narrowed[0]!.collectionTitle).toBe("我的合集");
+    expect(narrowed[0]!.sectionTitle).toBe("第一章");
+  });
+});
+
+describe("链接指向项 target（对齐桌面 current_episode_data）", () => {  it("无 ?p= 时指向稿件默认 cid（= 第 1 个分P）", async () => {
+    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1xx411c7mD");
+    expect(result.target).toEqual({ key: "cid", value: 280001 });
+  });
+
+  it("有 ?p=2 时指向第 2 个分P 的 cid", async () => {
+    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1xx411c7mD?p=2");
+    expect(result.target).toEqual({ key: "cid", value: 280002 });
+  });
+
+  it("?p= 越界时退回默认 cid", async () => {
+    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1xx411c7mD?p=99");
+    expect(result.target).toEqual({ key: "cid", value: 280001 });
+  });
+
+  it("单P 视频也带上 target", async () => {
+    const body = { code: 0, data: { ...VIEW_MULTI_P.data, pages: undefined } };
+    const ctx: ParseContext = { http: httpWithJson(body) };
+    const result = await new VideoParser().parse(ctx, "BV1xx411c7mD");
+    expect(result.target).toEqual({ key: "cid", value: 280001 });
+  });
+
+  it("链接指向项一定出现在 items 里（否则前端勾不中）", async () => {
+    const ctx: ParseContext = { http: httpWithJson(VIEW_MULTI_P) };
+    const result = await new VideoParser().parse(ctx, "https://www.bilibili.com/video/BV1xx411c7mD?p=2");
+    const hit = result.items.find((it) => it.cid === result.target?.value);
+    expect(hit?.id).toBe("video:BV1xx411c7mD:p2");
   });
 });

@@ -122,3 +122,26 @@ describe("BangumiParser", () => {
     await expect(new BangumiParser().parse(makeCtx(), "https://www.bilibili.com/video/BV1xx411c7mD")).rejects.toMatchObject({ code: "INVALID_URL" });
   });
 });
+
+describe("BangumiParser 链接指向项 target", () => {
+  it("ep 链接：target 指向该集，且该集在 items 里", async () => {
+    const result = await new BangumiParser().parse(makeCtx(), "https://www.bilibili.com/bangumi/play/ep399341");
+    expect(result.target).toEqual({ key: "ep_id", value: 399341 });
+    const hit = result.items.find((it) => it.epId === result.target?.value);
+    expect(hit).toBeDefined();
+    expect(hit?.sectionTitle).toBe("正片");
+  });
+
+  it("ss 链接：退回正片第一集", async () => {
+    const result = await new BangumiParser().parse(makeCtx(), "https://www.bilibili.com/bangumi/play/ss28861");
+    expect(result.target).toEqual({ key: "ep_id", value: 399341 });
+  });
+
+  it("接口回 current_ep_id 时优先用它（对齐原版 get_ep_id）", async () => {
+    const ctx = makeCtx();
+    // makeCtx 的 fetchImpl 在调用时才读 seasonBody，所以这里改完再 parse 即生效
+    seasonBody = { ...makeSeasonResult(), current_ep_id: 499001 };
+    const result = await new BangumiParser().parse(ctx, "https://www.bilibili.com/bangumi/play/ss28861");
+    expect(result.target).toEqual({ key: "ep_id", value: 499001 });
+  });
+});

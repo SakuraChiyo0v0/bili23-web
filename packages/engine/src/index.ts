@@ -36,7 +36,7 @@ export { ListParser } from "./parser/list.js";
 export { FestivalParser } from "./parser/festival.js";
 export { AudioParser, AUDIO_API_BASE } from "./parser/audio.js";
 export { LessonParser, LESSON_API_BASE, LESSON_DETAIL_URL } from "./parser/lesson.js";
-export type { Parser, ParseContext, ParseOptions, ParseResult } from "./parser/types.js";
+export type { Parser, ParseContext, ParseOptions, ParseResult, LinkTarget, LinkTargetKey } from "./parser/types.js";
 export { fetchVideoMediaInfo, normalizePlayPayload, assertPlayOk, isLoginApiError, dashStreamUrls } from "./media/video-info.js";
 export { fetchAudioMediaInfo, fetchLessonMediaInfo } from "./media/flavor.js";
 export { fetchPlayMediaInfo, flavorOf } from "./media/flavor.js";

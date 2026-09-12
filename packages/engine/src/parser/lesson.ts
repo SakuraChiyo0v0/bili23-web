@@ -126,6 +126,15 @@ export class LessonParser implements Parser {
         });
       }
     }
-    return { type: "lesson", title: courseTitle, items };
+    // 链接指向的小节（对齐桌面 episode/lesson.py:get_section_id）：
+    // 原版优先用观看进度里的 locationInfo.sectionId，我们拿不到该进度，故退回第一个可播放小节
+    const targetSectionId = items[0]?.sectionId;
+
+    return {
+      type: "lesson",
+      title: courseTitle,
+      items,
+      ...(targetSectionId !== undefined ? { target: { key: "section_id" as const, value: targetSectionId } } : {}),
+    };
   }
 }

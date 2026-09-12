@@ -1,4 +1,7 @@
-import { ProxyAgent } from "undici";
+import { EnvHttpProxyAgent, ProxyAgent } from "undici";
+
+/** `#proxy` 的哨兵值：表示"跟随系统代理"（区别于 undefined = 不使用代理） */
+const SYSTEM_PROXY = Symbol("system-proxy");
 import { BiliError } from "../errors.js";
 import { CookieJar } from "./cookies.js";
 
@@ -65,23 +68,45 @@ function sleep(ms: number): Promise<void> {
 }
 
 export class HttpClient {
-  readonly ua: string;
+  #ua: string;
   readonly referer: string;
   readonly jar: CookieJar;
   readonly timeoutMs: number;
   readonly retries: number;
   #fetch: typeof fetch;
-  #proxy: string | undefined = undefined;
-  #agent: ProxyAgent | undefined = undefined;
+  #proxy: string | typeof SYSTEM_PROXY | undefined = undefined;
+  #agent: ProxyAgent | EnvHttpProxyAgent | undefined = undefined;
+  /**
+   * 构造时是否注入了 fetch 替身（测试用）。
+   * 注入的 fetch **就是传输层本身** —— 切换代理时不能把它换掉，
+   * 否则会把替身冲成真实 fetch（踩过：一条用 mock 的单测因此真的去请求了线上接口）。
+   */
+  #injectedFetch: boolean;
 
   constructor(opts: HttpClientOptions = {}) {
-    this.ua = opts.ua ?? DEFAULT_UA;
+    this.#ua = opts.ua ?? DEFAULT_UA;
     this.referer = opts.referer ?? "https://www.bilibili.com/";
     this.jar = opts.cookieJar ?? new CookieJar();
     this.timeoutMs = opts.timeoutMs ?? 10_000;
     this.retries = opts.retries ?? 3;
+    this.#injectedFetch = Boolean(opts.fetchImpl);
     this.#fetch = opts.fetchImpl ?? (opts.proxy ? this.#makeProxyFetch(opts.proxy) : fetch);
     this.#proxy = opts.proxy;
+  }
+
+  /** 当前 UA（只读视图；改它用 `setDefaultUserAgent`） */
+  get ua(): string {
+    return this.#ua;
+  }
+
+  /**
+   * 运行时改默认 UA（对齐桌面「高级 > User-Agent」改动即时生效）。
+   * 空白串按"没填"处理回落到内置默认 —— 服务端校验也会拦空 UA，这里是第二道。
+   */
+  setDefaultUserAgent(ua?: string): void {
+    const next = ua && ua.trim() !== "" ? ua : DEFAULT_UA;
+    if (next === this.#ua) return;
+    this.#ua = next;
   }
 
   /** 发起请求（带 cookie/UA/Referer/重试），返回原始 Response（调用方负责消费） */
@@ -143,11 +168,33 @@ export class HttpClient {
 
   /** 运行时切换代理（配置更新用）；无代理时回退全局 fetch */
   setProxy(proxy?: string): void {
+    if (this.#injectedFetch) return;
     if (proxy === this.#proxy) return;
     this.#proxy = proxy;
     this.#agent?.close().catch(() => undefined);
     this.#agent = undefined;
     this.#fetch = proxy ? this.#makeProxyFetch(proxy) : fetch;
+  }
+
+  /**
+   * 跟随系统代理（对齐桌面 `ProxyMode.SYSTEM`）。
+   *
+   * ⚠️ 为什么需要单独一个方法：Node 内置 fetch **不会**读 `HTTP_PROXY` / `HTTPS_PROXY`，
+   * 所以"跟随系统"如果不显式装 `EnvHttpProxyAgent`，就会和"不使用代理"表现完全一样 ——
+   * 那就是个假开关。桌面版 `SYSTEM` 语义就是"环境变量 + 系统代理设置"。
+   */
+  setSystemProxy(): void {
+    if (this.#injectedFetch) return;
+    if (this.#proxy === SYSTEM_PROXY) return;
+    this.#proxy = SYSTEM_PROXY;
+    this.#agent?.close().catch(() => undefined);
+    this.#agent = undefined;
+    const agent = new EnvHttpProxyAgent();
+    this.#agent = agent;
+    this.#fetch = ((input, init) => {
+      const options = (init ?? {}) as RequestInit & { dispatcher?: unknown };
+      return fetch(input, { ...options, dispatcher: agent as never });
+    }) as typeof fetch;
   }
 
   /** 用 undici ProxyAgent 包装 fetch（HTTP 代理，解析与取流共用） */
