@@ -413,7 +413,10 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 html[data-theme=dark] .tab.active::after{ background:var(--accent); }
 
 /* ===== Settings page ===== */
-.settings-page{ max-width:860px; }
+/* 宽屏：收窄到 860 并**居中**（原来是左对齐，右边空一大条）；
+   手机 / 平板 / 手机横屏（<1024）：直接占满 —— 横屏手机原来右侧会空出 200 多像素 */
+.settings-page{ max-width:860px; margin-inline:auto; }
+@media (max-width:1023px){ .settings-page{ max-width:100%; } }
 .settings-group h2{ font-size:16px; margin-bottom:10px; padding:0 2px; }
 .settings-group .panel{ overflow:hidden; }
 
