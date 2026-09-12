@@ -3,10 +3,15 @@ import {
 } from "../services/client";
 import { useTasksStore, TASK_STATUS_META } from "../store/useTasksStore";
 import type { TaskSummary } from "../services/types";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
 import { Overlay } from "./Overlay";
+
+/** 「保存到本机」的下载地址（服务端推完即删副本）；抽成函数免得各处手拼 URL */
+export function deliverRawUrl(taskId: string): string {
+  return `/api/deliver/raw?taskId=${encodeURIComponent(taskId)}`;
+}
 
 export function TaskActions({
   task,
@@ -20,6 +25,17 @@ export function TaskActions({
   const [logOpen, setLogOpen] = useState(false);
   const [logLines, setLogLines] = useState<string[]>([]);
   const meta = TASK_STATUS_META[task.status];
+  /** 这个任务选了「保存到：本机」 */
+  const isLocalDeliver = task.deliver === "local";
+  /** 自动推送试过一次没（按钮文案随之变成「再次保存到本机」） */
+  const [deliverTried, setDeliverTried] = useState(false);
+  useEffect(() => {
+    if (!isLocalDeliver || task.status !== "completed" || deliverTried) return;
+    // 完成的那一帧就试着推一次；被浏览器拦了也没关系，按钮一直在
+    setDeliverTried(true);
+    const timer = window.setTimeout(() => { window.location.href = deliverRawUrl(task.id); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [isLocalDeliver, task.status, deliverTried, task.id]);
 
   // 主按钮动作定义，映射到各操作
   const act = async () => {
@@ -90,6 +106,20 @@ export function TaskActions({
       )}
       {meta.action === "open" && (
         <button type="button" className="btn sm ghost" onClick={() => secondary("delete")}>{tr("删除")}</button>
+      )}
+      {/**
+       * 「保存到本机」：只有选了「保存到：本机」的任务才有。
+       * 完成的瞬间自动试一次（浏览器对"非用户手势"的下载可能拦截，所以按钮始终在），
+       * 用 `<a download>` 触发 —— 点击本身就是用户手势，最稳。
+       */}
+      {isLocalDeliver && task.status === "completed" && (
+        <a className="btn sm primary" href={deliverRawUrl(task.id)} download
+          onClick={() => onToast(tr("正在推送到本机…服务器副本会在推送完成后删除"), "info")}>
+          <Icon name="download" size={15} />{deliverTried ? tr("再次保存到本机") : tr("保存到本机")}
+        </a>
+      )}
+      {isLocalDeliver && task.status !== "completed" && (
+        <span className="small muted" title={tr("服务器不留副本：推送到你的浏览器后会删除")}>{tr("保存到本机")}</span>
       )}
       <Overlay open={logOpen} onClose={() => setLogOpen(false)} size="md" sheetOnMobile>
             <div className="modal-head"><div className="modal-title">{tr("任务日志")}</div><button type="button" className="icon-btn" onClick={() => setLogOpen(false)} aria-label={tr("关闭")}><svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>

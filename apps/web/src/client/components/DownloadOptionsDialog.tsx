@@ -4,6 +4,7 @@ import { DuplicateDialog } from "./DuplicateDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Overlay } from "./Overlay";
 import { validateDownloadForm } from "../lib/downloadValidation";
+import { loadJSON, saveJSON } from "../lib/storage";
 import { CODEC_NOTE, audioCodecName, estimateSize, fmtBitrate, fmtFrameRate, noAudioReason } from "../lib/mediaText";
 import { getCurrentLang } from "../lib/i18n";
 import { stepDuplicates } from "../lib/duplicateQueue";
@@ -34,6 +35,13 @@ export function DownloadOptionsDialog() {
   const settingsLoad = useSettingsStore((st) => st.load);
   const saveConfig = useSettingsStore((st) => st.save);
   const [dupQueue, setDupQueue] = useState<Array<{ itemId: string; title: string }>>([]);
+  /**
+   * 「保存到」：NAS（服务器，默认）或 本机。
+   * 用 localStorage 记住上次的选择（`bili23.web.deliver`）—— 用户要是固定"下到本机"，
+   * 不必每次都点一遍；不进服务端配置，免得为一个纯前端口味改 schema。
+   */
+  const [deliver, setDeliverState] = useState<"server" | "local">(() => loadJSON<"server" | "local">("deliver", "server"));
+  const setDeliver = (v: "server" | "local") => { setDeliverState(v); saveJSON("deliver", v); };
   const dupHead = dupQueue[0] ?? null;
   /**
    * 校验用的 MessageBox（原版 `dialog.py:60-75` 与 `media.py:92-115` 三处）。
@@ -105,6 +113,8 @@ export function DownloadOptionsDialog() {
       ...(selectedRule ? { naming: { conventionType: selectedRule.type, rule: selectedRule.rule, number: "" } } : {}),
       extras,
       container,
+      // 「保存到本机」：本机模式落投递目录、推完即删；server 模式就是原有行为
+      deliver,
       // 下载路径卡：显式带上，保证本次任务就落在用户刚选的目录（同时下面会写回全局）
       ...(dirDraft.trim() !== "" ? { downloadDir: dirDraft.trim() } : {}),
     };
@@ -242,7 +252,8 @@ export function DownloadOptionsDialog() {
               videoSelected={form.video}
               config={settingsCfg}
               onPatchConfig={(p) => void saveConfig(p)}
-              onOpenNumberingGuide={() => setNumberingGuideOpen(true)} />
+              onOpenNumberingGuide={() => setNumberingGuideOpen(true)}
+              deliver={deliver} setDeliver={setDeliver} />
           )}
         </div>
         <div className="dl-footer">
@@ -594,6 +605,7 @@ function AdditionalPane({
 function DownloadPane({
   container, setContainer, namingRuleId, setNamingRuleId, namingChoices,
   dirDraft, setDirDraft, videoSelected, config, onPatchConfig, onOpenNumberingGuide,
+  deliver, setDeliver,
 }: {
   container: "mp4" | "mkv";
   setContainer: (v: "mp4" | "mkv") => void;
@@ -607,6 +619,9 @@ function DownloadPane({
   config?: AppConfig;
   onPatchConfig: (p: AppConfigPatch) => void;
   onOpenNumberingGuide: () => void;
+  /** 「保存到」：server=下载目录（产物库）/ local=投递目录（推给浏览器后即删） */
+  deliver: "server" | "local";
+  setDeliver: (v: "server" | "local") => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const numberingType = Number(config?.fileNaming?.numberingType ?? 0);
@@ -614,16 +629,37 @@ function DownloadPane({
   const showDialog = config?.behavior?.showDownloadOptionsDialog ?? true;
   return (
     <div className="dl-pane" data-tab="download">
+      {/* 「保存到」卡：下到 NAS（服务器，进产物库）还是下到本机（推给浏览器后即删服务器副本）。
+          这是**我们自己的设置**（原版没有），因为 Web 端"文件在哪"这件事必须说清楚 */}
+      <div className="dl-card">
+        <div className="dl-card-title">{tr("保存到")}</div>
+        <div className="dl-field">
+          <span>{tr("位置")}</span>
+          <div className="seg">
+            <button type="button" className={`seg-btn${deliver === "server" ? " active" : ""}`} onClick={() => setDeliver("server")}>{tr("NAS（服务器）")}</button>
+            <button type="button" className={`seg-btn${deliver === "local" ? " active" : ""}`} onClick={() => setDeliver("local")}>{tr("本机")}</button>
+          </div>
+        </div>
+        <div className="muted small" style={{ marginTop: 6 }}>
+          {deliver === "local"
+            ? tr("下载完成后在任务上点「保存到本机」：文件会推送到你的浏览器，服务器不留副本。")
+            : tr("产物存到下载目录，可在「产物」页浏览/下载；适合长期留在 NAS 上。")}
+        </div>
+      </div>
       {/* 下载路径卡（原版 DownloadPathSettingCard）：只改「确定」时才写回的全局下载目录 */}
       <div className="dl-card">
         <div className="dl-card-title">{tr("下载路径")}</div>
         <div className="dl-field">
           <span>{tr("下载目录")}</span>
           <input className="text-input" style={{ flex: 1 }} value={dirDraft} placeholder={tr("默认下载目录")}
-            onChange={(e) => setDirDraft(e.target.value)} />
-          <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>{tr("选择文件夹")}</button>
+            onChange={(e) => setDirDraft(e.target.value)} disabled={deliver === "local"} />
+          <button type="button" className="btn sm" onClick={() => setPickerOpen(true)} disabled={deliver === "local"}>{tr("选择文件夹")}</button>
         </div>
-        <div className="muted small" style={{ marginTop: 6 }}>{tr("点击「确定」后才会保存该目录；取消不影响当前设置。")}</div>
+        <div className="muted small" style={{ marginTop: 6 }}>
+          {deliver === "local"
+            ? tr("选了「本机」时这个目录不参与：产物先落在服务器的临时投递目录，推给你之后就删掉。")
+            : tr("点击「确定」后才会保存该目录；取消不影响当前设置。")}
+        </div>
         <DirPicker open={pickerOpen} onClose={() => setPickerOpen(false)} value={dirDraft} onPick={setDirDraft} />
       </div>
       {/* 下载格式卡（原版 DownloadFormatCard） */}

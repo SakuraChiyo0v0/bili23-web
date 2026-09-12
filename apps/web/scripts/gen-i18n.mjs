@@ -93,7 +93,34 @@ for (const [key, { en, zh }] of cn) {
   map.set(zh, { en, tw: twEntry?.zh ?? "" });
 }
 
+/**
+ * **我们自己的词**的译文补充表。
+ *
+ * 原版没有这些词（都是 Web 侧加的：导航里的账号、设置里的动效、下载位置的"保存到本机"…），
+ * 字典里查不到就会原样显示简中 —— 在英文界面里很扎眼。这里手工补上，
+ * 只收"我们自己造、且会出现在界面上"的词，别拿它当通用翻译表用。
+ */
+const EXTRA = [
+  ["账号", "Account", "帳號"],
+  ["动效", "Motion", "動效"],
+  ["流畅", "Smooth", "流暢"],
+  ["精简", "Reduced", "精簡"],
+  ["产物", "Files", "產物"],
+  ["保存到", "Save to", "儲存到"],
+  ["本机", "This device", "本機"],
+  ["NAS（服务器）", "NAS (server)", "NAS（伺服器）"],
+  ["保存到本机", "Save to this device", "儲存到本機"],
+  ["再次保存到本机", "Save to this device again", "再次儲存到本機"],
+  ["正在推送到本机…服务器副本会在推送完成后删除", "Sending to your device… the server copy is removed once it finishes", "正在推送到本機…伺服器副本會在推送完成後刪除"],
+  ["服务器不留副本：推送到你的浏览器后会删除", "No copy is kept on the server: deleted once sent to your browser", "伺服器不留副本：推送到你的瀏覽器後會刪除"],
+];
+
 const entries = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh"));
+for (const [zh, en, tw] of EXTRA) {
+  if (map.has(zh)) continue; // 原版已有同名键就别覆盖
+  entries.push([zh, { en, tw }]);
+}
+entries.sort((a, b) => a[0].localeCompare(b[0], "zh"));
 const header = `/**
  * 三语字典（en / zh-TW）—— 由 apps/web/scripts/gen-i18n.mjs 从**原版仓库**的
  * Qt 翻译文件（src/res/i18n/bili23.zh_CN.ts + bili23.zh_TW.ts，各 904 条）生成，请勿手工编辑。

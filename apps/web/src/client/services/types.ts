@@ -65,6 +65,8 @@ export type TaskStatus =
   | "paused" | "interrupted" | "completed" | "failed" | "cancelled";
 
 export interface DownloadOptions {
+  /** 产物送到哪里：server=下载目录（产物库）/ local=投递目录（推给浏览器后即删服务器副本） */
+  deliver?: "server" | "local";
   videoQualityId?: number;
   /** 本次任务的下载目录（原版下载选项弹窗「下载路径卡」）；留空 = 用创建任务时的全局目录 */
   downloadDir?: string;
@@ -102,6 +104,8 @@ export interface TaskSummary {
   cover?: string;
   /** 条目的原始链接（右键「重新解析」用） */
   url?: string;
+  /** 产物落点：server=下载目录（产物库）/ local=投递目录（点「保存到本机」拉走后即删） */
+  deliver?: "server" | "local";
 }
 
 export interface MediaOptionSummary {
