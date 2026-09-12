@@ -3,6 +3,7 @@ import { testProxy } from "../services/client";
 import type { ProxyTestResult } from "../services/types";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 export interface ProxyForm {
   proxyType: "http";
@@ -34,8 +35,6 @@ export function ProxyDialog({
 
   useEffect(() => { if (open) { setForm(value); setResult(null); } }, [open, value]);
 
-  if (!open) return null;
-
   const patch = (p: Partial<ProxyForm>) => setForm((prev) => ({ ...prev, ...p }));
 
   const runTest = async () => {
@@ -50,8 +49,7 @@ export function ProxyDialog({
   };
 
   return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="sm">
         <div className="modal-head">
           <div className="modal-title">{tr("设置代理服务器")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -103,7 +101,6 @@ export function ProxyDialog({
             <button type="button" className="btn primary" onClick={() => onConfirm(form)}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DEFAULT_PRIORITY, PRIORITY_TITLE, priorityLabel, type PriorityKind } from "../lib/priorityMaps";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 自定义优先级弹窗 —— 对齐原版 `gui/dialog/setting/priority.py`：
@@ -36,8 +37,7 @@ export function PriorityDialog({
   };
 
   return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open onClose={onClose} size="sm">
         <div className="modal-head">
           <div className="modal-title">{tr("自定义优先级")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -72,7 +72,6 @@ export function PriorityDialog({
             <button type="button" className="btn primary" onClick={() => onConfirm(list)}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

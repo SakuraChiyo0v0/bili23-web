@@ -1,5 +1,6 @@
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 账号卡片。
@@ -10,11 +11,9 @@ import { t as tr } from "../lib/i18n";
 export function ProfileDialog({ open, onClose, uname, face, mid, preview, onLogout }: {
   open: boolean; onClose: () => void; uname?: string; face?: string; mid?: number; preview?: string; onLogout: () => void;
 }) {
-  if (!open) return null;
   const fallback = (el: HTMLImageElement) => { el.style.display = "none"; const p = el.parentElement; if (p) p.textContent = (uname?.charAt(0) || "用"); };
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("账号")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -40,7 +39,6 @@ export function ProfileDialog({ open, onClose, uname, face, mid, preview, onLogo
             <button type="button" className="btn" onClick={onClose}>{tr("关闭")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

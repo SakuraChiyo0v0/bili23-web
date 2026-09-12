@@ -1,5 +1,6 @@
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 未登录提示（对齐原版 `main_window.py:310-321` 的 MessageBox）。
@@ -12,10 +13,8 @@ import { t as tr } from "../lib/i18n";
 export function LoginRequiredDialog({ open, onClose, onLogin }: {
   open: boolean; onClose: () => void; onLogin: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div className="overlay center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="sm" centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("需要登录")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -29,7 +28,6 @@ export function LoginRequiredDialog({ open, onClose, onLogin }: {
             <button type="button" className="btn primary" onClick={onLogin}>{tr("登录")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

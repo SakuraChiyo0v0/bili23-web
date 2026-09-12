@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useToast } from "../lib/toast";
 import type { AppConfig, AppConfigPatch } from "../services/types";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 「自动解析分页」对话框（原版 `gui/dialog/misc/auto_parse.py`）。
@@ -39,8 +40,6 @@ export function AutoParseDialog({ open, onClose, totalPages, currentPage, config
     setEndPage(totalPages);
   }, [open, currentPage, totalPages]);
 
-  if (!open) return null;
-
   const confirm = () => {
     const from = allPages ? currentPage : startPage;
     const to = allPages ? totalPages : endPage;
@@ -54,8 +53,7 @@ export function AutoParseDialog({ open, onClose, totalPages, currentPage, config
   };
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("自动解析分页")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
@@ -113,7 +111,6 @@ export function AutoParseDialog({ open, onClose, totalPages, currentPage, config
             <button type="button" className="btn primary" onClick={confirm}>{tr("开始解析")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

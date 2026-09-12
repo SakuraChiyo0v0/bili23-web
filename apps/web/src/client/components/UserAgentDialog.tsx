@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 「自定义 User-Agent」弹窗 —— 对齐原版 `gui/dialog/setting/user_agent.py`：
@@ -17,12 +18,9 @@ export function UserAgentDialog({
 }) {
   const [text, setText] = useState(value);
   useEffect(() => { if (open) setText(value); }, [open, value]);
-  if (!open) return null;
-
   const empty = text.trim() === "";
   return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal md" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="md">
         <div className="modal-head">
           <div className="modal-title">自定义 User-Agent</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -41,7 +39,6 @@ export function UserAgentDialog({
             <button type="button" className="btn primary" disabled={empty} onClick={() => onConfirm(text.trim())}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

@@ -4,6 +4,7 @@ import type { MediaItem } from "../services/types";
 import { useToast } from "../lib/toast";
 import { Icon } from "../lib/icons";
 import { t as tr, trp } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /** 时长格式：原版 `Units.format_duration`（分:秒 / 时:分:秒） */
 function fmtDuration(sec: number): string {
@@ -63,8 +64,7 @@ export function MultiPartListsDialog({ open, onClose, item, onDownload }: {
   });
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal lg" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="lg" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("分P视频列表")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -117,7 +117,6 @@ export function MultiPartListsDialog({ open, onClose, item, onDownload }: {
               }}>{tr("下载所选项目")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 字幕语言选择 —— 原版 `SubtitlesLanguageDialog`：
@@ -29,11 +30,9 @@ export function SubtitleLanguageDialog({ open, onClose, selection, onChange }: {
 }) {
   const [specified, setSpecified] = useState<boolean>(selection.downloadSpecified);
   const [langs, setLangs] = useState<string[]>(selection.specifiedLanguages);
-  if (!open) return null;
   const toggleLang = (v: string) => setLangs((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm">
+    <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head"><div className="modal-title">{tr("字幕语言")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
@@ -58,7 +57,6 @@ export function SubtitleLanguageDialog({ open, onClose, selection, onChange }: {
               onClick={() => { onChange({ downloadSpecified: specified, specifiedLanguages: specified ? langs : [] }); onClose(); }}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

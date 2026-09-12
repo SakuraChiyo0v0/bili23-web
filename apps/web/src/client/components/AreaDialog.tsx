@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 「选择地理位置」弹窗 —— 对齐原版 `gui/dialog/setting/select_area.py`：
@@ -21,8 +22,6 @@ export function AreaDialog({
   onConfirm: (next: "cn" | "ov") => void;
 }) {
   const [choice, setChoice] = useState<"cn" | "ov">(value);
-  if (!open) return null;
-
   const option = (v: "cn" | "ov", label: string) => (
     <label className="radio-row">
       <input type="radio" name="area" checked={choice === v} onChange={() => setChoice(v)} />
@@ -31,8 +30,7 @@ export function AreaDialog({
   );
 
   return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="sm">
         <div className="modal-head">
           <div className="modal-title">{tr("选择地理位置")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -51,7 +49,6 @@ export function AreaDialog({
             <button type="button" className="btn primary" onClick={() => onConfirm(choice)}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

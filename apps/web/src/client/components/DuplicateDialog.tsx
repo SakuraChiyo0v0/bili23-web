@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 「检测到重复下载」对话框（原版 `gui/dialog/misc/duplicate_download.py`）。
@@ -26,8 +27,7 @@ export function DuplicateDialog({ duplicate, remaining, onContinue, onSkip }: {
 }) {
   const [neverAsk, setNeverAsk] = useState(false);
   return (
-    <div className="overlay sheet-on-mobile center-mobile">
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open dismissable={false} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("检测到重复下载")}</div>
         </div>
@@ -46,7 +46,6 @@ export function DuplicateDialog({ duplicate, remaining, onContinue, onSkip }: {
             <button type="button" className="btn primary" onClick={() => onContinue(neverAsk)}>{tr("继续下载")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

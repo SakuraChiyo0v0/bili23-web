@@ -1,4 +1,5 @@
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 /**
  * 「互动视频」确认对话框（原版 `gui/dialog/misc/interactive_video.py`）。
  *
@@ -16,10 +17,8 @@ export function InteractiveVideoDialog({ open, title, onCancel, onConfirm }: {
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onCancel} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("互动视频")}</div>
           <button type="button" className="icon-btn" onClick={onCancel} aria-label={tr("关闭")}>
@@ -40,7 +39,6 @@ export function InteractiveVideoDialog({ open, title, onCancel, onConfirm }: {
             <button type="button" className="btn primary" onClick={onConfirm}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listDirs } from "../services/client";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 服务端目录浏览弹窗 —— 原版各处 `Directory.browse_directory()` 的 Web 对应物。
@@ -32,8 +33,6 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
       .finally(() => setLoading(false));
   }, [open, current]);
 
-  if (!open) return null;
-
   const up = () => {
     const trimmed = current.replace(/[\\/]+$/, "");
     const idx = trimmed.lastIndexOf("/");
@@ -44,8 +43,7 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
   const confirmPick = () => { const dir = manual.trim().replace(/[\\/]+$/, "") || "/"; onPick(dir); onClose(); };
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal md">
+    <Overlay open={open} onClose={onClose} size="md" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("选择下载目录")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
@@ -79,7 +77,6 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
             <button type="button" className="btn primary" onClick={confirmPick}>{tr("使用此目录")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

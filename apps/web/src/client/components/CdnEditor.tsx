@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToast } from "../lib/toast";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 const DEFAULT_CN_CDN_HOSTS = [
   "https://upos-sz-mirrorali.bilivideo.com",
@@ -31,8 +32,6 @@ export function CdnEditor({
   const [draft, setDraft] = useState("");
   const [tab, setTab] = useState<"mainland" | "overseas">("mainland");
 
-  if (!open) return null;
-
   const items = tab === "mainland" ? cn : ov;
   const setItems = (next: string[]) => (tab === "mainland" ? setCn(next) : setOv(next));
 
@@ -53,8 +52,7 @@ export function CdnEditor({
   const reset = () => setItems(tab === "mainland" ? [...DEFAULT_CN_CDN_HOSTS] : [...DEFAULT_OV_CDN_HOSTS]);
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal md cdn-editor">
+    <Overlay open={open} onClose={onClose} size="md" sheetOnMobile centerOnMobile className="cdn-editor">
         <div className="modal-head">
           <div className="modal-title">CDN 节点</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
@@ -91,7 +89,6 @@ export function CdnEditor({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }
