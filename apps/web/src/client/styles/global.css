@@ -198,6 +198,8 @@ html[data-theme=dark] .overlay{ background:rgba(0,0,0,.55); }
   .overlay.sheet-on-mobile.closing .modal{ animation:sheetOut .18s var(--ease) forwards; }
   @keyframes sheetOut{ to{ opacity:0; transform:translateY(14px); } }
 }
+/* 面板本身会被程序化聚焦（为了 Tab 循环与焦点归还），它不需要焦点环 */
+.modal:focus{ outline:none; }
 .modal-head{ display:flex; align-items:center; gap:10px; padding:16px 18px 0; }
 .modal-title{ font-size:16px; font-weight:700; flex:1; }
 .modal-body{ padding:14px 18px 6px; overflow:auto; }

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
-import { exitMs } from "../components/Overlay";
+import { exitMs } from "./motion";
 
 export type ToastTone = "ok" | "err" | "warn" | "info";
 export interface ToastItem {
