@@ -15,7 +15,12 @@ const h = vi.hoisted(() => {
     pageCalls: number[];
     dashMode: boolean;
     pagination_totalPages: number | undefined;
-  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [], pageCalls: [], dashMode: false, pagination_totalPages: undefined };
+    /** 合并闸门：设为 true 时 mergeAudioVideo 会挂住，用来把任务稳定停在 merging 状态 */
+    mergeHold: boolean;
+    mergeWaiters: Array<() => void>;
+    /** 让 fetchPlayMediaInfo 返回 DASH 形态（无 singleFileExt）→ 流程会经过合并 */
+    dashInfo: boolean;
+  } = { parseItems: [], failFetch: false, downloads: [], streamOpts: [], pageCalls: [], dashMode: false, pagination_totalPages: undefined, mergeHold: false, mergeWaiters: [], dashInfo: false };
   return { state };
 });
 
@@ -43,6 +48,10 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
       if (h.state.failFetch) {
         throw new actual.BiliError("DOWNLOAD_FAILED", "模拟解析/取流失败");
       }
+      // dashInfo：让"媒体信息"也走 DASH 形态（没有 singleFileExt）。
+      // 默认返回 singleFileExt=mp4 → 流程走"单文件直出"，**根本不会经过合并**，
+      // 所以要测 merging 状态的用例必须打开这个开关；单开 dashMode 是不够的。
+      if (h.state.dashInfo) return { mediaType: "dash" } as never;
       return { mediaType: "mp4", singleFileExt: "mp4" } as never;
     },
     resolveStreams: (info: Record<string, unknown>, streamOpts: Record<string, unknown>) => {
@@ -97,7 +106,14 @@ vi.mock("@bili23-web/engine", async (importOriginal) => {
     },
     probeMedia: async () => ({ ok: true, format: { duration: 1 } }) as never,
     remuxMedia: async (_i: string, out: string) => { await writeFile(out, Buffer.alloc(64, 1)); return { outputPath: out, code: 0, stderr: "" }; },
-    mergeAudioVideo: async (_v: string, _a: string, out: string) => { await writeFile(out, Buffer.alloc(64, 1)); return { outputPath: out, code: 0, stderr: "" }; },
+    mergeAudioVideo: async (_v: string, _a: string, out: string) => {
+      // 合并闸门：要测"合并中禁止重新下载"时把任务稳定挂在这里
+      if (h.state.mergeHold) {
+        await new Promise<void>((resolve) => { h.state.mergeWaiters.push(resolve); });
+      }
+      await writeFile(out, Buffer.alloc(64, 1));
+      return { outputPath: out, code: 0, stderr: "" };
+    },
     concatMediaParts: async (_l: string, out: string) => { await writeFile(out, Buffer.alloc(64, 1)); return { outputPath: out, code: 0, stderr: "" }; },
   };
 });
@@ -338,6 +354,9 @@ describe("DownloadManager parseRequest（类型入口）", () => {
   it("分页类型：pages=9999 时按 pagination.totalPages 提前停止（搜索全部）", async () => {
     const mgr = await makeManager();
     try {
+      // 自动解析分页会在页之间 sleep（原版默认 2.0s，见 auto_parse_interval）；
+      // 这条用例只关心"停在第几页"，把间隔压到下限，免得白等 4 秒撞上用例超时
+      await mgr.updateConfig({ behavior: { autoParseInterval: 0.1 } });
       h.state.parseItems = [makeItem(ID1, 280001) as unknown as Record<string, unknown>];
       h.state.pagination_totalPages = 3;
       h.state.pageCalls = [];
@@ -690,6 +709,88 @@ describe("DownloadManager 高级默认档位兜底（advanced.default*）", () =
       h.state.downloads.length = 0;
       h.state.streamOpts = [];
       h.state.dashMode = false;
+    }
+  });
+});
+
+describe("重新下载（原版 download_list/model.py:339-365 的 redownload）", () => {
+  it("已完成的任务能重新下载：搬回下载表并重新入队", async () => {
+    const mgr = await makeManager();
+    try {
+      // h.state.downloads 是跨用例共享的数组：先清一遍，避免把上一条用例遗留的下载当成本用例的
+      h.state.downloads.length = 0;
+      const items = await seedThree(mgr);
+      h.state.streamOpts = [];
+      const created = await mgr.createTasks([items[0]!.id], {});
+      const tid = created.tasks[0]!.id;
+      await waitFor(() => statusOf(mgr, tid)?.status === "downloading");
+      await waitDownloads(1);
+      releaseDownloads(1);
+      // 注意：任务状态先变 completed，completed_task 行是随后才写的
+      //（`task.update({status:"completed"})` 在 addCompleted 之前，中间还隔了一次 rm(taskDir)）
+      // → 必须等 history 落库，不能只等状态
+      await waitFor(() => mgr.listHistory().some((r) => r.taskId === tid), 10000);
+
+      const res = await mgr.redownloadTask(tid);
+      expect(res.ok).toBe(true);
+      // 已完成的记录要从 completed 表搬走（否则会同时出现在"已完成"和"下载中"）
+      expect(mgr.listHistory().some((r) => r.taskId === tid)).toBe(false);
+      // 清空断点后重新入队 → 会重新下载（不要求跑完，只看它离开了 completed）
+      await waitFor(() => statusOf(mgr, tid)?.status !== "completed", 5000);
+      expect(["queued", "parsing", "downloading"]).toContain(statusOf(mgr, tid)?.status);
+      // 收尾：把这个又跑起来的任务删掉并等它收尾，否则它的下载会污染下一条用例
+      await mgr.deleteTask(tid);
+    } finally {
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+      h.state.dashMode = false;
+    }
+  });
+
+  it("合并中拒绝重新下载，且不改变任务状态", async () => {
+    const mgr = await makeManager();
+    try {
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+      const items = await seedThree(mgr);
+      // DASH 形态（媒体信息也不能带 singleFileExt）+ 合并闸门 → 任务会稳定停在 merging
+      h.state.dashMode = true;
+      h.state.dashInfo = true;
+      h.state.mergeHold = true;
+      const created = await mgr.createTasks([items[0]!.id], { downloadVideo: true, downloadAudio: true, mergeVideoAudio: true });
+      const tid = created.tasks[0]!.id;
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitDownloads(1);
+      releaseDownloads(1);
+      await waitFor(() => statusOf(mgr, tid)?.status === "merging", 10000);
+
+      const res = await mgr.redownloadTask(tid);
+      expect(res).toEqual({ ok: false, reason: "ffmpeg" });
+      expect(statusOf(mgr, tid)?.status).toBe("merging");
+
+      // 放行合并，收尾
+      h.state.mergeHold = false;
+      for (const release of h.state.mergeWaiters.splice(0)) release();
+      await waitFor(() => statusOf(mgr, tid)?.status === "completed", 10000);
+    } finally {
+      h.state.mergeHold = false;
+      for (const release of h.state.mergeWaiters.splice(0)) release();
+      mgr.close();
+      h.state.downloads.length = 0;
+      h.state.streamOpts = [];
+      h.state.dashMode = false;
+      h.state.dashInfo = false;
+    }
+  });
+
+  it("不存在的任务返回 notfound", async () => {
+    const mgr = await makeManager();
+    try {
+      expect(await mgr.redownloadTask("no-such-task")).toEqual({ ok: false, reason: "notfound" });
+    } finally {
+      mgr.close();
     }
   });
 });

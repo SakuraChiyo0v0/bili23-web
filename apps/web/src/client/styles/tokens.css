@@ -1,0 +1,106 @@
+/* ==========================================================================
+   设计令牌 —— 原版 Bili23-Downloader v2.15.0 的视觉规格
+   ==========================================================================
+   全部是**实测值**，不是估的：来源见 docs/ui-preview/parse.html（逐像素校过）
+   与 docs/parity/07-前端UI重做-设计稿.md。改这里的值之前先看那份文档。
+
+   ⚠️ 两个踩过的坑，别重犯：
+     1. 原版截图是 **150% 缩放**截的，早期把物理像素当逻辑像素用，尺寸全错 1.5 倍。
+        这里都是**逻辑像素**（浏览器 CSS 像素）。
+     2. Qt 的 alpha 会**取整成整数/255**。斑马纹源码写 rgba(0,0,0,0.05)，
+        实际是 12/255 = .047 —— 用 .05 会让蓝色通道差 1 个色阶。
+   ========================================================================== */
+
+:root {
+  /* —— 面 —— */
+  --win: #f0f4f9;              /* 窗口底（原版 Mica 关闭时的底色） */
+  --card: #f7f9fc;             /* 内容面 = rgba(255,255,255,.5) 叠在 --win 上 */
+  --card-bd: rgba(0, 0, 0, .068);
+
+  /* —— 文字 —— */
+  --text: #1f1f1f;
+  --text-dim: #606060;         /* 表头、次要信息 */
+  --icon: #4a4a4a;
+  --placeholder: #8a8a8a;
+
+  /* —— 强调色（原版默认 #009faa，源码里从不写死）—— */
+  --accent: #009faa;
+  --accent-strong: #00a7b3;    /* hover = ThemeColorLight1 */
+  --on-accent: #fff;
+
+  /* —— 导航 —— */
+  --nav-sel: #ffffff;          /* 选中项底色 */
+
+  /* —— 表格 / 树 —— */
+  --thead-line: #dcdcdc;
+  --thead-col-line: rgba(0, 0, 0, .059);
+  --zebra: rgba(0, 0, 0, .047);/* ⚠️ 不是 .05，见文件头 */
+  --row-sel: #e3e5e8;
+
+  /* —— 控件 —— */
+  --input-bg: #ffffff;
+  --input-bd: rgba(0, 0, 0, .05);
+  --input-bd-b: rgba(0, 0, 0, .39);
+  --cb-bg: #fff;
+  --cb-bd: rgba(0, 0, 0, .48);
+  --check: #fff;
+  --btn-disabled: #cdcdcd;
+  --btn-disabled-fg: rgba(255, 255, 255, .9);
+
+  /* —— 尺寸（实测）—— */
+  --nav-w: 72px;               /* 导航条宽 = 4 + 64 + 4 */
+  --nav-btn: 64px;
+  --nav-btn-h: 58px;
+  --row-h: 32px;               /* 解析树行高 */
+  --thead-h: 35px;
+  --cb-size: 19px;             /* 勾选框 */
+  --indent: 20px;              /* 每级缩进 */
+  --ctl-h: 32px;               /* 输入框 / 按钮高 */
+  --radius: 5px;
+  --font: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  --font-nav: 11px;            /* 导航项文字 */
+  --font-tree: 13px;           /* 树行 */
+  --font-ctl: 14px;            /* 输入框 / 按钮 */
+}
+
+/* 深色：窗口底 #202020、卡片 = rgba(255,255,255,.0314) 叠上去 = #272727
+   ⚠️ 深色下强调色很亮，**前景要用黑色**（原版按钮文字就是黑的） */
+[data-theme="dark"] {
+  --win: #202020;
+  --card: #272727;
+  --card-bd: rgba(0, 0, 0, .18);
+
+  --text: #ffffff;
+  --text-dim: #cbcbcb;
+  --icon: #cbcbcb;
+  --placeholder: #9a9a9a;
+
+  --accent: #29f1ff;
+  --accent-strong: #3af2ff;
+  --on-accent: #000000;
+
+  --nav-sel: #454545;
+
+  --thead-line: rgba(255, 255, 255, .09);
+  --thead-col-line: rgba(255, 255, 255, .06);
+  --zebra: #383838;
+  --row-sel: #3f3f3f;
+
+  --input-bg: #343434;
+  --input-bd: rgba(255, 255, 255, .08);
+  --input-bd-b: rgba(255, 255, 255, .5442);
+  --cb-bg: #232323;
+  --cb-bd: rgba(255, 255, 255, .557);
+  --check: #000000;            /* ⚠️ 深色下对勾是黑的，不是白的 */
+
+  --btn-disabled: #343434;
+  --btn-disabled-fg: rgba(0, 0, 0, .9);
+}
+
+/* 跟随系统：用户没选主题、也没有本地缓存时，至少让 CSS 有个默认分支
+   （此前 CSS 完全没有 prefers-color-scheme，等于"不跟随系统"） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+}

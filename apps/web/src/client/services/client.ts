@@ -2,8 +2,11 @@ import type {
   DownloadOptions,
   AppConfig,
   AppConfigPatch,
+  LogEntry,
+  MediaItem,
   MediaOptionSummary,
   ParseResult,
+  ProxyTestResult,
   TaskSummary,
 } from "./types";
 
@@ -29,12 +32,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** 解析一个链接（或 type 入口），返回条目列表 */
-export function parseUrl(body: { urls?: string[] } | { type: string; query?: string; keyword?: string; pn?: number; pages?: number }): Promise<{ results: ParseResult[] }> {
+export function parseUrl(body:
+  | { urls?: string[]; interactiveAll?: boolean }
+  | { type: string; query?: string; keyword?: string; pn?: number; pages?: number; weekNum?: number; interactiveAll?: boolean },
+): Promise<{ results: ParseResult[] }> {
   return request("/parse", { method: "POST", body: JSON.stringify(body) });
 }
 
-/** 单个条目的媒体候选（画质/音质/编码），P3 下载选项弹窗用 */
-export function mediaOptions(itemId: string): Promise<MediaOptionSummary> {
+/** 命名规则预览（原版 EditRuleDialog.on_preview 的 dry-run，用示例数据渲染） */
+export interface NamingPreviewResult {
+  ok: boolean;
+  /** 相对目录（原版 `result.parent`） */
+  folder?: string;
+  /** 文件名，不含扩展名（原版 `result.stem`） */
+  fileName?: string;
+  /** 校验失败提示（简中，逐字取原版） */
+  message?: string;
+}
+export function previewNamingRule(rule: string, type?: number): Promise<NamingPreviewResult> {
+  return request("/naming/preview", { method: "POST", body: JSON.stringify({ rule, type }) });
+}
+
+/** 单稿件分P 列表（原版 MultiPartListsDialog 的二次解析；不展开合集、不动主树） */export function listVideoParts(url: string): Promise<{ items: MediaItem[] }> {
+  return request("/parts", { method: "POST", body: JSON.stringify({ url }) });
+}
+
+/** 单个条目的媒体候选（画质/音质/编码），P3 下载选项弹窗用 */export function mediaOptions(itemId: string): Promise<MediaOptionSummary> {
   return request(`/media/${encodeURIComponent(itemId)}`);
 }
 
@@ -63,6 +86,14 @@ export function resumeTask(id: string): Promise<{ ok: boolean }> {
 }
 export function retryTask(id: string): Promise<{ ok: boolean }> {
   return request(`/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" });
+}
+/**
+ * 重新下载（原版任务行右键「重新下载」）：已完成/下载中也能重下。
+ * 合并中被拒时后端返 409 `FFMPEG_BUSY`，这里**把错误原样抛出**，让调用方按 code 给提示
+ * —— 不能让 UI 弹一句"已重新下载"却没发生任何事。
+ */
+export function redownloadTask(id: string): Promise<{ ok: boolean; task: TaskSummary }> {
+  return request(`/tasks/${encodeURIComponent(id)}/redownload`, { method: "POST" });
 }
 export function deleteTask(id: string): Promise<{ ok: boolean }> {
   return request(`/tasks/${encodeURIComponent(id)}/delete`, { method: "POST" });
@@ -119,6 +150,38 @@ export function fileRawUrl(relPath: string): string {
 export function updateConfig(patch: AppConfigPatch): Promise<{ config: AppConfig }> {
   return request("/config", { method: "PUT", body: JSON.stringify({ config: patch }) });
 }
+/** 代理连通性测试（原版「设置代理服务器」弹窗的「测试」按钮）：测的是表单当前值，不是已保存的配置 */
+export function testProxy(form: { proxyType: string; proxyServer: string; proxyPort: number; proxyUname: string; proxyPassword: string }): Promise<ProxyTestResult> {
+  return request("/proxy/test", { method: "POST", body: JSON.stringify(form) });
+}
+/** 应用日志（桌面「日志」窗口）：search 为包含匹配；返回最新的在前 */
+export function listLogs(opts: { search?: string; limit?: number } = {}): Promise<{ entries: LogEntry[] }> {
+  const q = new URLSearchParams();
+  if (opts.search) q.set("search", opts.search);
+  if (opts.limit) q.set("limit", String(opts.limit));
+  const qs = q.toString();
+  return request(`/logs${qs ? `?${qs}` : ""}`);
+}
+/** 清除日志（桌面「清除日志」） */
+export function clearLogs(): Promise<{ ok: boolean }> {
+  return request("/logs", { method: "DELETE" });
+}
+/** 导出配置（原版「配置文件设置 → 导出」）：拿回 JSON 对象，由调用方落成文件 */
+export function exportConfig(): Promise<AppConfig> {
+  return request("/config/export");
+}
+/** 导入配置（原版「配置文件设置 → 导入」）：净化 + 校验通过才落盘 */
+export function importConfig(config: unknown): Promise<{ config: AppConfig }> {
+  return request("/config/import", { method: "POST", body: JSON.stringify({ config }) });
+}
+/** 重置为默认配置（原版「配置文件设置 → 重置」） */
+export function resetConfig(): Promise<{ config: AppConfig }> {
+  return request("/config/reset", { method: "POST" });
+}
+/** MCP 运行状态（进程级；桌面把 mcp_running/mcp_last_error 放全局信号给设置卡显示） */
+export function mcpStatus(): Promise<{ running: boolean; lastError: string }> {
+  return request("/mcp/status");
+}
 export interface AuthStatus { loggedIn: boolean; preview: string; uname?: string; face?: string; mid?: number }
 export interface QrLoginSession { qrUrl: string; qrcodeKey: string; status: number }
 export function authStatus(): Promise<AuthStatus> { return request("/auth/status"); }
@@ -126,11 +189,23 @@ export function loginCookie(sessdata: string): Promise<AuthStatus> { return requ
 export function logoutAuth(): Promise<AuthStatus> { return request("/auth", { method: "DELETE" }); }
 export function qrLoginStart(): Promise<QrLoginSession> { return request("/auth/qr", { method: "POST" }); }
 export function qrLoginPoll(qrcodeKey: string): Promise<QrLoginSession & { loggedIn: boolean }> { return request("/auth/qr/poll", { method: "POST", body: JSON.stringify({ qrcodeKey }) }); }
-export interface FavFolder { id: number; title: string; mediaCount: number; cover?: string }
-export interface FollowBangumi { seasonId: number; title: string; cover: string; newEp: string; progress: string; isFinish: number; url: string }
-export function listFollowBangumi(type?: string): Promise<{ follow: FollowBangumi[] }> {
-  return request("/bangumi/follow" + (type ? "?type=" + encodeURIComponent(type) : ""));
+export interface FavFolder { id: number; title: string; mediaCount: number; cover?: string; url: string }
+export interface FollowBangumi { seasonId: number; title: string; cover: string; type: string; newEp: string; progress: string; desc: string; isFinish: number; url: string }
+export interface Pagination { total: number; page: number; pageSize: number; totalPages: number }
+/** 追番/追剧列表：type=1 追番 / 2 追剧；status=0 全部 / 1 想看 / 2 在看 / 3 看过（对齐原版浮层两个下拉） */
+export function listFollowBangumi(type = "1", status = 0, pn = 1): Promise<{ follow: FollowBangumi[]; pagination: Pagination }> {
+  const q = new URLSearchParams({ type, status: String(status), pn: String(pn) });
+  return request("/bangumi/follow?" + q.toString());
 }
-export function listFavorites(): Promise<{ mid: number; folders: FavFolder[] }> {
-  return request("/favorites");
+/** 收藏夹列表：kind=created 我创建的 / collected 我订阅的（原版「收藏夹」与「订阅合集」两栏） */
+export function listFavorites(kind: "created" | "collected" = "created"): Promise<{ mid: number; folders: FavFolder[] }> {
+  return request("/favorites" + (kind === "collected" ? "?kind=collected" : ""));
+}
+/**
+ * 「我创建的」收藏夹封面：那条列表接口不返回 cover，得逐个取（服务端限并发 3 + 缓存）。
+ * 客户端是"列表先出来、封面随后填"，所以这是**另一个请求**。
+ */
+export function listFavFolderCovers(ids: number[]): Promise<{ covers: Record<string, string> }> {
+  if (ids.length === 0) return Promise.resolve({ covers: {} });
+  return request("/favorites/covers?ids=" + ids.join(","));
 }

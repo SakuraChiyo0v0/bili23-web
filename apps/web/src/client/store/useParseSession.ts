@@ -1,16 +1,11 @@
 import { create } from "zustand";
 import type { MediaItem, ParseResult } from "../services/types";
+import { computeAutoChecked, DEFAULT_AUTO_SELECT_CONDITIONS } from "../lib/autoSelect";
+import { applyInitialChecked, buildTree, setByLeafIndices, type TreeNode } from "../lib/parseTree";
+import { useSettingsStore } from "./useSettingsStore";
 
-export interface TreeNode {
-  id: string;
-  kind: "group" | "leaf";
-  title: string;
-  groupKey?: string;
-  children?: TreeNode[];
-  item?: MediaItem;
-  checked: boolean | "partial";
-  collapsed?: boolean;
-}
+// 树的形状与建树逻辑都在 lib/parseTree.ts（纯函数、有单测）；这里只做状态与勾选联动
+export type { TreeNode };
 
 export type ParseState = "idle" | "parsing" | "success" | "error";
 
@@ -21,10 +16,16 @@ interface ParseSession {
   input: string;
   parseType: string;
   autoPages: number;
+  /** 当前页码（分页型结果用；原版底部有个 Pager，点页码就重新解析那一页） */
+  page: number;
+  /** 每周必看期数（popular 专用；服务端 weekNum，缺省第 1 期） */
+  weekNum: number;
   error?: string;
   setInput: (v: string) => void;
   setParseType: (t: string) => void;
   setAutoPages: (n: number) => void;
+  setPage: (n: number) => void;
+  setWeekNum: (n: number) => void;
   start: () => void;
   success: (results: ParseResult[]) => void;
   fail: (error: string) => void;
@@ -38,31 +39,6 @@ interface ParseSession {
   toggleCollapse: (nodeId: string) => void;
   expandAll: (open: boolean) => void;
   selectedLeaves: () => MediaItem[];
-}
-
-function buildTree(results: ParseResult[]): TreeNode[] {
-  const rootCount: Record<string, { title: string; container?: string; items: MediaItem[] }> = {};
-  for (const r of results) {
-    for (const item of r.items) {
-      const key = `${item.groupTitle}__${item.containerType ?? r.type}`;
-      rootCount[key] ??= { title: item.groupTitle, container: item.containerType ?? r.type, items: [] };
-      rootCount[key]!.items.push(item);
-    }
-  }
-  const nodes: TreeNode[] = [];
-  for (const key of Object.keys(rootCount)) {
-    const g = rootCount[key]!;
-    const grouped = g.items.map((it) => ({
-      id: it.id, kind: "leaf" as const, title: it.title || it.groupTitle, item: it, checked: false,
-    }));
-    if (grouped.length === 1) {
-      const it = g.items[0]!;
-      nodes.push({ id: it.id, kind: "leaf", title: it.title, item: it, checked: false });
-    } else {
-      nodes.push({ id: `group:${key}`, kind: "group", title: g.title, groupKey: key, children: grouped, checked: false });
-    }
-  }
-  return nodes;
 }
 
 function recompute(nodes: TreeNode[]): TreeNode[] {
@@ -151,13 +127,9 @@ function invertAll(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((n) => ({ ...n, checked: n.checked === true ? false : true, children: n.children ? invertAll(n.children) : undefined }));
 }
 
-/** 按顶层结果条目序号（1..N）勾选：先全不选，再勾选指定序号对应的顶层节点（含其下所有分P叶子） */
+/** 按「序号」列的叶子序号勾选（原版 batch_select 语义：命中就勾上，不清除其它） */
 function setByResultIndices(nodes: TreeNode[], want: Set<number>): TreeNode[] {
-  const setChecked = (n: TreeNode, v: boolean): TreeNode => ({ ...n, checked: v, children: n.children ? n.children.map((c) => setChecked(c, v)) : undefined });
-  return nodes.map((n, i) => {
-    if (want.has(i + 1)) return setChecked(n, true);
-    return setChecked(n, false);
-  });
+  return setByLeafIndices(nodes, want);
 }
 
 /** 仅把指定叶子/组 id 勾选为 v（其它不变）；group id 作用到整组 */
@@ -177,12 +149,23 @@ export const useParseSession = create<ParseSession>((set, get) => ({
   input: "",
   parseType: "auto",
   autoPages: 1,
+  page: 1,
+  weekNum: 1,
   error: undefined,
   setInput: (v) => set({ input: v }),
   setParseType: (t) => set({ parseType: t }),
   setAutoPages: (n) => set({ autoPages: n }),
+  setPage: (n) => set({ page: Math.max(1, Math.floor(n) || 1) }),
+  setWeekNum: (n) => set({ weekNum: n }),
   start: () => set({ state: "parsing", error: undefined, tree: [] }),
-  success: (results) => set({ state: "success", results, tree: buildTree(results) }),
+  // 解析成功即按原版行为算好初始勾选集合（默认条件式：勾中链接指向项）
+  success: (results) => {
+    const behavior = useSettingsStore.getState().config?.behavior;
+    const mode = behavior?.autoSelectMode ?? "conditional";
+    const conditions = behavior?.autoSelectConditions ?? DEFAULT_AUTO_SELECT_CONDITIONS;
+    const autoChecked = computeAutoChecked(results, mode, conditions);
+    return set({ state: "success", results, tree: recompute(applyInitialChecked(buildTree(results), autoChecked)) });
+  },
   fail: (error) => set({ state: "error", error }),
   reset: () => set({ state: "idle", results: [], tree: [], input: "", parseType: "auto", error: undefined }),
   toggle: (id) => set((s) => ({ tree: recompute(toggleNode(s.tree, id)) })),

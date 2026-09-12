@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from "react";
+import { t as tr } from "../lib/i18n";
 
 export function Modal({
   open,
@@ -40,7 +41,7 @@ export function Modal({
           <div className="modal-head">
             <div className="modal-title">{title}</div>
             {dismissable && (
-              <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
+              <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
                 <svg className="ico" viewBox="0 0 24 24" width={18} height={18}>
                   <path d="M6 6l12 12M18 6L6 18" />
                 </svg>

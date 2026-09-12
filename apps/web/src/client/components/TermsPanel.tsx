@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { loadJSON } from "../lib/storage";
 import { TERMS_VERSION } from "../lib/useTermsGate";
+import { t as tr } from "../lib/i18n";
 
 const DEFAULT_SECTIONS = [
   ["责任边界", "本软件仅用于个人学习与研究目的。通过本项目下载的任何内容仅限个人、非商业使用，不得用于商业用途、公开传播、共享、转售或任何非法获利。"],
@@ -27,7 +28,7 @@ export function TermsPanel({ compact = false }: { compact?: boolean }) {
         </p>
       ))}
       {historyExtra > 0 && <p className="small muted">本地另有 {historyExtra} 条历史更新记录，将在正式条款页展示。</p>}
-      {compact && <p className="small muted">（此版本为按原版条款语义编写的骨架文本，正式文案与协议跳转将在后续确定。）</p>}
+      {compact && <p className="small muted">{tr("（此版本为按原版条款语义编写的骨架文本，正式文案与协议跳转将在后续确定。）")}</p>}
     </div>
   );
 }

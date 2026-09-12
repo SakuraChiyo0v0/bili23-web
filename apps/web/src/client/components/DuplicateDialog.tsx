@@ -1,37 +1,49 @@
+import { useState } from "react";
+import { t as tr } from "../lib/i18n";
 
-export function DuplicateDialog({
-  open, onClose, duplicates, onForce,
-}: {
-  open: boolean; onClose: () => void;
-  duplicates: Array<{ itemId: string; title: string }>;
-  onForce: (dupIds: string[]) => void;
+/**
+ * 「检测到重复下载」对话框（原版 `gui/dialog/misc/duplicate_download.py`）。
+ *
+ * 原版是**逐条询问**的阻塞式弹窗（`task/manager.py:561-571`：每条重复项弹一次，
+ * 后台线程 `done_event.wait()` 等用户点），文案：
+ *   标题「检测到重复下载」
+ *   正文「检测到下载列表中已存在相同的下载任务，是否继续下载？」
+ *   任务名称：{title}
+ *   复选框「不再询问」（勾了就把全局重复策略改成 继续下载/跳过下载，`duplicate_download.py:49-53`）
+ *   按钮「继续下载」/「跳过下载」
+ *
+ * Web 侧改成同一个弹窗**排队逐条问**（一次一条），勾「不再询问」后剩下的按同一决定批量处理 ——
+ * 语义与原版一致，又不需要阻塞线程。父组件用 `key={itemId}` 渲染，换下一条时组件重挂，
+ * 「不再询问」自然回到未勾选（等同原版每次都新建弹窗）。
+ */
+export function DuplicateDialog({ duplicate, remaining, onContinue, onSkip }: {
+  /** 当前这一条 */
+  duplicate: { itemId: string; title: string };
+  /** 队列里还剩几条（含当前这条）—— 原版没有这个计数，是我们给队列加的一行小字 */
+  remaining: number;
+  onContinue: (neverAsk: boolean) => void;
+  onSkip: (neverAsk: boolean) => void;
 }) {
-  if (!open || duplicates.length === 0) return null;
+  const [neverAsk, setNeverAsk] = useState(false);
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm">
+    <div className="overlay sheet-on-mobile center-mobile">
+      <div className="modal sm" role="dialog" aria-modal="true">
         <div className="modal-head">
-          <div className="modal-title">重复下载</div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭">
-            <svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg>
-          </button>
+          <div className="modal-title">{tr("检测到重复下载")}</div>
         </div>
         <div className="modal-body">
-          <p className="small muted" style={{ marginBottom: 10 }}>以下内容已下载过：</p>
-          <div className="dup-list">
-            {duplicates.slice(0, 8).map((d) => (
-              <div key={d.itemId} className="dup-item">
-                <span className="dup-dot" />{d.title}
-              </div>
-            ))}
-            {duplicates.length > 8 && <div className="dup-item muted">…共 {duplicates.length} 个</div>}
-          </div>
+          <p className="small">{tr("检测到下载列表中已存在相同的下载任务，是否继续下载？")}</p>
+          <p className="small" style={{ marginTop: 6 }}>任务名称：{duplicate.title}</p>
+          {remaining > 1 ? <p className="muted small" style={{ marginTop: 6 }}>还有 {remaining - 1} 条重复项待确认。</p> : null}
+          <label className="check-row" style={{ marginTop: 10 }}>
+            <input type="checkbox" checked={neverAsk} onChange={(e) => setNeverAsk(e.target.checked)} />
+            <span>{tr("不再询问")}</span>
+          </label>
         </div>
         <div className="modal-foot">
           <div className="right">
-            <button type="button" className="btn" onClick={onClose}>取消</button>
-            <button type="button" className="btn" onClick={onClose}>跳过重复</button>
-            <button type="button" className="btn primary" onClick={() => onForce(duplicates.map((d) => d.itemId))}>强制下载 {duplicates.length} 个</button>
+            <button type="button" className="btn" onClick={() => onSkip(neverAsk)}>{tr("跳过下载")}</button>
+            <button type="button" className="btn primary" onClick={() => onContinue(neverAsk)}>{tr("继续下载")}</button>
           </div>
         </div>
       </div>

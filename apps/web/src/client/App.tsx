@@ -1,15 +1,23 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTermsGate } from "./lib/useTermsGate";
 import { useHashRoute, type RouteId } from "./lib/routes";
 import { useToast, ToastProvider } from "./lib/toast";
-import { Sidebar, TopBar, MobileTabBar } from "./components/Layout";
+import { NavRail, MobileTopBar, TabBar } from "./components/Layout";
+import { AboutDialog } from "./components/AboutDialog";
+import { ProfileDialog } from "./components/ProfileDialog";
+import { LoginRequiredDialog } from "./components/LoginRequiredDialog";
+import { TeachingTip } from "./components/TeachingTip";
+import { FavoritesPage } from "./pages/FavoritesPage";
 import { LoginDialog } from "./components/LoginDialog";
 import { useAuthStore } from "./store/useAuthStore";
+import { useSettingsStore } from "./store/useSettingsStore";
+import { useParseSession } from "./store/useParseSession";
 import { TermsPanel } from "./components/TermsPanel";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ParsePage } from "./pages/ParsePage";
 import { TasksPage } from "./pages/TasksPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { FilesPage } from "./pages/FilesPage";
+import { t as tr, resolveLang, setCurrentLang, type Lang } from "./lib/i18n";
 
 export function App() {
   return (
@@ -23,10 +31,48 @@ function Shell() {
   const [route, navigate] = useHashRoute();
   const [accepted, accept] = useTermsGate();
   const { toast } = useToast();
+  // 弹窗状态上提到外壳：导航有「左侧竖排」和「窄屏顶栏」两套承载形态，
+  // 状态放这里才能让两者共用同一个弹窗实例（否则要挂两份，还会各弹各的）。
   const [loginOpen, setLoginOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [needLoginOpen, setNeedLoginOpen] = useState(false);
+  /** 未登录教学气泡（原版 `main_window.py:36-37,110-122`）：每次启动只要没登录就提示一次 */
+  const [loginTipOpen, setLoginTipOpen] = useState(false);
+  const [loginTipTarget, setLoginTipTarget] = useState<HTMLElement | null>(null);
   const auth = useAuthStore();
-  useEffect(() => { void auth.refresh(); /*eslint-disable-next-line*/ }, []);
+  const parseSession = useParseSession();
+  const loadConfig = useSettingsStore((s) => s.load);
+  const cfgLang = useSettingsStore((s) => s.config?.behavior?.language);
+  /**
+   * 语言（i18n）。两个要点：
+   * 1. **在渲染期**调用 `setCurrentLang` —— 它是模块级状态，`t()` 在子组件渲染时读它；
+   *    放 useEffect 里就太晚了（effect 之后没有重渲染，界面会停留在旧语言）。
+   *    同一个渲染批次里父组件先执行，所以下面整棵树都能读到新语言。
+   * 2. 下面给 `.app` 挂 `key={lang}`：换语言时整棵树**重挂**，各处静态调用自然重算，
+   *    省掉在 48 个文件里逐处订阅 store。
+   */
+  const lang: Lang = resolveLang(cfgLang, typeof navigator !== "undefined" ? navigator.language : undefined);
+  setCurrentLang(lang);
+  // 全局配置要在解析之前就位：解析成功的"自动勾选"策略（behavior.autoSelectMode）由它决定，
+  // 否则没进过设置页就直接解析时，只能退回原版默认值。
+  useEffect(() => {
+    if (!useSettingsStore.getState().config) void loadConfig();
+    void auth.refresh(); /*eslint-disable-next-line*/
+  }, []);
 
+  // 登录态检查完成后仍未登录 → 头像旁挂一次教学气泡（原版没有"看过就不再提示"的记账，
+  // 每次启动未登录都会提示；这里保持一致）
+  useEffect(() => {
+    if (!auth.checked || auth.loggedIn) { setLoginTipOpen(false); return; }
+    const timer = setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(".avatar-login-btn");
+      if (!el) return;
+      setLoginTipTarget(el);
+      setLoginTipOpen(true);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [auth.checked, auth.loggedIn]);
 
   if (!accepted) {
     return (
@@ -36,34 +82,87 @@ function Shell() {
     );
   }
 
+  /** 收藏夹页点条目 → 去解析页解析它 */
+  const gotoParse = useCallback((url: string) => {
+    // 收藏夹页给的都是自描述链接（收藏夹 / 合集 / 追番 / bili23:// 伪协议），一律走自动识别，
+    // 不要在进解析页后还沿用用户上次选的类型
+    parseSession.setParseType("auto");
+    parseSession.setInput(url);
+    navigate("parse");
+  }, [parseSession, navigate]);
+
   const renderPage = () => {
     if (route.id === "parse") return <ParsePage />;
     if (route.id === "downloads") return <TasksPage />;
+    // 收藏夹：原版是浮层，这里按 Web 形态做成页面（内容与层级不变）
+    if (route.id === "favorites") return <FavoritesPage onParse={gotoParse} mid={auth.mid} />;
     if (route.id === "settings") return <SettingsPage />;
-    return <PlaceholderPage key={route.id} route={route.id} />;
+    // 剩下的只有 files（产物浏览页）；导航里没有它，入口在下载页工具栏
+    return <FilesPage />;
+  };
+
+  const logout = async () => {
+    const { logoutAuth } = await import("./services/client");
+    await logoutAuth();
+    await auth.refresh();
+    toast(tr("已退出登录"));
+  };
+
+  const navProps = {
+    route: route.id,
+    onNavigate: (id: RouteId) => navigate(id),
+    loggedIn: auth.loggedIn,
+    uname: auth.uname,
+    face: auth.face,
+    mid: auth.mid,
+    preview: auth.preview,
+    onLogin: () => setLoginOpen(true),
+    onOpenProfile: () => setProfileOpen(true),
+    // 原版：未登录时点「收藏夹」弹「需要登录 / 请先登录账号」（main_window.py:310-321），
+    // 而不是把浮层打开、里面显示一句错误
+    onOpenFavorites: () => {
+      if (!auth.loggedIn) { setNeedLoginOpen(true); return; }
+      navigate("favorites");
+    },
+    onOpenAbout: () => setAboutOpen(true),
   };
 
   return (
-    <div className="app">
-      <Sidebar route={route.id} onNavigate={navigate} onLogin={() => setLoginOpen(true)} loggedIn={auth.loggedIn} preview={auth.preview} uname={auth.uname} face={auth.face} mid={auth.mid} onLogout={async () => { const { logoutAuth } = await import("./services/client"); await logoutAuth(); await auth.refresh(); toast("已退出登录"); }} />
+    // key=语言：换语言时整棵界面重挂，各处 tr("…") 用新语言重算（见上面 lang 的注释）
+    <div className="app" key={lang}>
+      <NavRail {...navProps} />
       <div className="main">
-        <TopBar
-          title={route.title}
-          route={route.id}
-          onNavigate={(id: RouteId) => navigate(id)}
-          loggedIn={auth.loggedIn}
-          uname={auth.uname}
-          face={auth.face}
-          mid={auth.mid}
-          preview={auth.preview}
-          onLogin={() => setLoginOpen(true)}
-          onLogout={async () => { const { logoutAuth } = await import("./services/client"); await logoutAuth(); await auth.refresh(); toast("已退出登录"); }}
-        />
-        <main className="content">{renderPage()}</main>
-        <MobileTabBar route={route.id} onNavigate={navigate} />
+        <MobileTopBar {...navProps} />
+        {/* 收藏夹页要铺满内容区（用户要求），所以这一路由下让 .content 不留内边距、也不自己滚动 */}
+        <main className={route.id === "favorites" ? "content flush" : "content"}>{renderPage()}</main>
+        <TabBar route={route.id} onNavigate={navigate} />
       </div>
 
       <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <ProfileDialog
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        uname={auth.uname}
+        face={auth.face}
+        mid={auth.mid}
+        preview={auth.preview}
+        onLogout={() => { setProfileOpen(false); void logout(); }}
+      />
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <LoginRequiredDialog
+        open={needLoginOpen}
+        onClose={() => setNeedLoginOpen(false)}
+        onLogin={() => { setNeedLoginOpen(false); setLoginOpen(true); }}
+      />
+      {/* 未登录教学气泡（原版 `main_window.py:110-122`：标题「登录账号」+ 头像旁的左侧尾巴） */}
+      <TeachingTip
+        open={loginTipOpen}
+        target={loginTipTarget}
+        title={tr("登录账号")}
+        content={tr("点击头像登录哔哩哔哩账号，未登录状态下下载功能将受限")}
+        tail="left"
+        onClose={() => setLoginTipOpen(false)}
+      />
     </div>
   );
 }
@@ -74,7 +173,7 @@ function TermsGateCard({ onAccept }: { onAccept: () => void }) {
       <div className="terms-gate-head">
         <div className="brand-logo">B</div>
         <h1>Bili23 Web</h1>
-        <p className="muted small">使用前请阅读并接受以下条款</p>
+        <p className="muted small">{tr("使用前请阅读并接受以下条款")}</p>
       </div>
       <TermsPanel />
       <div className="modal-foot">
@@ -90,4 +189,3 @@ function TermsGateCard({ onAccept }: { onAccept: () => void }) {
     </div>
   );
 }
-
