@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { DownloadManager } from "./download-manager.js";
+import { initLogger, logInfo, logWarn } from "./logger.js";
 import { registerApi } from "./routes.js";
 import { join } from "node:path";
 
@@ -13,12 +14,16 @@ export interface CreateAppOptions {
 }
 
 let defaultManager: DownloadManager | undefined;
+/** MCP 控制器的当前状态（供 `/api/mcp/status` 读；没启用时是 undefined） */
+let mcpStatusProvider: (() => { running: boolean; lastError: string }) | undefined;
 
 /** 默认 manager：数据目录 BILI23_DATA_DIR（默认 ./data），下载目录 DOWNLOAD_DIR（默认 <data>/downloads） */
 function getDefaultManager(): DownloadManager {
   if (!defaultManager) {
     const dataDir = process.env.BILI23_DATA_DIR ?? join(process.cwd(), "data");
     const downloadDir = process.env.DOWNLOAD_DIR;
+    // 日志与桌面版同构：<data>/logs/app.log（午夜切割，留 15 份）
+    initLogger(join(dataDir, "logs"));
     defaultManager = new DownloadManager({
       dataDir,
       ...(downloadDir ? { downloadDir } : {}),
@@ -52,7 +57,9 @@ export function createApp(opts: CreateAppOptions = {}) {
   const getManager = (): DownloadManager => opts.manager ?? getDefaultManager();
 
   app.get("/api/health", (c) => c.json({ ok: true }));
-  registerApi(app, getManager);
+  registerApi(app, getManager, {
+    mcpStatus: () => mcpStatusProvider?.() ?? { running: false, lastError: "" },
+  });
 
   // 前端 SPA（hash 路由）：托管 dist/client 静态文件，非 /api/* 且非静态文件时回退 index.html
   if (existsSync(CLIENT_DIR)) {
@@ -84,6 +91,24 @@ export function createApp(opts: CreateAppOptions = {}) {
 
 const app = createApp();
 
+/**
+ * MCP 服务器 —— 独立端口（原版 `mcp_port`，默认 23330），与原版同构：
+ * 它是给 AI 客户端用的，暴露面应当与 Web UI **分开控制**
+ * （用户可以只把 UI 放局域网，而 MCP 保持回环）。
+ * 未启用时**连模块都不加载**（原版 `main.py:501-523` 也是这个意思）。
+ *
+ * 启停交给 `McpController`：配置一变就重启（原版 `card.py:708-709`）。
+ * 没有它的话设置页那个开关"拨了不生效"，就是个假开关。
+ */
+async function startMcpIfEnabled(): Promise<void> {
+  const manager = getDefaultManager();
+  const { McpController } = await import("./mcp.js");
+  const controller = new McpController(manager);
+  mcpStatusProvider = () => ({ running: controller.running, lastError: controller.lastError });
+  manager.onConfigChange(() => controller.apply());
+  await controller.apply();
+}
+
 if (process.env.NODE_ENV !== "test") {
   // 监听前先恢复遗留任务（download_task → interrupted，幂等），保证重启后任务可继续
   await getDefaultManager().init();
@@ -92,6 +117,7 @@ if (process.env.NODE_ENV !== "test") {
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`[bili23-web] listening on http://localhost:${info.port}`);
   });
+  await startMcpIfEnabled();
 }
 
 export default app;

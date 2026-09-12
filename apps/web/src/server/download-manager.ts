@@ -11,6 +11,7 @@ import {
   TaskStore,
   calcHashId,
   concatMediaParts,
+  CookieJar,
   ensureAnonymousSession,
   qrGenerate,
   qrPoll,
@@ -25,6 +26,7 @@ import {
   probeStreamUrl,
   remuxMedia,
   resolveStreams,
+  runFfmpeg,
   audioQualityLabel,
   videoQualityLabel,
 } from "@bili23-web/engine";
@@ -83,7 +85,10 @@ import {
   type NamingQuality,
   type NumberingTypeId,
 } from "@bili23-web/engine";
-import { ConfigStore, deepMerge } from "./config.js";
+import { ConfigStore, deepMerge, resolveCdnHosts, resolveProxyUrl } from "./config.js";
+import { logger, logError, logInfo, logWarn } from "./logger.js";
+import { friendlyDownloadError } from "./error-text.js";
+import type { LogEntry } from "./logger.js";
 import type { AppConfig, AppConfigPatch } from "./config.js";
 
 /**
@@ -112,6 +117,11 @@ export interface DownloadOptions {
   container?: "mp4" | "mkv";
   /** 是否下载视频流（缺省 true） */
   downloadVideo?: boolean;
+  /**
+   * **本次任务**的下载目录（原版下载选项弹窗页签3「下载设置 → 下载目录卡」，save=False）。
+   * 只影响这一次任务，不写回全局配置；留空 = 用全局下载目录。
+   */
+  downloadDir?: string;
   /** 是否下载音频流（缺省 true） */
   downloadAudio?: boolean;
   /** 是否合并音视频（缺省 true；false 时视频流/音频流单独落盘） */
@@ -153,6 +163,8 @@ export interface TaskSummary {
   etaSec?: number | undefined;
   /** 封面 URL（B站缩略图） */
   cover?: string | undefined;
+  /** 条目的原始链接（原版右键「重新解析」要用它重新走一次解析） */
+  url?: string | undefined;
 }
 
 export interface MediaOptionSummary {
@@ -160,9 +172,27 @@ export interface MediaOptionSummary {
   mediaType: "dash" | "mp4";
   timelength: number;
   /** 可选画质（含该画质可用编码）；videoBandwidth 为该画质约合视频流码率(bps，0=未知) */
-  qualities: Array<{ id: number; label: string; codecs: Array<{ id: number; label: string }>; videoBandwidth: number }>;
-  audioQualities: Array<{ id: number; label: string; audioBandwidth: number }>;
+  qualities: Array<{
+    id: number; label: string; codecs: Array<{ id: number; label: string }>; videoBandwidth: number;
+    /** 帧率（playurl 的 frameRate，如 "60"）；拿不到就不给（原版媒体信息行会显示它） */
+    frameRate?: string;
+    width?: number; height?: number;
+    /** MP4/durl 形态下接口给的真实字节数；DASH 没有这个字段（前端按码率×时长估算） */
+    size?: number;
+  }>;
+  audioQualities: Array<{ id: number; label: string; audioBandwidth: number; audioCodecId?: number; audioCodecs?: string }>;
 }
+
+/** 代理连通性测试结果（`routes.ts` 转发给客户端；客户端 `services/types.ts` 有同名镜像） */
+export interface ProxyTestResult {
+  ok: boolean;
+  ip?: string;
+  location?: string;
+  isp?: string;
+  error?: string;
+}
+
+export type { LogEntry };
 
 export interface FileEntry {
   name: string;
@@ -200,6 +230,10 @@ export interface HistoryEntryDto {
 }
 
 /** 正在运行（占用并发槽位）的状态集合 */
+/** 收藏夹封面缓存 TTL：成功 10 分钟；失败 1 分钟（412 之后别马上再打） */
+const COVER_TTL_MS = 10 * 60 * 1000;
+const COVER_FAIL_TTL_MS = 60 * 1000;
+
 const RUNNING_STATUSES = new Set<TaskStatus>(["parsing", "downloading", "merging"]);
 
 /** 规范化下载根内相对路径并防目录穿越；越界/非法返回 undefined */
@@ -222,6 +256,52 @@ function sanitizeFileName(name: string): string {
 
 function codecLabel(id: number): string {
   return ({ 7: "AVC/H.264", 12: "HEVC/H.265", 13: "AV1" } as Record<number, string>)[id] ?? `编码${id}`;
+}
+
+/**
+ * 解析登录框粘贴的 Cookie 文本（UI 提示"支持分号或 JSON 格式"）：
+ * - `SESSDATA=xxx; bili_jct=yyy` → 逐段解析（CookieJar.parse 会跳过 Path/Domain 等属性段）；
+ * - `{"SESSDATA":"xxx"}`（对象映射）或 `[{"name":"SESSDATA","value":"xxx"}]`
+ *   （Cookie-Editor / EditThisCookie 导出的数组）→ 按 JSON 解析；
+ * - 裸值（只粘贴 SESSDATA 本身，如 `abc%2Cdef`）→ 整段当作 SESSDATA，保持旧行为。
+ * 找不到 SESSDATA 时返回空表，由调用方给出明确报错（不再把整段原样存成 SESSDATA）。
+ */
+function parsePastedCookies(raw: string): Record<string, string> {
+  const text = raw.trim();
+  if (text.startsWith("{") || text.startsWith("[")) {
+    const fromJson = cookiesFromJson(text);
+    // JSON 本身合法但里面没有 SESSDATA 时，不再退化成"整段当裸值"，避免把 JSON 原文存成 SESSDATA
+    if (fromJson) return fromJson.SESSDATA ? fromJson : {};
+  }
+  const jar = CookieJar.parse(text);
+  if (jar.get("SESSDATA")) return jar.snapshot();
+  // 完全没有 k=v 结构（不含 "="）时才按裸 SESSDATA 处理
+  if (!text.includes("=")) return { SESSDATA: text };
+  return {};
+}
+
+/** 把浏览器插件导出的 JSON 转成 name→value；非 JSON 或没有可用字段时返回 undefined */
+function cookiesFromJson(text: string): Record<string, string> | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  const put = (name: unknown, value: unknown): void => {
+    if (typeof name === "string" && typeof value === "string" && value.length > 0) out[name] = value;
+  };
+  if (Array.isArray(parsed)) {
+    for (const row of parsed) {
+      if (!row || typeof row !== "object") continue;
+      const r = row as { name?: unknown; value?: unknown };
+      put(r.name, r.value);
+    }
+  } else if (parsed && typeof parsed === "object") {
+    for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) put(name, value);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 interface PlannedFile {
@@ -307,6 +387,7 @@ class ManagedTask {
       speedBps: this.status === "downloading" ? this.speedBps : undefined,
       etaSec: this.status === "downloading" ? this.etaSec : undefined,
       cover: this.item.cover || undefined,
+      url: this.item.url || undefined,
     };
   }
 
@@ -379,6 +460,15 @@ export interface ParseRequest {
   pn?: number;
   /** 翻页数（分页类型，默认 1） */
   pages?: number;
+  /**
+   * 互动视频是否直接展开全部分支节点。
+   *
+   * 不传（默认）时 `/api/parse` 走"先探测"：命中互动视频只回报
+   * `interactiveDetected`，让前端先弹「检测到互动视频，请选择操作」再带
+   * `interactiveAll: true` 重来一次（对齐桌面两段式解析）。
+   * `parseUrls` 被 MCP 直接调用时不传该字段 → 直接展开，保持原语义。
+   */
+  interactiveAll?: boolean;
 }
 
 export interface AuthStatus {
@@ -421,6 +511,8 @@ export class DownloadManager {
   /** 匿名会话引导（buvid/bili_ticket 等指纹 cookie），首次解析前就绪（最佳努力，不失败） */
   #sessionReady: Promise<void>;
   #rootDir: string;
+  /** 收藏夹封面缓存（folder id → 封面 URL；失败也缓存，短 TTL，避免 412 后立刻重试） */
+  #coverCache = new Map<number, { cover: string; at: number }>();
   #tmpDir: string;
   #tasks = new Map<string, ManagedTask>();
   #items = new Map<string, MediaItem>();
@@ -441,10 +533,14 @@ export class DownloadManager {
   #sessdata: string | undefined;
   /** 最近一次从 nav 取回的登录用户信息（可选字段；尽力而为，未取到保持 undefined） */
   #user: { uname?: string; face?: string; mid?: number } | undefined;
-  /** CDN 节点（advanced.cdnHosts），取流时作为候选地址前缀 */
+  /** CDN 节点（advanced.cnCdnHosts + ovCdnHosts），取流时作为候选地址前缀 */
   #cdnHosts: string[] = [];
   /** 自定义 ffmpeg 可执行文件路径（advanced.ffmpegPath） */
   #ffmpegPath: string | undefined = undefined;
+  /** 配置变更监听者（MCP 服务器启停用） */
+  #configListeners: Array<(cfg: AppConfig) => Promise<void> | void> = [];
+  /** 下载前是否预分配文件空间（behavior.preallocateFileSpace，桌面默认开） */
+  #preallocate = true;
   /** 产物重名策略（config.download.renamePolicy）：auto=自动加后缀 overwrite=覆盖 */
   #renamePolicy: "auto" | "overwrite" = "auto";
   /** 重复下载策略（config.download.duplicatePolicy）：prompt=询问 skip=跳过 force=强制 */
@@ -500,7 +596,42 @@ export class DownloadManager {
     this.#applyRuntimeConfig(next);
     // 并行上限变化后立即按新值推进队列（调大时 queued 任务马上补位，调小则保持现状）
     this.#scheduleNext();
+    // 配置变更通知（MCP 服务器据此启停/重启：原版 `card.py:708-709,791-797` 也是"任一变化就重启"）
+    for (const cb of this.#configListeners) {
+      try { await cb(next); } catch { /* 监听者异常不影响配置保存 */ }
+    }
     return next;
+  }
+
+  /** 导出当前配置（原版「配置文件设置 → 导出」） */
+  async exportConfig(): Promise<AppConfig> {
+    await this.#configReady;
+    return this.#configStore.exportAll();
+  }
+
+  /** 导入配置（原版「配置文件设置 → 导入」）：净化 + 校验通过才落盘，并刷新运行时 */
+  async importConfig(raw: unknown): Promise<AppConfig> {
+    await this.#configReady;
+    const next = await this.#configStore.replaceAll(raw);
+    this.#applyRuntimeConfig(next);
+    this.#scheduleNext();
+    logInfo("config", "已导入配置文件");
+    return next;
+  }
+
+  /** 重置为默认配置（原版「配置文件设置 → 重置」） */
+  async resetConfig(): Promise<AppConfig> {
+    await this.#configReady;
+    const next = await this.#configStore.resetAll();
+    this.#applyRuntimeConfig(next);
+    this.#scheduleNext();
+    logInfo("config", "已重置为默认配置");
+    return next;
+  }
+
+  /** 注册配置变更监听（当前只有 MCP 服务器用） */
+  onConfigChange(cb: (cfg: AppConfig) => Promise<void> | void): void {
+    this.#configListeners.push(cb);
   }
 
   // ---------- 登录（SESSDATA cookie）----------
@@ -528,10 +659,19 @@ export class DownloadManager {
     return { qrUrl: "", qrcodeKey, status, loggedIn: false };
   }
   async loginAuth(sessdata: string): Promise<AuthStatus> {
-    const s = sessdata.trim();
-    if (!s) throw new BiliError("INVALID_URL", "SESSDATA 不能为空");
-    this.#sessdata = s;
-    this.#http.jar.set("SESSDATA", s);
+    const raw = sessdata.trim();
+    if (!raw) throw new BiliError("INVALID_URL", "SESSDATA 不能为空");
+    // 粘贴内容可能是整段 Cookie（k=v 或 JSON），先解析出真实字段再落库；
+    // 旧实现把整段文本原样当 SESSDATA 值，粘贴 `SESSDATA=x; bili_jct=y` 会存成无效登录态
+    const cookies = parsePastedCookies(raw);
+    const value = cookies.SESSDATA?.trim();
+    if (!value) {
+      throw new BiliError("INVALID_URL", "未找到 SESSDATA，请粘贴包含 SESSDATA 的 Cookie 或直接粘贴其值");
+    }
+    this.#sessdata = value;
+    // 其余 cookie（bili_jct / DedeUserID 等）一并写入 jar，后续接口才能带上完整登录态
+    for (const [name, cookieValue] of Object.entries(cookies)) this.#http.jar.set(name, cookieValue);
+    this.#http.jar.set("SESSDATA", value);
     await this.#refreshUser();
     await this.#persistAuth();
     return this.#authStatusObj();
@@ -603,8 +743,8 @@ export class DownloadManager {
     }
   }
 
-  /** 登录用户收藏夹列表（1:1 收藏夹面板；需登录，未登录抛 LOGIN_REQUIRED） */
-  async listFavFolders(): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number; cover: string }> }> {
+  /** 登录用户的 mid；未登录/登录态失效抛 LOGIN_REQUIRED（收藏夹与追番共用） */
+  async #loginMid(): Promise<number> {
     await this.#sessionReady;
     if (!this.#sessdata) {
       throw new BiliError("LOGIN_REQUIRED", "请先登录");
@@ -614,52 +754,172 @@ export class DownloadManager {
     if (nav.code !== 0 || !mid) {
       throw new BiliError("LOGIN_REQUIRED", "登录态无效，请重新登录");
     }
-    const res = await this.#http.getJSON<{
-      code: number; data?: { list?: Array<{ id: number; title: string; media_count?: number }> };
-    }>(BILI_API_BASE + "/x/v3/fav/folder/created/list-all", { params: { up_mid: String(mid) } });
-    if (res.code !== 0) {
-      throw new BiliError("LOGIN_REQUIRED", res.code === -101 ? "登录态无效" : "获取收藏夹失败");
-    }
-    const list = res.data?.list ?? [];
-    const folders = await Promise.all(list.map(async (f) => {
-      let cover = "";
-      try {
-        const one = await this.#http.getJSON<{
-          code: number; data?: { medias?: Array<{ cover?: string }> };
-        }>(BILI_API_BASE + "/x/v3/fav/resource/list", { params: { media_id: String(f.id), pn: 1, ps: 1 } });
-        cover = one.data?.medias?.[0]?.cover ?? "";
-      } catch { /* 单收藏夹封面失败不阻塞整体 */ }
-      return { id: f.id, title: f.title, mediaCount: f.media_count ?? 0, cover };
-    }));
-    return { mid, folders };
+    return mid;
   }
 
-  /** 登录用户追番/追剧列表（type=1 番剧 / type=2 电影 / type=3 纪录片 / type=4 国创 / type=5 电视剧 / type=7 综艺）；需登录 */
-  async listFollowBangumi(type = "1"): Promise<Array<{ seasonId: number; title: string; cover: string; newEp: string; progress: string; isFinish: number; url: string }>> {
-    await this.#sessionReady;
-    if (!this.#sessdata) {
-      throw new BiliError("LOGIN_REQUIRED", "请先登录");
+  /**
+   * 逐个取**我创建的**收藏夹封面 —— `fav/resource/list` 的 `data.info.cover`（实测有）。
+   *
+   * 为什么单独一个接口、而不是塞进 `listFavFolders`：
+   * 这里每取一个封面就是一次 `fav/resource/list` 请求，而**并发打满会把该接口打到 HTTP 412**
+   * （上一轮实测 25 个并发必 412，而它正是"点进收藏夹解析"用的同一个接口）。
+   * 所以：**限并发 3 + 结果缓存（10 分钟）+ 失败即止（412 立刻停手）**，
+   * 并且前端是"列表先出来、封面随后填"（渐进式），不阻塞列表。
+   */
+  async listFavFolderCovers(ids: number[]): Promise<Record<number, string>> {
+    const out: Record<number, string> = {};
+    const now = Date.now();
+    const todo: number[] = [];
+    for (const id of ids) {
+      const hit = this.#coverCache.get(id);
+      if (hit) {
+        const ttl = hit.cover ? COVER_TTL_MS : COVER_FAIL_TTL_MS;
+        if (now - hit.at < ttl) {
+          if (hit.cover) out[id] = hit.cover;
+          continue;
+        }
+      }
+      todo.push(id);
     }
-    const nav = await this.#http.getJSON<{ code: number; data?: { mid?: number } }>(BILI_API_BASE + "/x/web-interface/nav");
-    const mid = nav.data?.mid;
-    if (nav.code !== 0 || !mid) {
-      throw new BiliError("LOGIN_REQUIRED", "登录态无效，请重新登录");
-    }
-    const res = await this.#http.getJSON<{
-      code: number; data?: { list?: Array<{ season_id: number; title: string; cover: string; new_ep?: { index_show?: string }; progress?: string; is_finish?: number; url?: string }> };
-    }>(BILI_API_BASE + "/x/space/bangumi/follow/list", { params: { type, pn: 1, ps: 20, follow_status: 0, vmid: String(mid) } });
+
+    let aborted = false;
+    const worker = async (): Promise<void> => {
+      while (todo.length > 0 && !aborted) {
+        const id = todo.shift() as number;
+        try {
+          const res = await this.#http.getJSON<{ code: number; data?: { info?: { cover?: string } } }>(
+            BILI_API_BASE + "/x/v3/fav/resource/list",
+            { params: { media_id: String(id), pn: 1, ps: 1, platform: "web" } },
+          );
+          const cover = res.code === 0 ? (res.data?.info?.cover ?? "") : "";
+          this.#coverCache.set(id, { cover, at: Date.now() });
+          if (cover) out[id] = cover;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.#coverCache.set(id, { cover: "", at: Date.now() });
+          // 412 = 被反爬拦了：立刻停手，别把剩下的也打出去
+          if (/412/.test(msg)) {
+            aborted = true;
+            logWarn("parse", `收藏夹封面请求被限流（HTTP 412），已停止剩余 ${todo.length} 个`);
+          }
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, todo.length) }, () => worker()));
+    return out;
+  }
+
+  /**
+   * 收藏夹面板的两个列表（1:1 原版收藏夹浮层）：
+   * - `created`：我创建的（`fav/folder/created/list-all`，对应原版 `get_favorite_list`）
+   * - `collected`：我订阅的（`fav/folder/collected/list`，对应原版 `get_subscription_list`，pn=1&ps=50）
+   * 需登录，未登录抛 LOGIN_REQUIRED。
+   *
+   * ⚠️ 封面：**只有订阅合集这条接口会返回 `cover`**（实测字段），我创建的这条**没有封面字段**
+   * （只有 id/fid/mid/attr/title/fav_state/media_count）。原版对我创建的那条走的是
+   * `__query__{fid}` 懒加载（`view_model/model_base.py:28`，逐行可见时才请求）。
+   * 这里**不做**那个逐个请求 —— 实测 25 个收藏夹并发调 `fav/resource/list` 会直接把该接口打到
+   * **HTTP 412**（B 站反爬），而它正是"点进收藏夹解析"用的同一个接口，代价太大。
+   * 因此 created 的 cover 一律留空，由前端画占位图。
+   */
+  async listFavFolders(kind: "created" | "collected" = "created"): Promise<{ mid: number; folders: Array<{ id: number; title: string; mediaCount: number; cover: string; url: string }> }> {
+    const mid = await this.#loginMid();
+    type FoldersResponse = {
+      code: number;
+      message?: string;
+      data?: { list?: Array<{ id: number; title: string; media_count?: number; cover?: string; mid?: number }> };
+    };
+    const res: FoldersResponse =
+      kind === "collected"
+        ? await this.#http.getJSON<FoldersResponse>(BILI_API_BASE + "/x/v3/fav/folder/collected/list", {
+            params: { up_mid: String(mid), pn: 1, ps: 50, platform: "web" },
+          })
+        : await this.#http.getJSON<FoldersResponse>(BILI_API_BASE + "/x/v3/fav/folder/created/list-all", {
+            params: { up_mid: String(mid) },
+          });
     if (res.code !== 0) {
-      throw new BiliError("LOGIN_REQUIRED", res.code === -101 ? "登录态无效" : "获取追番列表失败");
+      // 只有 -101 才是登录态问题；其余是接口业务错误，
+      // 一律说成"请先登录"会把用户引到错误的排查方向
+      if (res.code === -101) throw new BiliError("LOGIN_REQUIRED", "登录态无效，请重新登录");
+      throw new BiliError("API_ERROR", res.message || "获取收藏夹失败", { apiCode: res.code });
     }
-    return (res.data?.list ?? []).map((b) => ({
-      seasonId: b.season_id,
-      title: b.title,
-      cover: b.cover ?? "",
-      newEp: b.new_ep?.index_show ?? "",
-      progress: b.progress ?? "",
-      isFinish: b.is_finish ?? 0,
-      url: b.url ?? `https://www.bilibili.com/bangumi/play/ss${b.season_id}`,
-    }));
+    const list = res.data?.list ?? [];
+    return {
+      mid,
+      folders: list.map((f) => ({
+        id: f.id,
+        title: f.title,
+        mediaCount: f.media_count ?? 0,
+        cover: f.cover ?? "",
+        /**
+         * 两个列表的 URL 形态不一样，照抄原版 `parser/favorite.py`：
+         * - 我创建的：`on_get_favorite_list_success` → `space.bilibili.com/{自己}/favlist?fid={id}`（favlist 语义）
+         * - 我订阅的：`on_get_subscription_list_success` → `space.bilibili.com/{**作者**}/lists/{id}?type=season`（**合集 semantics**）
+         *
+         * ⚠️ 订阅合集**不能**用 `www.bilibili.com/list/ml{id}`：实测那样会解析成"我的默认收藏夹、0 条"。
+         * 订阅合集在 B 站是**别人空间里的一个合集(season)**，必须带作者的 mid 走 season 接口。
+         */
+        url:
+          kind === "collected"
+            ? `https://space.bilibili.com/${f.mid ?? mid}/lists/${f.id}?type=season`
+            : `https://space.bilibili.com/${mid}/favlist?fid=${f.id}`,
+      })),
+    };
+  }
+
+  /**
+   * 登录用户追番/追剧列表（1:1 原版追番面板）。
+   * `type`：1 追番 / 2 追剧（原版浮层的下拉只有这两档）；
+   * `status`：0 全部 / 1 想看 / 2 在看 / 3 看过；
+   * `ps=24` 对齐原版（`parser/favorite.py:68`），返回值带分页信息供前端分页器使用。
+   */
+  async listFollowBangumi(type = "1", status = 0, pn = 1): Promise<{
+    follow: Array<{ seasonId: number; title: string; cover: string; type: string; newEp: string; progress: string; desc: string; isFinish: number; url: string }>;
+    pagination: { total: number; page: number; pageSize: number; totalPages: number };
+  }> {
+    const mid = await this.#loginMid();
+    const ps = 24;
+    const page = Math.max(1, Math.floor(pn) || 1);
+    const res = await this.#http.getJSON<{
+      code: number;
+      message?: string;
+      data?: {
+        list?: Array<{
+          season_id: number; title: string; cover: string;
+          season_type_name?: string;
+          areas?: Array<{ name?: string }>;
+          new_ep?: { index_show?: string };
+          progress?: string; evaluate?: string; is_finish?: number; url?: string;
+        }>;
+        total?: number;
+      };
+    }>(BILI_API_BASE + "/x/space/bangumi/follow/list", {
+      params: { type, pn: page, ps, follow_status: status, vmid: String(mid) },
+    });
+    if (res.code !== 0) {
+      // 同上：-101 才是登录态问题；其余（如 type=3/4/5/7）是接口业务错误
+      if (res.code === -101) throw new BiliError("LOGIN_REQUIRED", "登录态无效，请重新登录");
+      throw new BiliError("API_ERROR", res.message || "获取追番列表失败", { apiCode: res.code });
+    }
+    const list = res.data?.list ?? [];
+    const total = res.data?.total ?? list.length;
+    const follow = list.map((b) => {
+      // 原版卡片显示「{season_type_name} · {areas[0].name}」（poster_item_delegate 的 type 字段）
+      const area = b.areas?.[0]?.name ?? "";
+      const typeText = [b.season_type_name ?? "", area].filter(Boolean).join(" · ");
+      return {
+        seasonId: b.season_id,
+        title: b.title,
+        cover: b.cover ?? "",
+        type: typeText,
+        newEp: b.new_ep?.index_show ?? "",
+        progress: b.progress ?? "",
+        desc: b.evaluate ?? "",
+        isFinish: b.is_finish ?? 0,
+        url: b.url ?? `https://www.bilibili.com/bangumi/play/ss${b.season_id}`,
+      };
+    });
+    return { follow, pagination: { total, page, pageSize: ps, totalPages: Math.max(1, Math.ceil(total / ps)) } };
   }
 
   #previewSessdata(s: string): string {
@@ -692,17 +952,22 @@ export class DownloadManager {
 
   // ---------- 解析会话 ----------
 
-  async parseUrls(urls: string[]): Promise<ParseResult[]> {
+  async parseUrls(urls: string[], opts?: { expandInteractive?: boolean }): Promise<ParseResult[]> {
     // 桌面在启动时初始化匿名指纹 cookie（CookieManager.init_cookie_info），
     // Web 侧在首次解析前补齐同一套 cookie，降低 WBI 接口 412 概率
     await this.#sessionReady;
+    // 互动视频：默认展开全部分支节点（MCP 的 parse 工具直接调这里，没有确认 UI）；
+    // `/api/parse` 会显式传 false 走"先探测再确认"的两段式
+    const expandInteractiveNodes = opts?.expandInteractive !== false;
     // 对齐桌面 Behavior > 保存解析历史：关闭时解析不写入 parse_history
     const saveParseHistory = (await this.#configReady.then(() => this.#configStore.get())).behavior.saveParseHistory;
     const results: ParseResult[] = [];
     for (const raw of urls) {
       const url = raw.trim();
       if (!url) continue;
-      const result = await parseUrl(this.ctx, url);
+      logInfo("parse", `开始解析，链接: ${url}`);
+      const result = await parseUrl(this.ctx, url, { expandInteractiveNodes });
+      logInfo("parse", `解析完成，链接: ${url}，条目: ${result.items.length}`);
       for (const item of result.items) {
         if (!this.#items.has(item.id)) {
           this.#items.set(item.id, item);
@@ -730,8 +995,10 @@ export class DownloadManager {
    */
   async parseRequest(req: ParseRequest): Promise<ParseResult[]> {
     await this.#sessionReady;
+    // 互动视频两段式：只有显式 interactiveAll 才直接展开（见 ParseRequest.interactiveAll）
+    const parseOpts = { expandInteractive: req.interactiveAll === true };
     if (!req.type) {
-      return this.parseUrls(req.urls ?? []);
+      return this.parseUrls(req.urls ?? [], parseOpts);
     }
     const urls = await this.#buildUrlsForType(req);
     if (urls.length === 0) {
@@ -750,7 +1017,7 @@ export class DownloadManager {
       return results;
     }
 
-    return this.parseUrls(urls);
+    return this.parseUrls(urls, parseOpts);
   }
 
   // ---------- 解析历史 ----------
@@ -761,6 +1028,21 @@ export class DownloadManager {
 
   deleteParseHistory(id: number): boolean {
     return this.#store.removeParseHistory(id);
+  }
+
+  /**
+   * 单个稿件的分P 列表（原版 `MultiPartListsDialog` 的二次解析）：
+   * 只取这个稿件自己的分P，**不展开合集**，也**不动主解析树**
+   * （原版那句 `del info_data["data"]["ugc_season"]`）。
+   */
+  async listVideoParts(url: string): Promise<MediaItem[]> {
+    await this.#sessionReady;
+    const result = await parseUrl(this.ctx, url, { ignoreSeason: true });
+    // 注册到内存条目表：拿到 itemId 后建任务/取媒体信息都要能查到
+    for (const item of result.items) {
+      if (!this.#items.has(item.id)) this.#items.set(item.id, item);
+    }
+    return result.items;
   }
 
   /** 是否支持翻页的类型入口 */
@@ -774,12 +1056,17 @@ export class DownloadManager {
     startPn: number,
     pages: number,
   ): Promise<ParseResult | undefined> {
-    const saveParseHistory = (await this.#configReady.then(() => this.#configStore.get())).behavior.saveParseHistory;
+    const cfg = await this.#configReady.then(() => this.#configStore.get());
+    const saveParseHistory = cfg.behavior.saveParseHistory;
+    // 自动解析分页的页间隔（桌面 `parser/dynamic.py:74-75` 的 `time.sleep(auto_parse_interval)`）。
+    // 请求过于频繁会触发 B 站风控，所以原版默认就等 2 秒；最后一页不等。
+    const pageIntervalMs = Math.round(cfg.behavior.autoParseInterval * 1000);
     let first: ParseResult | undefined;
     const items: MediaItem[] = [];
     let pagination: ParseResult["pagination"];
     const MAX_AUTO_PAGES = 100; // 搜索全部时安全上限，防止异常接口导致请求失控
     const effectivePages = Math.min(pages, MAX_AUTO_PAGES);
+    const lastPage = startPn + effectivePages - 1;
     for (let page = startPn; page < startPn + effectivePages; page += 1) {
       const result = await parseUrl(this.ctx, url, { pn: page });
       for (const item of result.items) {
@@ -792,6 +1079,9 @@ export class DownloadManager {
       if (result.pagination && page >= result.pagination.totalPages) break;
       // 无分页返回的接口：空页视为已到末页（搜索全部时安全停止）
       if (!result.pagination && result.items.length === 0 && page > startPn) break;
+      if (page < lastPage && pageIntervalMs > 0) {
+        await new Promise<void>((r) => setTimeout(r, pageIntervalMs));
+      }
     }
     if (!first) return undefined;
     if (saveParseHistory) {
@@ -926,7 +1216,13 @@ export class DownloadManager {
       const codecIds = byCodec ? Object.keys(byCodec).map(Number) : [];
       const codecs = codecIds.map((id) => ({ id, label: codecLabel(id) }));
       const firstBw = codecIds[0] != null && byCodec ? (byCodec[codecIds[0]]?.bandwidth ?? 0) : 0;
-      qualities.push({ id: q, label: videoQualityLabel(q), codecs, videoBandwidth: firstBw });
+      const firstRef = codecIds[0] != null && byCodec ? byCodec[codecIds[0]] : undefined;
+      qualities.push({
+        id: q, label: videoQualityLabel(q), codecs, videoBandwidth: firstBw,
+        ...(firstRef?.frameRate !== undefined ? { frameRate: firstRef.frameRate } : {}),
+        ...(firstRef?.width !== undefined ? { width: firstRef.width } : {}),
+        ...(firstRef?.height !== undefined ? { height: firstRef.height } : {}),
+      });
     }
     // 单文件/MP4 直链形态（audio=m4a 192K、lesson=mp4 1080P、durl 视频）没有 DASH qualities，
     // 把接口返回的 mp4Qualities 补进选项，避免下拉只剩"自动"（Task 2.9 顺手修复）
@@ -934,7 +1230,11 @@ export class DownloadManager {
       for (const q of info.mp4Qualities) {
         if (seen.has(q)) continue;
         seen.add(q);
-        qualities.push({ id: q, label: info.mp4QualityLabel[q] ?? String(q), codecs: [], videoBandwidth: this.#durlBandwidth(info, q) });
+        const durlSize = info.durl?.find((d) => d.url)?.size;
+        qualities.push({
+          id: q, label: info.mp4QualityLabel[q] ?? String(q), codecs: [], videoBandwidth: this.#durlBandwidth(info, q),
+          ...(typeof durlSize === "number" && durlSize > 0 ? { size: durlSize } : {}),
+        });
       }
     }
     return {
@@ -942,7 +1242,14 @@ export class DownloadManager {
       mediaType: info.mediaType,
       timelength: info.timelength,
       qualities,
-      audioQualities: info.audioQualities.map((id) => ({ id, label: audioQualityLabel(id), audioBandwidth: this.#audioBandwidth(info, id) })),
+      audioQualities: info.audioQualities.map((id) => {
+        const ref = info.audioList.find((a) => a.id === id);
+        return {
+          id, label: audioQualityLabel(id), audioBandwidth: this.#audioBandwidth(info, id),
+          ...(ref?.codecid !== undefined ? { audioCodecId: ref.codecid } : {}),
+          ...(ref?.codecs ? { audioCodecs: ref.codecs } : {}),
+        };
+      }),
     };
   }
 
@@ -1026,8 +1333,18 @@ export class DownloadManager {
         ...(options.audioQualityId === undefined && cfg.advanced.defaultAudioQualityId !== undefined
           ? { audioQualityId: cfg.advanced.defaultAudioQualityId }
           : {}),
+        // 三个优先级数组来自 config（原版 config.py:73-100）。
+        // 任务选项里显式给了就用任务的（对齐原版"弹窗内也能改优先级"），否则用配置的。
+        ...(options.videoQualityPriority ? {} : { videoQualityPriority: [...cfg.download.videoQualityPriority] }),
+        ...(options.audioQualityPriority ? {} : { audioQualityPriority: [...cfg.download.audioQualityPriority] }),
+        ...(options.videoCodecPriority ? {} : { videoCodecPriority: [...cfg.download.videoCodecPriority] }),
         extras: normalizeExtrasStyles(deepMerge(cfg.additional, options.extras)),
         naming: { conventionType, rule, number },
+        // 下载目录：调用方显式指定就用它的（下载选项弹窗「下载路径卡」），
+        // 否则固化创建任务那一刻的全局目录（原版 `manager.py:105`
+        // `task_info.File.download_path = config.get(config.download_path)`）。
+        // 固化之后，用户再改全局目录不会把已排队任务的落盘位置一起搬走。
+        ...(options.downloadDir && options.downloadDir.trim() !== "" ? {} : { downloadDir: this.#rootDir }),
       };
       const task = new ManagedTask(item, resolved);
       task.duplicate = duplicates.some((d) => d.itemId === item.id);
@@ -1035,6 +1352,7 @@ export class DownloadManager {
       // 进入等待队列：先持久化 queued，再由调度器按并发上限启动
       this.#persist(task, { status: "queued" });
       task.pushLog("已加入队列，等待调度");
+      logInfo("download", `创建任务：${task.summary().title}`);
       created.push(task);
       this.#pending.push(task);
     }
@@ -1094,11 +1412,12 @@ export class DownloadManager {
     return task.summary();
   }
 
-  /** 重试：failed/cancelled → 清空断点、重建 download_task 行后全新下载（不续传） */
-  retryTask(id: string): TaskSummary | undefined {
-    const task = this.#tasks.get(id);
-    if (!task) return undefined;
-    if (task.status !== "failed" && task.status !== "cancelled") return undefined;
+  /**
+   * 清空断点并重新入队（retry / redownload 共用）。
+   * 会先把任务从待调度队列里摘掉，避免重复入队。
+   */
+  #requeue(task: ManagedTask, logText: string): TaskSummary {
+    this.#removePending(task);
     task.resetForRun();
     task.files = {};
     task.error = undefined;
@@ -1107,13 +1426,44 @@ export class DownloadManager {
     task.progress = 0;
     task.downloadedBytes = 0;
     task.totalBytes = 0;
-    this.#store.removeActive(id);
+    this.#store.removeActive(task.id);
     task.update({ status: "queued" });
+    task.pushLog(logText);
     this.#persist(task, { status: "queued", files: {} });
-    task.pushLog("重试：清空断点，重新下载");
     this.#pending.push(task);
     this.#scheduleNext();
     return task.summary();
+  }
+
+  /**
+   * 重新下载（原版 `download_list/model.py:339-365` 的 `redownload` +
+   * `list_view.py:181-191`）：
+   * - 已完成：从 completed 表搬回下载表，清断点重下；
+   * - 下载中/解析中：**先中止并等收尾**，再清断点重下（原版是 `pause()` 后立刻 reset；
+   *   我们是异步模型，必须先 await `runPromise`，否则 `#run` 的 catch 会把状态改回 cancelled）；
+   * - 合并中：拒绝（文案「处于 FFmpeg 处理中的任务无法重新下载」）。
+   *
+   * 注：我们的 `TaskStatus` 没有 `converting` —— m4a→mp3 转换发生在 merging 阶段内部，
+   * 所以那个状态由 `merging` 一并覆盖。
+   */
+  async redownloadTask(id: string): Promise<{ ok: true; task: TaskSummary } | { ok: false; reason: "notfound" | "ffmpeg" }> {
+    const task = this.#tasks.get(id);
+    if (!task) return { ok: false, reason: "notfound" };
+    if (task.status === "merging") return { ok: false, reason: "ffmpeg" };
+    if (RUNNING_STATUSES.has(task.status)) {
+      task.cancel();
+      await task.runPromise?.catch(() => undefined);
+    }
+    this.#store.removeCompleted(id);
+    return { ok: true, task: this.#requeue(task, "重新下载：清空断点，重新加入队列") };
+  }
+
+  /** 重试：failed/cancelled → 清空断点、重建 download_task 行后全新下载（不续传） */
+  retryTask(id: string): TaskSummary | undefined {
+    const task = this.#tasks.get(id);
+    if (!task) return undefined;
+    if (task.status !== "failed" && task.status !== "cancelled") return undefined;
+    return this.#requeue(task, "重试：清空断点，重新下载");
   }
 
   /**
@@ -1197,6 +1547,47 @@ export class DownloadManager {
     return this.#walk(this.#rootDir);
   }
 
+  /** 日志：读（最新的在前，可搜索）/ 清空（对齐桌面「日志」窗口的刷新与清除） */
+  readLogs(opts: { search?: string; limit?: number } = {}): LogEntry[] {
+    return logger()?.read(opts) ?? [];
+  }
+
+  clearLogs(): void {
+    logger()?.clear();
+  }
+
+  /** 日志文件路径（排查时用；Web 端没有"打开日志目录"） */
+  logFilePath(): string | undefined {
+    return logger()?.filePath;
+  }
+
+  /**
+   * 代理连通性测试（原版 `dialog/setting/proxy.py:83` 的对应物）：
+   * 用**传入的代理**去问 B 站自己的 `x/web-interface/zone`，拿到出口 IP / 地区 / ISP。
+   * 用同一个接口是有意的 —— 能通就说明"这个代理能访问 B 站"，比 ping 一个公共接口更贴近实际用途。
+   */
+  async testProxy(form: { proxyType: string; proxyServer: string; proxyPort: number; proxyUname: string; proxyPassword: string }): Promise<ProxyTestResult> {
+    if (!form.proxyServer.trim()) return { ok: false, error: "未填写代理服务器地址" };
+    const auth = form.proxyUname
+      ? `${encodeURIComponent(form.proxyUname)}:${encodeURIComponent(form.proxyPassword)}@`
+      : "";
+    const url = `${form.proxyType}://${auth}${form.proxyServer.trim()}:${form.proxyPort}`;
+    try {
+      // 借引擎自己的 HttpClient 带上代理 —— 不在这里另引 undici，
+      // 而且顺带复用了它的 UA / 超时 / 重试语义（与真实抓取同一条通路）
+      const probe = new HttpClient({ proxy: url, timeoutMs: 10_000, retries: 0 });
+      const body = await probe.getJSON<{ code?: number; data?: { ip?: string; country?: string; province?: string; city?: string; isp?: string } }>(
+        "https://api.bilibili.com/x/web-interface/zone",
+      );
+      if (body.code !== 0 || !body.data) return { ok: false, error: `接口返回 code=${body.code ?? "?"}` };
+      const d = body.data;
+      const location = [d.country, d.province, d.city].filter(Boolean).join(" ") || "未知";
+      return { ok: true, ip: d.ip ?? "未知", location, isp: d.isp || "未知" };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
   /**
    * 浏览给定绝对目录的子目录（下载目录选择器用）。
    * - 路径不存在 / 不是目录 / 为空 → 返回空列表；
@@ -1270,13 +1661,24 @@ export class DownloadManager {
       mkdirSync(this.#rootDir, { recursive: true });
       mkdirSync(this.#tmpDir, { recursive: true });
     }
-    // advanced：代理、CDN、ffmpeg 路径即时生效
-    this.#http.setProxy(cfg.advanced.proxy);
-    this.#cdnHosts = cfg.advanced.cdnHosts;
+    // advanced：代理、CDN、UA、ffmpeg 路径即时生效
+    // 三态代理：disabled=直连、system=跟随环境变量、manual=用配置的代理服务器
+    if (cfg.advanced.proxyMode === "system") this.#http.setSystemProxy();
+    else this.#http.setProxy(resolveProxyUrl(cfg.advanced));
+    this.#http.setDefaultUserAgent(cfg.advanced.userAgent);
+    // 桌面按地区（area）只用其中一套节点，且受「优先使用服务商 CDN」开关控制
+    // （`resolveCdnHosts` 里就是这个语义）；探测失败仍会回落到 B 站原始调度链接
+    this.#cdnHosts = resolveCdnHosts(cfg.advanced);
     this.#ffmpegPath = cfg.advanced.ffmpegPath;
+    this.#preallocate = cfg.behavior.preallocateFileSpace !== false;
   }
 
-  /** 重启恢复实现（见 init）：download_task 遗留任务一律置 interrupted，保留断点可手动继续 */
+  /**
+   * 重启恢复实现（见 init）：
+   * - download_task 遗留任务一律置 interrupted，保留断点可手动继续；
+   * - completed_task 里的已完成任务也恢复进内存，否则重启后"已完成"页签为空
+   *   （完成历史只落在库里，前端列表读的是内存任务表）。
+   */
   async #rehydrate(): Promise<void> {
     await this.#configReady;
     const rows = this.#store.listActive();
@@ -1295,6 +1697,20 @@ export class DownloadManager {
       this.#tasks.set(task.id, task);
       if (!this.#items.has(task.item.id)) this.#items.set(task.item.id, task.item);
       this.#persist(task, { status: "interrupted", files: task.files });
+    }
+    for (const rec of this.#store.listCompleted()) {
+      const data = rec.data as (Partial<TaskSnapshot> & { outputPath?: string }) | null;
+      if (!data || typeof data !== "object") continue;
+      if (!data.item || !data.options) continue;
+      const task = new ManagedTask(data.item, data.options, rec.taskId);
+      task.status = "completed";
+      task.progress = 100;
+      task.outputPath = typeof data.outputPath === "string" ? data.outputPath : undefined;
+      task.createdAt = rec.time;
+      task.updatedAt = rec.time;
+      task.pushLog("历史记录（服务重启前已完成）");
+      this.#tasks.set(task.id, task);
+      if (!this.#items.has(task.item.id)) this.#items.set(task.item.id, task.item);
     }
   }
 
@@ -1368,6 +1784,8 @@ export class DownloadManager {
           fileSize: pf.fileSize,
           referer: "https://www.bilibili.com/",
           concurrency: this.#maxThreads,
+          // 预分配文件空间（桌面 Behavior > 下载处理 > 预分配文件空间，默认开）
+          preallocate: this.#preallocate,
           signal: task.signal,
           gate: this.#gate,
           ...(snapshot ? { state: snapshot } : {}),
@@ -1399,7 +1817,7 @@ export class DownloadManager {
       // 输出扩展名以接口语义为准，忽略用户容器选择（桌面同样保持 m4a/mp4 直出）
       const outExt = info.singleFileExt ?? container;
       const tempOut = join(taskDir, "output_" + task.id + "." + outExt);
-      const labels = this.#qualityLabels(resolved);
+      const labels = this.#qualityLabels(task, resolved);
       const target = this.#outputTarget(task, labels);
       const extrasOpt = normalizeExtrasStyles(task.options.extras ?? DEFAULT_EXTRAS_OPTIONS);
       const gathered = await this.#gatherExtraInputs(task, taskDir, info, extrasOpt, container);
@@ -1446,11 +1864,15 @@ export class DownloadManager {
       }
       const finalOut = finalPath as string; // 各分支均已落盘或抛错，此处必然存在
       await probeMedia(finalOut); // 校验产物可读（ffprobe）
-      await this.#writeStandaloneExtras(task, finalOut, extrasOpt, gathered);
-      task.update({ status: "completed", progress: 100, outputPath: finalOut });
+      // 「将 M4A 转换为 MP3」（桌面 config.m4a_to_mp3，默认关）：**仅纯音频流**时生效。
+      // 放在 probe 之后、写附加内容之前 —— 后面那些步骤都要用最终路径。
+      const converted = await this.#maybeConvertM4aToMp3(task, finalOut);
+      await this.#writeStandaloneExtras(task, converted, extrasOpt, gathered);
+      task.update({ status: "completed", progress: 100, outputPath: converted });
       task.speedBps = 0;
       task.etaSec = 0;
-      task.pushLog("下载完成：" + finalOut);
+      task.pushLog("下载完成：" + converted);
+      logInfo("download", `下载完成：${task.summary().title} → ${converted}`);
       await rm(taskDir, { recursive: true, force: true });
 
       const completedData = {
@@ -1486,9 +1908,11 @@ export class DownloadManager {
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      task.update({ status: "failed", error: message });
+      // F12/F13：底层错误改写成"人能看懂的长提示"（零时序风险；原始信息仍进日志）
+      task.update({ status: "failed", error: friendlyDownloadError(message) });
       this.#persist(task, { status: "failed" });
       task.pushLog("失败：" + message);
+      logError("download", `任务失败：${task.summary().title}（${message}）`);
       this.#scheduleNext();
     }
   }
@@ -1587,8 +2011,53 @@ export class DownloadManager {
     return result;
   }
 
-  async #merge(
-    task: ManagedTask,
+  /**
+   * 「将 M4A 转换为 MP3」—— 对齐桌面 `merger.py:338-363` + `ffmpeg/command.py:154-161`。
+   *
+   * - **仅纯音频流**（选了视频就不转），与原版卡片描述一致
+   * - 参数逐字照抄：`-c:a libmp3lame -q:a 2`
+   * - **先输出到独立临时名、成功后再改扩展名** —— 原版注释解释了原因：
+   *   转换中途失败/退出时，重试仍要能按 m4a 判断，若就地把扩展名改成 mp3，
+   *   重试会去重命名一个根本不存在的 mp3。
+   * - 转换后删除 m4a（原版转换产物在临时目录，m4a 不会留存）
+   *
+   * ⚠️ 与桌面的一处差异：桌面有独立的 `CONVERTING` 状态（「转换中」），
+   * 我们复用了 ffmpeg 家族的 `merging` 状态并写一条任务日志 —— 新增状态要动
+   * TaskStatus 联合类型与前端映射，收益不抵改动面。
+   */
+  async #maybeConvertM4aToMp3(task: ManagedTask, input: string): Promise<string> {
+    if (!input.toLowerCase().endsWith(".m4a")) return input;
+    const cfg = await this.#configReady.then(() => this.#configStore.get());
+    if (!cfg.download.m4aToMp3) return input;
+    // 仅纯音频流：选了视频就不转
+    if (task.options.downloadVideo !== false || task.options.downloadAudio === false) return input;
+
+    const cwd = dirname(input);
+    const tempOut = join(cwd, `output_${task.id}.mp3`);
+    task.pushLog("正在转换为 MP3…");
+    task.update({ status: "merging" });
+    try {
+      await runFfmpeg(
+        [this.#ffmpegPath ?? "ffmpeg", "-i", input, "-c:a", "libmp3lame", "-q:a", "2", tempOut],
+        { cwd, ...(task.signal ? { signal: task.signal } : {}) },
+      );
+      const out = input.replace(/\.m4a$/i, ".mp3");
+      await rename(tempOut, out);
+      await rm(input, { force: true });
+      task.pushLog("已转换为 MP3：" + out);
+      logInfo("download", `已转换为 MP3：${out}`);
+      return out;
+    } catch (e) {
+      // 转换失败不该毁掉已下载的音频：保留 m4a 并按成功收尾（记日志说明）
+      await rm(tempOut, { force: true });
+      const msg = e instanceof Error ? e.message : String(e);
+      task.pushLog(`转换为 MP3 失败，保留原文件：${msg}`);
+      logWarn("download", `转换为 MP3 失败（保留 m4a）：${msg}`);
+      return input;
+    }
+  }
+
+  async #merge(    task: ManagedTask,
     taskDir: string,
     plan: MergePlan,
     files: PlannedFile[],
@@ -1688,7 +2157,11 @@ export class DownloadManager {
     return unique;
   }
 
-  /** 合并后保留原始分片文件（视频/音频 m4s 或直链 mp4 分片），落盘在产物目录 */
+  /**
+   * 合并后保留原始分片文件（视频/音频 m4s 或直链 mp4 分片），落盘在产物目录。
+   * 保留范围由 keepOriginalFilesType（0=仅视频 / 1=仅音频 / 2=视频+音频）决定，
+   * 缺省按 2 处理（与前端"全部"档一致）；分片 key 约定见 #buildPlan。
+   */
   async #keepOriginalFiles(
     task: ManagedTask,
     files: PlannedFile[],
@@ -1697,8 +2170,14 @@ export class DownloadManager {
     stem: string,
   ): Promise<void> {
     await mkdir(dir, { recursive: true });
+    const keepType = task.options.keepOriginalFilesType ?? 2;
+    const kept = files.filter((f) => {
+      if (keepType === 1) return f.key === "audio";
+      if (keepType === 0) return f.key === "video" || f.key.startsWith("video_part_");
+      return true;
+    });
     // 复制（不移动）原始分片到产物目录，避免重复命名冲突时影响已合并产物
-    for (const file of files) {
+    for (const file of kept) {
       const src = join(taskDir, file.fileName);
       const target = join(dir, `${stem}.${file.fileName}`);
       await rename(src, target).catch(async (err) => {
@@ -1716,11 +2195,14 @@ export class DownloadManager {
   }
 
   /** 档位展示标签（命名变量 video_quality/audio_quality/video_codec） */
-  #qualityLabels(resolved: ResolvedStreams): NamingQuality {
+  #qualityLabels(task: ManagedTask, resolved: ResolvedStreams): NamingQuality {
     return {
       videoQuality: videoQualityLabel(resolved.videoQualityId),
       audioQuality: resolved.audioQualityId > 0 ? audioQualityLabel(resolved.audioQualityId) : "",
-      videoCodec: resolved.audioQualityId > 0 ? (VIDEO_CODEC_STR[resolved.videoCodecId] ?? "") : "",
+      // 编码取决于"本次是否下载视频流"，与音频无关：
+      // 改前判 audioQualityId，导致音频流选不中（audioQualityId=0）时 video_codec 恒为空
+      videoCodec:
+        task.options.downloadVideo === false ? "" : (VIDEO_CODEC_STR[resolved.videoCodecId] ?? ""),
     };
   }
 
@@ -1733,7 +2215,9 @@ export class DownloadManager {
     const idx = Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\"));
     const folder = idx >= 0 ? rel.slice(0, idx) : "";
     const stem = idx >= 0 ? rel.slice(idx + 1) : rel;
-    return { dir: folder ? join(this.#rootDir, folder) : this.#rootDir, stem };
+    // 下载目录：任务创建时已固化（见 createTasks），这里只做回落兜底
+    const base = task.options.downloadDir && task.options.downloadDir.trim() !== "" ? task.options.downloadDir.trim() : this.#rootDir;
+    return { dir: folder ? join(base, folder) : base, stem };
   }
 
   /** 弹幕/字幕正文转换（按所选格式） */
@@ -1896,7 +2380,7 @@ export class DownloadManager {
       try {
         await run();
       } catch (err) {
-        console.warn(`[bili23-web] 附加内容 ${label} 写入失败（不影响主文件）:`, err instanceof Error ? err.message : err);
+        logWarn("extras", `附加内容 ${label} 写入失败（不影响主文件）: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
 
