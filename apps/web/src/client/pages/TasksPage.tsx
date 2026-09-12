@@ -133,7 +133,14 @@ export function TasksPage() {
             </button>
           ))}
         </div>
-        <div className="sort-ctl">{sortSel}{dirBtn}</div>
+        {/* 排序 + 刷新 放一组：窄屏上这一组占一行，操作按钮另占一行
+            （原来刷新在操作按钮组的末尾，手机上被挤到第三行孤零零一个） */}
+        <div className="list-tools">
+          <div className="sort-ctl">{sortSel}{dirBtn}</div>
+          <button type="button" className="btn sm ghost" onClick={() => void refresh()} disabled={loading}>
+            {loading ? tr("刷新中…") : tr("刷新")}
+          </button>
+        </div>
         {/* 按钮组对齐原版（top_widget.py:144-193）：下载中 = 全部开始 / 全部暂停 / 全部删除；已完成 = 清除记录 */}
         <div className="btn-group">
           {/* 原版工具栏第二个按钮是「打开下载目录」（调系统文件管理器）。
@@ -152,9 +159,6 @@ export function TasksPage() {
           ) : (
             <button type="button" className="btn sm ghost" onClick={clearCompleted} disabled={completed.length === 0}>{tr("清除记录")}</button>
           )}
-          <button type="button" className="btn sm ghost" onClick={() => void refresh()} disabled={loading}>
-            {loading ? tr("刷新中…") : tr("刷新")}
-          </button>
         </div>
       </div>
 

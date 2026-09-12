@@ -123,8 +123,8 @@ export function NavRail(props: ShellNavProps) {
   );
 }
 
-/** 窄屏顶栏：当前页标题 + 「更多」（收藏夹页 / 关于）+ 头像 */
-export function MobileTopBar({ route, onNavigate, loggedIn, uname, face, onLogin, onOpenProfile, onOpenFavorites, onOpenAbout }: ShellNavProps) {
+/** 窄屏顶栏：当前页标题 + 「关于」 + 头像（收藏夹在底部 TabBar，不再在这里重复放） */
+export function MobileTopBar({ route, onNavigate, loggedIn, uname, face, onLogin, onOpenProfile, onOpenAbout }: ShellNavProps) {
   void onNavigate;
   const badge = useDownloadBadge();
   const title = ROUTES.find((r) => r.id === route)?.title ?? "";
@@ -135,9 +135,8 @@ export function MobileTopBar({ route, onNavigate, loggedIn, uname, face, onLogin
         {route === "downloads" && badge && <span className="nav-badge inline">{badge}</span>}
       </div>
       <div className="topbar-actions">
-        <button type="button" className={`icon-btn${route === "favorites" ? " active" : ""}`} onClick={onOpenFavorites} aria-label={tr("收藏夹")} title={tr("收藏夹")}>
-          <Icon name="star" size={19} />
-        </button>
+        {/* 收藏夹**不在**顶栏放入口：窄屏底部 TabBar 已经有它了
+            （两处入口重复，用户会以为点了不是同一个东西；实测截图里那颗星还是"选中态"，更乱） */}
         <button type="button" className="icon-btn" onClick={onOpenAbout} aria-label={tr("关于")} title={tr("关于")}>
           <Icon name="info" size={19} />
         </button>

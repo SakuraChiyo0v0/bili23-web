@@ -19,6 +19,7 @@
  *     "JSON.stringify([...document.querySelectorAll('.teaching-tip')].map(e=>e.innerText))"
  */
 import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -98,6 +99,23 @@ try {
 
   await send("Page.enable");
   await send("Runtime.enable");
+
+  /**
+   * 真机尺寸模拟：`--window-size` 有下限（实测约 528），所以要看**手机真实宽度**必须走
+   * `Emulation.setDeviceMetricsOverride`。用环境变量 `PROBE_DEVICE=390x844`（可选 `@2` 表示 DPR 2）。
+   */
+  const device = process.env.PROBE_DEVICE;
+  if (device) {
+    const m = /^(\d+)x(\d+)(?:@([\d.]+))?$/.exec(device);
+    if (m) {
+      await send("Emulation.setDeviceMetricsOverride", {
+        width: Number(m[1]), height: Number(m[2]),
+        deviceScaleFactor: Number(m[3] ?? 2), mobile: true,
+      });
+      console.log(`设备模拟: ${m[1]}×${m[2]} @${m[3] ?? 2}x`);
+    }
+  }
+
   await send("Page.navigate", { url });
   await sleep(waitMs);
 
@@ -114,6 +132,17 @@ try {
     } else {
       console.log(`EXPR ${n} => ${JSON.stringify(out.result?.value)}`);
     }
+  }
+
+  /**
+   * 截图：环境变量 `PROBE_SHOT=<文件路径>`（可给多个，用 `;` 分隔 —— 配合最后一个表达式的
+   * 返回值来"分步截"，例如先截顶栏再滚动）。最省事的用法是配合上面的表达式把界面驱动到目标状态。
+   */
+  const shots = (process.env.PROBE_SHOT ?? "").split(";").map((s) => s.trim()).filter(Boolean);
+  for (const shot of shots) {
+    const res = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    writeFileSync(shot, Buffer.from(res.data, "base64"));
+    console.log(`SHOT => ${shot}`);
   }
 } catch (err) {
   console.error("探针失败:", err instanceof Error ? err.message : String(err));

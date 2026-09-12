@@ -889,3 +889,29 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
 /* download options media type badge */
 .dl-card .dl-type{ position:absolute; top:14px; right:16px; background:var(--surface-3); color:var(--muted); }
 .dl-card .dl-type.mp4{ color:var(--accent); }
+
+/* ===== 手机端细节修正（2026-09-13：自己截图看出来的问题）=====
+   1. 设置页顶栏已有标题，页内那个「设置」是重复的 → 窄屏藏掉，只留「重新加载」
+   2. 下载页：排序+刷新 收进 .list-tools 一组占一行，操作按钮另占一行（原来是三行，刷新孤零零一行）
+   3. 解析页：输入框太窄（被类型下拉和解析按钮挤到 ~120px）→ 窄屏让输入框独占一行
+   4. 状态行那四个图标按钮在手机上只有 26px，点不准 → 放大到 40px
+   5. 空态原来是 padding:70px + 垂直居中，手机上顶部空一大片 → 收紧
+   —— 全部只影响 ≤767px，桌面观感不变 */
+@media (max-width:767px){
+  .settings-page .page-head .panel-title{ display:none; }
+  .settings-page .page-head{ margin-bottom:10px; }
+
+  .list-tools{ display:flex; align-items:center; gap:8px; }
+  .list-tools .sort-ctl{ flex:1; min-width:0; }
+  .sort-ctl select{ max-width:100%; }
+
+  .parse-top{ flex-wrap:wrap; }
+  .parse-top .url-input-wrap{ flex:1 1 100%; }
+  .parse-top .type-select{ flex:1 1 auto; min-width:0; }
+  .parse-status .icon-btn{ width:40px; height:40px; }
+  .parse-status{ gap:2px; }
+
+  .empty-state{ padding:32px 16px 24px; }
+  .empty-state h3{ font-size:15px; }
+  .empty-state p{ font-size:12.5px; }
+}
