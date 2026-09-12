@@ -231,7 +231,7 @@ FAVORITE/SPACE/HISTORY/WATCH_LATER/WEEKLY/AUDIO），`{var}` 模板、`{var:%Y..
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET  | `/api/config` | 读取全局设置 |
-| PUT  | `/api/config` | 更新全局设置（含 advanced.proxy/cdnHosts/ffmpegPath） |
+| PUT  | `/api/config` | 更新全局设置（含 advanced.proxy/cnCdnHosts/ovCdnHosts/ffmpegPath） |
 | GET  | `/api/auth/status` | 登录态（SESSDATA） |
 | POST | `/api/auth` | 设置 SESSDATA（Cookie 登录） |
 | DELETE | `/api/auth` | 退出并清除登录态 |
@@ -271,7 +271,7 @@ b23 短链在识别阶段就解跳转。
 
 ### 代理 / CDN / ffmpeg
 - **代理**：`HttpClient.setProxy()`，用 undici `ProxyAgent` 包装 fetch，解析与取流共用。
-- **CDN**：`advanced.cdnHosts`（主机名数组）重写流 URL host 加入候选，优先探测。
+- **CDN**：`advanced.cnCdnHosts` + `advanced.ovCdnHosts`（大陆/海外两套主机名数组，编辑器分页签各自维护）重写流 URL host 加入候选，优先探测。
 - **ffmpeg**：`advanced.ffmpegPath` 注入合并/转封装命令的 `argv[0]`。
 
 ### 任务快照与续传
@@ -315,7 +315,10 @@ pnpm --filter @bili23-web/web build
 pnpm --filter @bili23-web/web dev:server   # 后端 http://localhost:8787
 pnpm --filter @bili23-web/web dev:client    # 前端 http://localhost:5173（/api 代理到后端）
 # 或用 tsc 产物跑
-node apps/web/dist/server/index.js
+# ⚠️ cwd 必须是 apps/web：静态目录是 process.cwd() + "/dist/client"（server/index.ts:30）。
+#    从仓库根跑 `node apps/web/dist/server/index.js` 时 /api/* 正常、但 / 直接 404，
+#    前端整段托管不生效，很容易误判成"产物没生成"。
+cd apps/web && node dist/server/index.js
 ```
 
 环境变量：`PORT`（默认 8787）、`BILI23_DATA_DIR`（默认 `./data`）、`DOWNLOAD_DIR`（默认 `<data>/downloads`）。
