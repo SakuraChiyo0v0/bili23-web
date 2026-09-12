@@ -134,7 +134,8 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
                 </>
               ) : (
                 <button type="button" className="tree-chev" aria-label={collapsed ? tr("展开") : tr("折叠")} onClick={(e) => { e.stopPropagation(); toggleCollapse(n.id); }}>
-                  <Icon name={collapsed ? "chevR" : "chevD"} size={16} />
+                  {/* 固定用 chevD，折叠时靠 CSS 转 -90° —— 换图标是"跳变"，转起来才是过渡 */}
+                  <Icon name="chevD" size={16} />
                 </button>
               )}
               <span className={`tree-num${isLeaf ? "" : " layer"}`}>{isLeaf ? rowSeq : tr(n.label ?? "")}</span>

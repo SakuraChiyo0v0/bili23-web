@@ -309,6 +309,9 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .tree-indent{ flex:none; }
 .tree-chev{ display:inline-flex; align-items:center; justify-content:center; background:none; border:none; padding:0; color:var(--muted); cursor:pointer; flex:none; }
 .tree-chev:hover{ color:var(--accent); }
+/* 展开/收起：箭头旋转 + 新出现的行自己播入场（行上的 rowIn），不做高度动画（长列表会 layout 抖动） */
+.tree-chev .ico{ transition:transform .18s var(--ease); }
+.tree-row.collapsed .tree-chev .ico{ transform:rotate(-90deg); }
 .tree-num{ color:var(--muted); font-size:12.5px; flex:none; }
 /* 容器行的序号列显示层名（合集/章节/分P）—— 原版就是这个位置放层名，见 docs/ui-preview/ref/parse-950x600.png */
 .tree-num.layer{ color:var(--text); font-size:13px; white-space:nowrap; }
