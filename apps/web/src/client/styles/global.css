@@ -572,7 +572,9 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
    295 宽是为了在 1130 面板下正好 3 列、830 下 2 列 —— 这正是原版 adjust_list_widget_width 的算法。 */
 /* 间距用**单元格内边距**给（原版 295 的 sizeHint 里自带 margin=10，视觉间距 20、布局间距 0）——
    所以这里 gap:0。1130 面板下内容宽 888，正好放下 3×295，与原版「宽≥1250→1130 三列」一致。 */
-.fav-grid{ display:grid; grid-template-columns:repeat(auto-fill,295px); gap:0; align-content:start; justify-content:start; }
+/* 网格铺满可用宽度：用 minmax(295px,1fr) 让列**自己拉伸**占满，
+   否则列宽固定 295px 时右边会空一大条（页面铺满后尤其明显） */
+.fav-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(295px,1fr)); gap:0; align-content:start; }
 .fav-item{ display:flex; flex-direction:row; align-items:flex-start; gap:20px; padding:10px; border-radius:var(--radius);
   border:none; background:transparent; text-align:left; cursor:pointer; color:var(--text); min-width:0; }
 .fav-item:hover{ background:var(--bg); }
@@ -595,7 +597,7 @@ img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* 追番追剧：竖版海报（原版 123×164），卡片更高 */
-.fav-poster-grid{ grid-template-columns:repeat(auto-fill,295px); }
+.fav-poster-grid{ grid-template-columns:repeat(auto-fill,minmax(295px,1fr)); }
 .fav-poster{ min-height:184px; }
 .fav-poster-cover{ width:123px; height:164px; border-radius:var(--radius); object-fit:cover; flex:none; background:var(--surface-3); }
 .fav-poster-cover.placeholder{ display:flex; align-items:center; justify-content:center; color:var(--muted); }
