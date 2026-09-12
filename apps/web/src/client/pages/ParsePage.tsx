@@ -54,7 +54,14 @@ export function ParsePage() {
   const lastClipRef = useRef<string>("");
   const { toast, toastLong } = useToast();
   const parsePages = (t: string) => ["space","favlist","history","watch_later","list"].includes(t);
-  const serverSearchable = ["space","favlist","history","watch_later"].includes(session.parseType);
+  /**
+   * 当前**结果**所属的分类。
+   * ⚠️ 判断"这份结果能不能翻页 / 能不能服务端搜索"要用它，**不能**用 `session.parseType`：
+   * 从收藏夹页点条目进来时 parseType 是 `auto`，而结果其实是 `favlist` ——
+   * 之前拿 parseType 判断，页码点了直接 return（"点第 2/3/4 页没反应"就是这么来的）。
+   */
+  const resultType = session.results[0]?.type ?? session.parseType;
+  const serverSearchable = ["space","favlist","history","watch_later"].includes(resultType);
 
   const typePlaceholder = (t: string) => { if (t === "auto") return "粘贴链接 / BV / av / ep / ss / md / 收藏夹 / 空间…"; if (t === "space") return "UP 主 UID 或主页链接"; if (t === "favlist") return "收藏夹链接 / 列表 ID"; if (t === "watch_later") return "（自动）稍后再看"; if (t === "history") return "（自动）历史记录"; if (t === "popular") return "每周必看（可留空，期数在工具栏）"; return "粘贴相应分类的链接"; };
 
@@ -218,11 +225,13 @@ export function ParsePage() {
    * `pages>1` 时是「自动解析分页」：从该页起连解析 N 页并聚合。
    */
   const parseAtPage = useCallback(async (pn: number, pages = 1, autoAdd = false) => {
-    if (!parsePages(session.parseType)) return;
+    // 用**结果**里带分页那条的类型（理由见 resultType 的注释）：从收藏夹页点进来时 parseType 还是 auto
+    const type = session.results.find((r) => r.pagination)?.type ?? session.results[0]?.type ?? session.parseType;
+    if (!parsePages(type)) return;
     session.setPage(pn);
     session.start();
     try {
-      const r = await parseUrl({ type: session.parseType, query: session.input.trim(), pn, pages });
+      const r = await parseUrl({ type, query: session.input.trim(), pn, pages });
       if (!r.results.length) throw new Error("解析结果为空");
       session.success(r.results);
       // 「解析每页后自动加入下载列表」（原版 `episode/dynamic.py:107-108`
@@ -334,7 +343,7 @@ export function ParsePage() {
     setSearchOpen(false);
     session.start();
     try {
-      const body = { type: session.parseType as "space" | "favlist" | "history" | "watch_later", query: session.input.trim() };
+      const body = { type: resultType as "space" | "favlist" | "history" | "watch_later", query: session.input.trim() };
       const r = await parseUrl(kw ? { ...body, keyword: kw } : body);
       if (!r.results.length) throw new Error("没有匹配结果");
       session.success(r.results);
