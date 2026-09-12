@@ -68,7 +68,9 @@ a{ color:inherit; text-decoration:none; }
 .nav-item.active{ background:var(--nav-sel); }
 .nav-item.active .ico{ opacity:1; color:var(--accent); }
 .nav-item.active .nav-txt{ color:var(--accent); }
-.nav-item.active::before{ content:""; position:absolute; left:0; top:16px; width:4px; height:24px; background:var(--accent); border-radius:2px; }
+.nav-item::before{ content:""; position:absolute; left:0; top:16px; width:4px; height:24px; background:var(--accent); border-radius:2px;
+  transform:scaleY(0); transition:transform .18s var(--ease); }
+.nav-item.active::before{ transform:scaleY(1); }
 .nav-spacer{ flex:1; }
 /* 下载徽章：原版 update_download_btn_badge_info —— 0 隐藏、>99 显示 99+ */
 .nav-badge{ position:absolute; top:5px; right:4px; background:var(--danger); color:#fff; border-radius:99px;
@@ -104,8 +106,13 @@ a{ color:inherit; text-decoration:none; }
 /* 图标按钮的"当前所在页"：窄屏顶栏的收藏夹按钮（它是页面，不是弹窗） */
 .icon-btn.active{ background:var(--nav-sel); color:var(--accent); }
 .icon-btn:disabled{ opacity:.4; cursor:default; }
-.btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 15px; border-radius:9px; background:var(--surface); color:var(--ink); border:1px solid var(--line); font-weight:500; transition:all var(--dur); white-space:nowrap; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 15px; border-radius:9px; background:var(--surface); color:var(--ink); border:1px solid var(--line); font-weight:500; transition:background var(--dur), border-color var(--dur), color var(--dur), transform .12s var(--ease); white-space:nowrap; }
 .btn:hover{ background:var(--surface-3); }
+/* 按压反馈：按下去"沉"一点，点击有实感（触屏上尤其明显） */
+.btn:active:not(:disabled){ transform:translateY(1px) scale(.985); }
+.icon-btn:active:not(:disabled),.tab:active:not(:disabled),.fav-cat:active:not(:disabled){ transform:translateY(1px); }
+/* 键盘焦点环：只在键盘操作时出现（:focus-visible），鼠标点击不打扰 */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{ outline:2px solid color-mix(in srgb, var(--accent) 65%, transparent); outline-offset:2px; border-radius:8px; }
 .btn.primary{ background:var(--accent); border-color:transparent; color:var(--text-on-accent); }
 .btn.primary:hover{ background:var(--accent-strong); }
 .btn.dangerous{ color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%,transparent); background:transparent; }
@@ -346,7 +353,9 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .tabs-nav{ display:flex; gap:2px; border-bottom:1px solid var(--line); padding:0 18px; }
 .tabs-nav .tab{ position:relative; background:transparent; box-shadow:none; height:40px; border-radius:0; color:var(--ink-2); font-weight:500; }
 .tabs-nav .tab.active{ background:transparent; color:var(--ink); }
-.tabs-nav .tab.active::after{ content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent); }
+.tabs-nav .tab::after{ content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent);
+  transform:scaleX(0); transform-origin:center; transition:transform .18s var(--ease); }
+.tabs-nav .tab.active::after{ transform:scaleX(1); }
 .dl-body{ padding:16px 18px 8px; overflow:auto; }
 .dl-card{ position:relative; border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
 .dl-card-title{ font-weight:600; font-size:14.5px; margin-bottom:10px; }
@@ -420,7 +429,9 @@ button.card-head:hover{ background:var(--surface-2); }
 .login-tabs{ display:flex; gap:2px; border-bottom:1px solid var(--line); padding:0 18px; margin-top:6px; }
 .login-tab{ position:relative; height:40px; padding:0 14px; color:var(--ink-2); font-weight:500; }
 .login-tab.active{ color:var(--ink); }
-.login-tab.active::after{ content:""; position:absolute; left:10px; right:10px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent); }
+.login-tab::after{ content:""; position:absolute; left:10px; right:10px; bottom:-1px; height:2.5px; border-radius:2px; background:var(--accent);
+  transform:scaleX(0); transition:transform .18s var(--ease); }
+.login-tab.active::after{ transform:scaleX(1); }
 .login-body{ padding:20px 18px; }
 .qr-pane{ display:flex; flex-direction:column; align-items:center; gap:12px; }
 .qr-box{ width:160px; height:160px; border:2px solid var(--line-strong); border-radius:12px; display:flex; align-items:center; justify-content:center; background:var(--surface); overflow:hidden; }
