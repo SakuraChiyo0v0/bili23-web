@@ -1,3 +1,5 @@
+import { Overlay } from "./Overlay";
+
 /**
  * 通用确认/提示框 —— 原版到处都是的 qfluentwidgets `MessageBox`。
  *
@@ -17,26 +19,23 @@ export function ConfirmDialog({ open, title, body, confirmText = "确定", cance
   onConfirm: () => void;
   onCancel?: () => void;
 }) {
-  if (!open) return null;
   const close = onCancel ?? onConfirm;
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
-        <div className="modal-head">
-          <div className="modal-title">{title}</div>
-        </div>
-        <div className="modal-body">
-          {body.split("\n\n").map((para, i) => (
-            <p className="small" key={i} style={{ marginTop: i === 0 ? 0 : 8 }}>{para}</p>
-          ))}
-        </div>
-        <div className="modal-foot">
-          <div className="right">
-            {cancelText ? <button type="button" className="btn" onClick={close}>{cancelText}</button> : null}
-            <button type="button" className="btn primary" onClick={onConfirm} autoFocus>{confirmText}</button>
-          </div>
+    <Overlay open={open} onClose={close} size="sm" sheetOnMobile centerOnMobile>
+      <div className="modal-head">
+        <div className="modal-title">{title}</div>
+      </div>
+      <div className="modal-body">
+        {body.split("\n\n").map((para, i) => (
+          <p className="small" key={i} style={{ marginTop: i === 0 ? 0 : 8 }}>{para}</p>
+        ))}
+      </div>
+      <div className="modal-foot">
+        <div className="right">
+          {cancelText ? <button type="button" className="btn" onClick={close}>{cancelText}</button> : null}
+          <button type="button" className="btn primary" onClick={onConfirm} autoFocus>{confirmText}</button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

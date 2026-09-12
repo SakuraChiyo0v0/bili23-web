@@ -6,6 +6,7 @@ import { useToast } from "../lib/toast";
 import type { RouteId } from "../lib/routes";
 import { CATEGORY_LABEL } from "../lib/parseTree";
 import { t as tr, trp } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 解析记录弹窗（原版 `gui/dialog/misc/parse_history.py`）。
@@ -77,11 +78,8 @@ export function ParseHistoryDialog({ open, onClose, onNavigate }: {
     toast(trp("已清除 {count} 条解析记录", { count: ids.length }), "ok");
   };
 
-  if (!open) return null;
-
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal md" role="dialog" aria-modal="true">
+    <Overlay open={open} onClose={onClose} size="md" sheetOnMobile centerOnMobile>
         <div className="modal-head">
           <div className="modal-title">{tr("解析记录")}</div>
           <button type="button" className="icon-btn" onClick={() => { setItems([]); onClose(); }} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -118,7 +116,6 @@ export function ParseHistoryDialog({ open, onClose, onNavigate }: {
             <button type="button" className="btn" onClick={() => { setItems([]); onClose(); }}>{tr("关闭")}</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }

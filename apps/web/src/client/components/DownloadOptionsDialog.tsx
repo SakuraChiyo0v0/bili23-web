@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mediaOptions, createTasks } from "../services/client";
 import { DuplicateDialog } from "./DuplicateDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Overlay } from "./Overlay";
 import { validateDownloadForm } from "../lib/downloadValidation";
 import { CODEC_NOTE, audioCodecName, estimateSize, fmtBitrate, fmtFrameRate, noAudioReason } from "../lib/mediaText";
 import { getCurrentLang } from "../lib/i18n";
@@ -87,8 +88,6 @@ export function DownloadOptionsDialog() {
       .then((m) => setMedia(m))
       .catch((e) => setMediaError(e instanceof Error ? e.message : String(e)));
   }, [open, items, setMedia, setMediaLoading, setMediaError]);
-
-  if (!open) return null;
 
   // 组装 DownloadOptions（点确认时）
   const buildOptions = (): void => {
@@ -206,8 +205,7 @@ export function DownloadOptionsDialog() {
   const chips = buildChips(form);
 
   return (
-    <div className="overlay sheet-on-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal lg dl-options">
+    <Overlay open={open} onClose={close} size="lg" sheetOnMobile className="dl-options">
         <div className="modal-head">
           <div className="modal-title">{tr("下载选项")}</div>
           <button type="button" className="icon-btn" onClick={close} aria-label={tr("关闭")}>
@@ -256,7 +254,6 @@ export function DownloadOptionsDialog() {
             <button type="button" className="btn primary" onClick={confirm}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
       {/* 校验 MessageBox（A4/A5 可取消、A6 仅提示）—— 挂在下载选项弹窗之上 */}
       <ConfirmDialog
         open={notice !== null}
@@ -283,7 +280,7 @@ export function DownloadOptionsDialog() {
       )}
       {/* 「有关编号设置的说明」（原版 `card.py:435-442` 的超链接） */}
       <GuideDialog open={numberingGuideOpen} title={tr("有关编号设置的说明")} text={NUMBERING_GUIDE} onClose={() => setNumberingGuideOpen(false)} />
-    </div>
+    </Overlay>
   );
 }
 

@@ -170,11 +170,23 @@ select:focus, .text-input:focus{ border-color:var(--accent); box-shadow:0 0 0 3p
 .toast-long-body{ font-size:12.5px; color:var(--ink-2); line-height:1.6; max-height:200px; overflow:auto; white-space:pre-wrap; }
 
 /* ===== Modal ===== */
-.overlay{ position:fixed; inset:0; background:rgba(10,14,24,.45); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:18px; z-index:100; }
+.overlay{ position:fixed; inset:0; background:rgba(10,14,24,.45); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:18px; z-index:100;
+  /* 遮罩淡入淡出（退场时 Overlay 会给它加 .closing 并延迟卸载） */
+  transition:opacity .15s var(--ease); }
 html[data-theme=dark] .overlay{ background:rgba(0,0,0,.55); }
 .modal{ background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); width:100%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; animation:modalIn .2s var(--ease); }
 .modal.sm{ max-width:420px; } .modal.md{ max-width:560px; } .modal.lg{ max-width:760px; }
 @keyframes modalIn{ from{opacity:0; transform:scale(.97) translateY(8px);} to{opacity:1; transform:none;} }
+/* 弹窗退场：Overlay 在 open=false 时先加 .closing、150ms 后才卸载（见 components/Overlay.tsx）。
+   以前是"啪"地瞬间消失 —— 元素被 unmount，CSS 根本没机会播退场动画 */
+.overlay.closing{ opacity:0; }
+.overlay.closing .modal{ animation:modalOut .15s var(--ease) forwards; }
+@keyframes modalOut{ to{ opacity:0; transform:scale(.985) translateY(6px); } }
+/* 窄屏底部抽屉：退场往下滑（只在窄屏生效，桌面仍用 modalOut 的缩放淡出） */
+@media (max-width:767px){
+  .overlay.sheet-on-mobile.closing .modal{ animation:sheetOut .18s var(--ease) forwards; }
+  @keyframes sheetOut{ to{ opacity:0; transform:translateY(14px); } }
+}
 .modal-head{ display:flex; align-items:center; gap:10px; padding:16px 18px 0; }
 .modal-title{ font-size:16px; font-weight:700; flex:1; }
 .modal-body{ padding:14px 18px 6px; overflow:auto; }
