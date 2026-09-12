@@ -22,6 +22,7 @@ import { useTasksStore } from "../store/useTasksStore";
 import { detectBiliLink } from "../lib/clipboardWatch";
 import { Icon } from "../lib/icons";
 import { t as tr, trp } from "../lib/i18n";
+import { Overlay } from "../components/Overlay";
 
 export function ParsePage() {
   const session = useParseSession();
@@ -614,8 +615,6 @@ function BatchSelectDialog({ open, onClose, total, onApply }: {
 }) {
   const [text, setText] = useState("");
   const { toast } = useToast();
-  if (!open) return null;
-
   /**
    * 解析行号串：三种失败分别给原版那三句（`batch_select.py:55-81`），
    * 逻辑在 `lib/batchSelect.ts`（纯函数、有单测）。
@@ -635,8 +634,7 @@ function BatchSelectDialog({ open, onClose, total, onApply }: {
   };
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm">
+    <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head"><div className="modal-title">{tr("批量选择")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
@@ -654,8 +652,7 @@ function BatchSelectDialog({ open, onClose, total, onApply }: {
             <button type="button" className="btn primary" onClick={apply}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }
 
@@ -668,7 +665,6 @@ function BatchParseDialog({ open, onClose, onParsed }: {
   const [text, setText] = useState("");
   const [autoSelect, setAutoSelect] = useState(false);
   const [parsing, setParsing] = useState(false);
-  if (!open) return null;
   const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const start = async () => {
     if (!lines.length) { toast(tr("请粘贴要解析的链接（每行一个）"), "warn"); return; }
@@ -689,8 +685,7 @@ function BatchParseDialog({ open, onClose, onParsed }: {
     onParsed(lines, results, autoSelect);
   };
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal md">
+    <Overlay open={open} onClose={onClose} size="md" sheetOnMobile centerOnMobile>
         <div className="modal-head"><div className="modal-title">{tr("批量解析")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
@@ -706,8 +701,7 @@ function BatchParseDialog({ open, onClose, onParsed }: {
             <button type="button" className="btn primary" onClick={() => void start()} disabled={parsing}>{parsing ? tr("解析中…") : tr("开始解析")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }
 
@@ -744,8 +738,6 @@ function SearchDialog({ open, onClose, serverSearchAvailable, currentKeyword, pa
     setScope(currentKeyword ? "all" : "page");
   }, [open, currentKeyword]);
 
-  if (!open) return null;
-
   const useServer = serverSearchAvailable && scope === "all";
 
   const confirm = () => {
@@ -758,8 +750,7 @@ function SearchDialog({ open, onClose, serverSearchAvailable, currentKeyword, pa
   };
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm">
+    <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile centerOnMobile>
         <div className="modal-head"><div className="modal-title">{tr("搜索")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
@@ -790,7 +781,6 @@ function SearchDialog({ open, onClose, serverSearchAvailable, currentKeyword, pa
             <button type="button" className="btn primary" onClick={confirm}>{tr("确定")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }

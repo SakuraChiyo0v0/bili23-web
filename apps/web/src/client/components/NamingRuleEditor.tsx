@@ -5,6 +5,7 @@ import { NAMING_RULE_GUIDE } from "../lib/guides";
 import { previewNamingRule } from "../services/client";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 命名分类（对齐引擎 ConventionType）。
@@ -66,8 +67,6 @@ export function NamingRuleEditor({
   /** 「预览」结果（原版 `EditRuleDialog.on_preview`：标题「预览」+ 子目录 / 文件名） */
   const [preview, setPreview] = useState<{ folder: string; fileName: string } | null>(null);
 
-  if (!open) return null;
-
   /** 试渲染当前草稿（dry-run 在后端做，用示例数据） */
   const doPreview = async () => {
     if (!draft) return;
@@ -105,8 +104,8 @@ export function NamingRuleEditor({
   };
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal lg naming-editor">
+    <>
+      <Overlay open={open} onClose={onClose} size="lg" sheetOnMobile centerOnMobile className="naming-editor">
         <div className="modal-head">
           <div className="modal-title">{tr("命名规则编辑器")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
@@ -170,28 +169,25 @@ export function NamingRuleEditor({
             </div>
           )}
         </div>
-      </div>
+      </Overlay>
       <GuideDialog open={guideOpen} title={tr("命名规则说明")} text={NAMING_RULE_GUIDE} onClose={() => setGuideOpen(false)} />
       {/* 预览（原版标题「预览」，正文 `子目录：{folder}\n文件名：{filename}`）。
-          原版用当前解析到的那个稿件渲染；设置页没有解析上下文，所以用示例数据并标注出来 */}
-      {preview && (
-        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setPreview(null); }}>
-          <div className="modal sm" role="dialog" aria-modal="true">
-            <div className="modal-head">
-              <div className="modal-title">{tr("预览")}</div>
-              <button type="button" className="icon-btn" onClick={() => setPreview(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
-            </div>
-            <div className="modal-body">
-              <pre className="meta-pre">子目录：{preview.folder || "（根目录）"}
-文件名：{preview.fileName}</pre>
-              <p className="muted small" style={{ marginTop: 8 }}>以上为示例数据（示例UP主 / 示例视频标题），仅用于确认规则写法。</p>
-            </div>
-            <div className="modal-foot">
-              <div className="right"><button type="button" className="btn" onClick={() => setPreview(null)}>{tr("关闭")}</button></div>
-            </div>
-          </div>
+          原版用当前解析到的那个稿件渲染；设置页没有解析上下文，所以用示例数据并标注出来。
+          它叠在编辑器之上，同样走 Overlay（这样也有退场动画） */}
+      <Overlay open={preview !== null} onClose={() => setPreview(null)} size="sm">
+        <div className="modal-head">
+          <div className="modal-title">{tr("预览")}</div>
+          <button type="button" className="icon-btn" onClick={() => setPreview(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
-      )}
-    </div>
+        <div className="modal-body">
+          <pre className="meta-pre">子目录：{preview?.folder || "（根目录）"}
+文件名：{preview?.fileName}</pre>
+          <p className="muted small" style={{ marginTop: 8 }}>以上为示例数据（示例UP主 / 示例视频标题），仅用于确认规则写法。</p>
+        </div>
+        <div className="modal-foot">
+          <div className="right"><button type="button" className="btn" onClick={() => setPreview(null)}>{tr("关闭")}</button></div>
+        </div>
+      </Overlay>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import type { TaskSummary } from "../services/types";
 import { useState } from "react";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 export function TaskActions({
   task,
@@ -91,13 +92,11 @@ export function TaskActions({
         <button type="button" className="btn sm ghost" onClick={() => secondary("delete")}>{tr("删除")}</button>
       )}
       {logOpen && (
-        <div className="overlay sheet-on-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) setLogOpen(false); }}>
-          <div className="modal md">
+        <Overlay open dismissable={false} size="md" sheetOnMobile>
             <div className="modal-head"><div className="modal-title">{tr("任务日志")}</div><button type="button" className="icon-btn" onClick={() => setLogOpen(false)} aria-label={tr("关闭")}><svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
             <div className="modal-body log-body"><pre>{logLines.length ? logLines.join("\n") : "暂无日志"}</pre></div>
             <div className="modal-foot"><div className="right"><button type="button" className="btn" onClick={() => setLogOpen(false)}>{tr("关闭")}</button></div></div>
-          </div>
-        </div>
+          </Overlay>
       )}
     </div>
   );

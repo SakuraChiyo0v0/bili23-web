@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToast } from "../lib/toast";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 interface FontCfg { name: string; size: number; bold: boolean; italic: boolean; underline: boolean; strike: boolean; }
 interface BorderCfg { border: number; shadow: number; }
@@ -24,12 +25,10 @@ export function StyleEditor({
   const { toast } = useToast();
   const [v, setV] = useState<StyleValues>(value ?? blank(kind));
 
-  if (!open) return null;
   const patch = (p: Partial<StyleValues>) => setV({ ...v, ...p });
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal md style-editor">
+    <Overlay open={open} onClose={onClose} size="md" sheetOnMobile centerOnMobile className="style-editor">
         <div className="modal-head">
           <div className="modal-title">{kind === "danmaku" ? tr("弹幕样式") : tr("字幕样式")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}><svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg></button>
@@ -78,8 +77,7 @@ export function StyleEditor({
             <button type="button" className="btn primary" onClick={() => { onChange(v); toast(tr("样式已保存"), "ok"); onClose(); }}>{tr("保存")}</button>
           </div>
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }
 

@@ -5,6 +5,7 @@ import { useToast } from "../lib/toast";
 import { COLUMN_LABEL, useParseListPrefs, type ColumnKey } from "../lib/parseListPrefs";
 import { dynTimeKey, dynTimeLabel, sortTree, type SortKey } from "../lib/parseTree";
 import { Icon } from "../lib/icons";
+import { Overlay } from "./Overlay";
 import { t as tr } from "../lib/i18n";
 
 function fmtDur(sec: number): string {
@@ -242,44 +243,36 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
       )}
 
       {/* 查看元数据（原版 MessageBox；它把「取消」改成了「复制」） */}
-      {metaNode && (
-        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setMetaNode(null); }}>
-          <div className="modal md" role="dialog" aria-modal="true">
-            <div className="modal-head">
-              <div className="modal-title">{tr("元数据")}</div>
-              <button type="button" className="icon-btn" onClick={() => setMetaNode(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
-            </div>
-            <div className="modal-body">
-              <pre className="meta-pre">{metadataText(metaNode)}</pre>
-            </div>
-            <div className="modal-foot">
-              <button type="button" className="btn" onClick={() => { void navigator.clipboard?.writeText(metadataText(metaNode)); toast(tr("已复制"), "ok"); }}>{tr("复制")}</button>
-              <div className="right"><button type="button" className="btn" onClick={() => setMetaNode(null)}>{tr("关闭")}</button></div>
-            </div>
-          </div>
+      <Overlay open={metaNode !== null} onClose={() => setMetaNode(null)} size="md">
+        <div className="modal-head">
+          <div className="modal-title">{tr("元数据")}</div>
+          <button type="button" className="icon-btn" onClick={() => setMetaNode(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
-      )}
+        <div className="modal-body">
+          <pre className="meta-pre">{metaNode ? metadataText(metaNode) : ""}</pre>
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={() => { if (metaNode) void navigator.clipboard?.writeText(metadataText(metaNode)); toast(tr("已复制"), "ok"); }}>{tr("复制")}</button>
+          <div className="right"><button type="button" className="btn" onClick={() => setMetaNode(null)}>{tr("关闭")}</button></div>
+        </div>
+      </Overlay>
 
       {/* 查看封面（原版是独立小窗 + 另存为；Web 改为弹层预览 + 下载） */}
-      {coverUrl && (
-        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setCoverUrl(null); }}>
-          <div className="modal md" role="dialog" aria-modal="true">
-            <div className="modal-head">
-              <div className="modal-title">{tr("封面")}</div>
-              <button type="button" className="icon-btn" onClick={() => setCoverUrl(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
-            </div>
-            <div className="modal-body center">
-              <img className="cover-preview" src={coverUrl} alt="" referrerPolicy="no-referrer" />
-            </div>
-            <div className="modal-foot">
-              <div className="right">
-                <a className="btn" href={coverUrl} target="_blank" rel="noreferrer" download>{tr("下载封面")}</a>
-                <button type="button" className="btn" onClick={() => setCoverUrl(null)}>{tr("关闭")}</button>
-              </div>
-            </div>
+      <Overlay open={coverUrl !== null} onClose={() => setCoverUrl(null)} size="md" sheetOnMobile centerOnMobile>
+        <div className="modal-head">
+          <div className="modal-title">{tr("封面")}</div>
+          <button type="button" className="icon-btn" onClick={() => setCoverUrl(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body center">
+          {coverUrl ? <img className="cover-preview" src={coverUrl} alt="" referrerPolicy="no-referrer" /> : null}
+        </div>
+        <div className="modal-foot">
+          <div className="right">
+            <a className="btn" href={coverUrl ?? undefined} target="_blank" rel="noreferrer" download>{tr("下载封面")}</a>
+            <button type="button" className="btn" onClick={() => setCoverUrl(null)}>{tr("关闭")}</button>
           </div>
         </div>
-      )}
+      </Overlay>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { qrLoginStart, qrLoginPoll, loginCookie } from "../services/client";
 import { useAuthStore } from "../store/useAuthStore";
 import { useToast } from "../lib/toast";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 export function LoginDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
@@ -47,8 +48,6 @@ export function LoginDialog({ open, onClose }: { open: boolean; onClose: () => v
     return () => { if (poll) clearInterval(poll); };
   }, [open]);
 
-  if (!open) return null;
-
   const doCookie = async () => {
     const v = cookieVal.trim();
     if (!v) { toast(tr("请输入 SESSDATA"), "warn"); return; }
@@ -67,8 +66,7 @@ export function LoginDialog({ open, onClose }: { open: boolean; onClose: () => v
   };
 
   return (
-    <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm login-modal">
+    <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile centerOnMobile className="login-modal">
         <div className="modal-head">
           <div className="modal-title">{tr("登录")}</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
@@ -101,8 +99,7 @@ export function LoginDialog({ open, onClose }: { open: boolean; onClose: () => v
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </Overlay>
   );
 }
 

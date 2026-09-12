@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listLogs, clearLogs } from "../services/client";
 import type { LogEntry } from "../services/types";
 import { Icon } from "../lib/icons";
+import { Overlay } from "./Overlay";
 import { t as tr } from "../lib/i18n";
 
 /**
@@ -40,8 +41,6 @@ export function LogViewerDialog({ open, onClose }: { open: boolean; onClose: () 
     return () => clearTimeout(t);
   }, [toast]);
 
-  if (!open) return null;
-
   /** 详情正文 —— 与桌面 `Log Details` 的模板逐行一致 */
   const detailText = (e: LogEntry) =>
     `Timestamp: ${e.timestamp}\nLevel: ${e.level}\nName: ${e.name} (${e.callsite})\n\nMessage:\n${e.message}`;
@@ -61,8 +60,7 @@ export function LogViewerDialog({ open, onClose }: { open: boolean; onClose: () 
 
   return (
     <>
-      <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-        <div className="modal lg" role="dialog" aria-modal="true">
+      <Overlay open={open} onClose={onClose} size="lg">
           <div className="modal-head">
             <div className="modal-title">{tr("日志")}</div>
             <div className="spacer" />
@@ -100,25 +98,20 @@ export function LogViewerDialog({ open, onClose }: { open: boolean; onClose: () 
               </div>
             )}
           </div>
-        </div>
-      </div>
+      </Overlay>
 
-      {/* 日志详情（桌面 `Log Details`） */}
-      {detail && (
-        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setDetail(null); }}>
-          <div className="modal md" role="dialog" aria-modal="true">
-            <div className="modal-head">
-              <div className="modal-title">{tr("日志详情")}</div>
-              <button type="button" className="icon-btn" onClick={() => setDetail(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
-            </div>
-            <div className="modal-body"><pre className="meta-pre">{detailText(detail)}</pre></div>
-            <div className="modal-foot">
-              <button type="button" className="btn" onClick={() => { void navigator.clipboard?.writeText(detailText(detail)); setToast("已复制"); }}>{tr("复制")}</button>
-              <div className="right"><button type="button" className="btn" onClick={() => setDetail(null)}>{tr("关闭")}</button></div>
-            </div>
-          </div>
+      {/* 日志详情（桌面 `Log Details`）—— 叠在日志之上，同样走 Overlay */}
+      <Overlay open={detail !== null} onClose={() => setDetail(null)} size="md">
+        <div className="modal-head">
+          <div className="modal-title">{tr("日志详情")}</div>
+          <button type="button" className="icon-btn" onClick={() => setDetail(null)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
-      )}
+        <div className="modal-body"><pre className="meta-pre">{detail ? detailText(detail) : ""}</pre></div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={() => { if (detail) void navigator.clipboard?.writeText(detailText(detail)); setToast("已复制"); }}>{tr("复制")}</button>
+          <div className="right"><button type="button" className="btn" onClick={() => setDetail(null)}>{tr("关闭")}</button></div>
+        </div>
+      </Overlay>
 
       {/* 右键菜单：查看详情 / 复制（桌面就是这样两项） */}
       {menu && (

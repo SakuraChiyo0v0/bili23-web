@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Icon } from "../lib/icons";
 import { TermsPanel } from "./TermsPanel";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * 「关于」弹窗。
@@ -11,10 +12,9 @@ import { t as tr } from "../lib/i18n";
  */
 export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [showTerms, setShowTerms] = useState(false);
-  if (!open) return null;
   return (
-    <div className="overlay sheet-on-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal sm" role="dialog" aria-modal="true">
+    <>
+      <Overlay open={open} onClose={onClose} size="sm" sheetOnMobile>
         <div className="modal-head">
           <div className="modal-title">关于 Bili23 Web</div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={tr("关闭")}>
@@ -33,19 +33,16 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
             <button type="button" className="btn" onClick={onClose}>{tr("关闭")}</button>
           </div>
         </div>
-      </div>
-      {showTerms && (
-        <div className="overlay sheet-on-mobile center-mobile" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowTerms(false); }}>
-          <div className="modal md">
-            <div className="modal-head">
-              <div className="modal-title">{tr("使用协议")}</div>
-              <button type="button" className="icon-btn" onClick={() => setShowTerms(false)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
-            </div>
-            <div className="modal-body"><TermsPanel /></div>
-            <div className="modal-foot"><div className="right"><button type="button" className="btn" onClick={() => setShowTerms(false)}>{tr("关闭")}</button></div></div>
-          </div>
+      </Overlay>
+      {/* 使用协议：叠在「关于」之上的一层（同样走 Overlay，退场动画一致） */}
+      <Overlay open={showTerms} onClose={() => setShowTerms(false)} size="md" sheetOnMobile centerOnMobile>
+        <div className="modal-head">
+          <div className="modal-title">{tr("使用协议")}</div>
+          <button type="button" className="icon-btn" onClick={() => setShowTerms(false)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
         </div>
-      )}
-    </div>
+        <div className="modal-body"><TermsPanel /></div>
+        <div className="modal-foot"><div className="right"><button type="button" className="btn" onClick={() => setShowTerms(false)}>{tr("关闭")}</button></div></div>
+      </Overlay>
+    </>
   );
 }

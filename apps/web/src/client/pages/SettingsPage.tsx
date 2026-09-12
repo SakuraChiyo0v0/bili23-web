@@ -22,6 +22,7 @@ import { Icon, type IconName } from "../lib/icons";
 import { COLUMN_LABEL, LOCKED_COLUMN, normalizeColumns, useParseListPrefs, type ParseListPrefs } from "../lib/parseListPrefs";
 import { useDownloadListPrefs } from "../lib/downloadListPrefs";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "../components/Overlay";
 
 export function SettingsPage() {
   const { config, loading, saved, error, load, save } = useSettingsStore();
@@ -659,8 +660,7 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
       <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }} />
       {resetOpen && (
-        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setResetOpen(false); }}>
-          <div className="modal sm" role="dialog" aria-modal="true">
+        <Overlay open dismissable={false} size="sm">
             <div className="modal-head">
               <div className="modal-title">{tr("重置配置")}</div>
               <button type="button" className="icon-btn" onClick={() => setResetOpen(false)} aria-label={tr("关闭")}>
@@ -674,8 +674,7 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
                 <button type="button" className="btn primary" onClick={() => void doReset()}>{tr("继续")}</button>
               </div>
             </div>
-          </div>
-        </div>
+          </Overlay>
       )}
     </Group>
   );

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { mcpStatus } from "../services/client";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
+import { Overlay } from "./Overlay";
 
 /**
  * MCP 服务器设置卡的内容 —— 对齐原版 MCPSettingCard（`card.py:707-862`）：
@@ -112,8 +113,7 @@ export function McpCardBody({
       )}
 
       {confirmRegen && (
-        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmRegen(false); }}>
-          <div className="modal sm" role="dialog" aria-modal="true">
+        <Overlay open dismissable={false} size="sm">
             <div className="modal-head">
               <div className="modal-title">{tr("重新生成访问令牌")}</div>
               <button type="button" className="icon-btn" onClick={() => setConfirmRegen(false)} aria-label={tr("关闭")}><Icon name="x" size={18} /></button>
@@ -127,8 +127,7 @@ export function McpCardBody({
                 <button type="button" className="btn primary" onClick={regen}>{tr("继续")}</button>
               </div>
             </div>
-          </div>
-        </div>
+          </Overlay>
       )}
     </>
   );
