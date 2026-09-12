@@ -21,6 +21,13 @@ import { t as tr } from "../lib/i18n";
  * 承载形态按 Web 调整（设计稿第 ③ 条允许）：窄屏左栏收成顶部横滑 chip、按钮挪到右上。
  */
 
+/**
+ * 封面淡入：图片解码完成才显形（CSS `.loaded`），避免"蹦"地出现。
+ * `ref` 里补一次 `complete` 判断 —— 命中缓存时 `onLoad` 可能不触发，否则图会一直透明。
+ */
+const coverLoaded = (e: React.SyntheticEvent<HTMLImageElement>) => e.currentTarget.classList.add("loaded");
+const coverRef = (el: HTMLImageElement | null) => { if (el?.complete) el.classList.add("loaded"); };
+
 type CategoryId = "favorite" | "subscription" | "follow" | "watch_later" | "history";
 
 const CATEGORIES: Array<{ id: CategoryId; label: string; icon: IconName; action?: boolean }> = [
@@ -197,12 +204,12 @@ export function FavoritesPage({
                 : (
                   <div className="fav-scroll">
                     <div className="fav-grid fav-poster-grid">
-                      {follow.map((b) => (
-                        <div key={b.seasonId} className="fav-cell">
+                      {follow.map((b, i) => (
+                        <div key={b.seasonId} className="fav-cell" style={{ ["--i"]: Math.min(i, 12) } as React.CSSProperties}>
                           <button type="button" className="fav-item fav-poster" onClick={() => onParse(b.url)}
                             onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, url: b.url }); }}>
                             {b.cover
-                              ? <img className="fav-poster-cover" src={b.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                              ? <img className="fav-poster-cover" src={b.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={coverLoaded} ref={coverRef} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                               : <div className="fav-poster-cover placeholder"><Icon name="play" size={22} /></div>}
                             {/* 右侧字段顺序对齐原版 poster_item_delegate：标题 / 类型 / 最新集 / 进度 / 简介 */}
                             <span className="fav-item-text">
@@ -258,12 +265,12 @@ export function FavoritesPage({
           ) : (
             <div className="fav-scroll">
               <div className="fav-grid">
-                {folders.map((f) => (
-                  <div key={f.id} className="fav-cell">
+                {folders.map((f, i) => (
+                  <div key={f.id} className="fav-cell" style={{ ["--i"]: Math.min(i, 12) } as React.CSSProperties}>
                     <button type="button" className="fav-item" onClick={() => onParse(f.url)}
                       onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, url: f.url }); }}>
                       {f.cover
-                        ? <img className="fav-thumb" src={f.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                        ? <img className="fav-thumb" src={f.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={coverLoaded} ref={coverRef} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                         : <div className="fav-thumb placeholder"><Icon name="folder" size={22} /></div>}
                       {/* 右侧：标题 + 「N 个项目」（原版 entry_item_delegate 的 `{count} items`） */}
                       <span className="fav-item-text">

@@ -110,7 +110,10 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
   };
 
   let rowSeq = 0;
+  /** 入场交错用的行序号：**组行与叶子都算**（用叶子序号会让组行全挤在 0 延迟上，级联不连续） */
+  let rowIndex = 0;
   const renderRow = (n: TreeNode, depth: number) => {
+    const myRowIndex = Math.min(rowIndex++, 12);
     const isLeaf = n.kind === "leaf";
     const checked = n.checked === true ? "on" : n.checked === "partial" ? "partial" : "";
     const collapsed = n.collapsed === true;
@@ -170,7 +173,7 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
         <div
           id={treeNodeDomId(n.id)}
           className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}${zebraOn ? " zebra" : ""}${isMatch ? " search-hit" : ""}${activeMatchId === n.id ? " search-hit-active" : ""}`}
-          style={{ gridTemplateColumns: gridTemplate }}
+          style={{ gridTemplateColumns: gridTemplate, ["--i"]: myRowIndex } as React.CSSProperties}
           onClick={(e) => {
             if (e.shiftKey && isLeaf && anchor) { rangeToggle(anchor, n.id); return; }
             toggle(n.id);

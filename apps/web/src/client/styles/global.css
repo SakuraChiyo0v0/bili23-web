@@ -270,7 +270,10 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .col-resize:hover::after{ background:var(--accent); width:2px; }
 @media (hover:none){ .col-resize{ display:none; } }
 .tree-row{ min-height:44px; border-bottom:1px solid var(--line); font-size:13.5px; cursor:pointer; }
-.tree-body .tree-row:last-child{ border-bottom:none; }
+/* 列表入场交错：每行淡入上移，`--i` 控制延迟（各列表在 JSX 里给，超过 12 不再累加，
+   免得长列表"等半天才出现"）。内容变化（勾选/改状态）不会重挂，所以不会反复播 */
+@keyframes rowIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
+.tree-row,.task-card,.fav-cell{ animation:rowIn .18s var(--ease) both; animation-delay:calc(var(--i,0) * 14ms); }.tree-body .tree-row:last-child{ border-bottom:none; }
 .tree-row:hover{ background:var(--surface-2); }
 .tree-row.group{ background:var(--surface-2); font-weight:600; cursor:pointer; }
 .tree-row.group:hover{ background:var(--surface-3); }
@@ -320,7 +323,9 @@ html[data-motion="reduced"] *{ animation:none !important; transition:none !impor
 .task-size{ margin-left:auto; }
 .task-right{ width:230px; flex:none; display:flex; flex-direction:column; gap:7px; align-items:stretch; }
 .progress-track{ height:7px; border-radius:99px; background:var(--surface-3); overflow:hidden; }
-.progress-bar{ height:100%; border-radius:99px; background:var(--accent); transition:width .3s var(--ease); }
+.progress-bar{ height:100%; border-radius:99px; background:var(--accent);
+  /* 进度是匀速推进的，用 linear 更像"在跑"；状态变色（暂停/完成/失败）也一起过渡 */
+  transition:width .3s linear, background-color .3s var(--ease); }
 .task-card.paused .progress-bar{ background:var(--warning); }
 .task-card.done .progress-bar{ background:var(--success); }
 .task-card.error .progress-bar{ background:var(--danger); }
@@ -558,6 +563,11 @@ button.card-head:hover{ background:var(--surface-2); }
 
 /* ===== Task card real cover image ===== */
 img.cover.cover-img{ object-fit:cover; display:flex; align-items:flex-end; }
+/* 封面淡入：图片解码完（onLoad 加 .loaded）才显形，避免"蹦"地出现 */
+img.cover.cover-img,.fav-thumb,.fav-poster-cover{ opacity:0; transition:opacity .22s var(--ease); }
+img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1; }
+/* 占位块（非 img 的占位）保持可见 */
+.fav-thumb.placeholder,.fav-poster-cover.placeholder{ opacity:1; }
 
 /* ===== Favorites flyout（原版 FavoriteFlyoutWidget：左栏分类 + 右内容区） ===== */
 /* 基准图：docs/ui-preview/ref/FavoriteFlyout-1424x900.png（1130×655 空态）与 FavoriteFlyout-follow.png */

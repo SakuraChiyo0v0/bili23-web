@@ -182,7 +182,7 @@ export function TasksPage() {
   );
 }
 
-function TaskCard({ task, onRemove }: { task: TaskSummary; onRemove: (id: string) => void }) {
+function TaskCard({ task, onRemove, index = 0 }: { task: TaskSummary; onRemove: (id: string) => void; /** 列表位置，用来做入场交错（超过 12 不再累加） */ index?: number }) {
   const { toast, toastLong } = useToast();
   const parseSession = useParseSession();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -240,9 +240,10 @@ function TaskCard({ task, onRemove }: { task: TaskSummary; onRemove: (id: string
 
   return (
     <div className={`task-card${isDone ? " done" : ""}`}
+      style={{ ["--i"]: Math.min(index, 12) } as React.CSSProperties}
       onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
       {task.cover ? (
-        <img className="cover cover-img" src={task.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display="none"; }} />
+        <img className="cover cover-img" src={task.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={(e) => e.currentTarget.classList.add("loaded")} onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display="none"; }} />
       ) : (
         <div className="cover cover-0">
           <div className="cover-title">{task.title}</div>
