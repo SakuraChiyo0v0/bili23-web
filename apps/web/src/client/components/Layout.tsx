@@ -20,9 +20,15 @@ import { t as tr } from "../lib/i18n";
  */
 
 /** 底部 TabBar 的三个主页面（窄屏下其余项收进顶栏「更多」） */
+/**
+ * 底部 TabBar 的项（窄屏主入口）。
+ * 原版桌面是左侧竖排 6 项；窄屏装不下，我们保留 4 项最常用的：
+ * 解析 / 下载 / **收藏夹** / 设置（收藏夹原来是塞在顶栏的一颗小星星里，手机上根本找不到 —— 用户报"手机端没有收藏夹"）。
+ */
 const TABS: Array<{ id: RouteId; label: string; icon: IconName }> = [
   { id: "parse", label: "解析", icon: "search" },
   { id: "downloads", label: "下载", icon: "download" },
+  { id: "favorites", label: "收藏夹", icon: "star" },
   { id: "settings", label: "设置", icon: "gear" },
 ];
 
@@ -152,7 +158,7 @@ export function MobileTopBar({ route, onNavigate, loggedIn, uname, face, onLogin
 }
 
 /** 底部 TabBar（<768px） */
-export function TabBar({ route, onNavigate }: { route: RouteId; onNavigate: (id: RouteId) => void }) {
+export function TabBar({ route, onNavigate, onOpenFavorites }: { route: RouteId; onNavigate: (id: RouteId) => void; /** 收藏夹要先过登录闸门（原版未登录点导航会弹「需要登录」） */ onOpenFavorites: () => void }) {
   const badge = useDownloadBadge();
   return (
     <nav className="tabbar" aria-label={tr("主导航")}>
@@ -161,11 +167,11 @@ export function TabBar({ route, onNavigate }: { route: RouteId; onNavigate: (id:
           key={t.id}
           type="button"
           className={`tabbar-item${route === t.id ? " active" : ""}`}
-          onClick={() => onNavigate(t.id)}
+          onClick={() => (t.id === "favorites" ? onOpenFavorites() : onNavigate(t.id))}
           aria-current={route === t.id ? "page" : undefined}
         >
           <Icon name={t.icon} size={22} />
-          <span>{t.label}</span>
+          <span>{tr(t.label)}</span>
           {t.id === "downloads" && badge && <span className="nav-badge tab">{badge}</span>}
         </button>
       ))}

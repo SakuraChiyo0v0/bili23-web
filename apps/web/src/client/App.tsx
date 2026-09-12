@@ -151,7 +151,7 @@ function Shell() {
         <MobileTopBar {...navProps} />
         {/* 收藏夹页要铺满内容区（用户要求），所以这一路由下让 .content 不留内边距、也不自己滚动 */}
         <main className={route.id === "favorites" ? "content flush" : "content"}>{renderPage()}</main>
-        <TabBar route={route.id} onNavigate={navigate} />
+        <TabBar route={route.id} onNavigate={navigate} onOpenFavorites={navProps.onOpenFavorites} />
       </div>
 
       <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
