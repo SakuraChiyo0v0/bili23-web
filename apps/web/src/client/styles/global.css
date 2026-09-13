@@ -1099,3 +1099,10 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
      一起藏掉的话 ⋮ 会消失（实测 moreRight=0）。 */
   .tree-header > :nth-child(n+3):not(.row-more), .tree-row > :nth-child(n+3):not(.row-more){ display:none; }
 }
+
+/* 「选择目录」弹窗：允许范围的可点入口（多个范围时用来切换） */
+.dir-quick{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.dir-quick .btn.sm{ max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* 当前目录超出允许范围时的说明块（替代一条红字报错） */
+.dir-out-of-scope{ padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface-2); }
+.dir-out-of-scope p{ margin:0; }

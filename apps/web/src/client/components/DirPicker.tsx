@@ -9,12 +9,28 @@ import { Overlay } from "./Overlay";
  * 设置页「下载目录」与下载选项弹窗「下载目录卡」共用同一个组件
  * （原版两处也都是 `DownloadPathSettingCard` 内嵌 `Directory.browse_directory`）。
  */
+/** 路径是否相同（忽略结尾分隔符与大小写——Windows 不区分） */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => p.replace(/[\\/]+$/, "").replace(/\\/g, "/").toLowerCase();
+  return norm(a) === norm(b);
+}
+/** 是否落在允许范围内（roots 为空=未限制）。与服务端 isPathAllowed 同语义 */
+function inScopeOf(roots: string[], p: string): boolean {
+  if (roots.length === 0) return true;
+  const norm = (v: string) => v.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const target = norm(p);
+  return roots.some((r) => { const root = norm(r); return target === root || target.startsWith(root + "/"); });
+}
+
 export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onClose: () => void; value: string; onPick: (dir: string) => void }) {
   const [current, setCurrent] = useState<string>(value || "/");
   const [dirs, setDirs] = useState<Array<{ name: string; path: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [manual, setManual] = useState(value || "");
+  /** 当前浏览目录超出允许范围时为它的路径（用来显示说明而不是红字报错） */
+  const [outOfScope, setOutOfScope] = useState<string | null>(null);
+  const inScope = (p: string): boolean => inScopeOf(host?.allowedRoots ?? [], p);
   /** 服务器信息：**必须**让用户知道这是哪台机器上的目录（否则会以为选错了） */
   const [host, setHost] = useState<{ host: string; localhost: boolean; allowedRoots: string[] } | null>(null);
 
@@ -25,9 +41,15 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
     let cancelled = false;
     void getSystemInfo().then((r) => {
       if (cancelled) return;
-      setHost({ host: r.host, localhost: r.localhost, allowedRoots: r.allowedRoots ?? [] });
-      // 起始目录：优先用当前值，其次下载目录，再其次允许范围内的第一项（避免一进来就 403）
-      const start = value || r.downloadDir || r.allowedRoots?.[0] || "/";
+      const roots = r.allowedRoots ?? [];
+      setHost({ host: r.host, localhost: r.localhost, allowedRoots: roots });
+      /**
+       * 起始目录：当前值 → 下载目录 → 范围第一项。
+       * ⚠️ 当前值也要**先验证在范围内**：配置里可能存着一个旧的范围外路径（例如限制之前设的），
+       * 直接用它开屏就会撞 403（用户看到的就是「读取失败：该目录超出允许的存储范围…」）。
+       */
+      const candidates = [value, r.downloadDir, roots[0]];
+      const start = candidates.find((c) => c && inScopeOf(roots, c)) ?? roots[0] ?? value ?? "/";
       setCurrent(start);
       setManual(value || "");
       setError("");
@@ -40,6 +62,19 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
 
   useEffect(() => {
     if (!open || !current) return;
+    /**
+     * 范围外的目录**根本不发请求**：服务端会回 403，前端只能显示一条红字错误，
+     * 用户看到的就是「读取失败：该目录超出允许的存储范围…」。
+     * 这里提前判断，给一段说明 + 范围入口，比报错友好得多。
+     */
+    if (!inScope(current)) {
+      setDirs([]);
+      setError("");
+      setOutOfScope(current);
+      setLoading(false);
+      return;
+    }
+    setOutOfScope(null);
     setLoading(true);
     setError("");
     listDirs(current)
@@ -53,21 +88,36 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
    * 于是一路"往上"其实直接跳回盘根（`C:\`），看着像不能往上走。
    * 另外盘根（`C:\`）与 UNC 根（`\\server\share`）都不该再往上。
    */
-  /** 已经在根上（盘根 C:\ / POSIX 根 / UNC 根）就没法再往上了 */
+  /** 已经在根上（盘根 C:\ / POSIX 根 / UNC 根）或已到**允许范围**的边界，就不能再往上了 */
   const atRoot = (p: string): boolean => {
     const t = p.replace(/[\\/]+$/, "");
-    return /^[A-Za-z]:$/.test(t) || t === "" || t === "/" || /^\\\\[^\\]+\\[^\\]+$/.test(t);
+    if (/^[A-Za-z]:$/.test(t) || t === "" || t === "/" || /^\\\\[^\\]+\\[^\\]+$/.test(t)) return true;
+    // 范围边界：站在 /volume1 或 /data 上时，再往上就是 /（范围外）
+    return (host?.allowedRoots ?? []).some((r) => samePath(t, r));
   };
   const up = () => {
     const trimmed = current.replace(/[\\/]+$/, "");
     if (/^[A-Za-z]:$/.test(trimmed)) return;                       // C: → 已到盘根
     const idx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-    if (idx > 2) { const parent = trimmed.slice(0, idx); setCurrent(parent); setManual(parent); return; }
-    if (/^[A-Za-z]:/.test(trimmed)) { setCurrent(trimmed.slice(0, 2) + "\\"); return; }
-    setCurrent("/");
+    const parent = idx > 2 ? trimmed.slice(0, idx)
+      : (/^[A-Za-z]:/.test(trimmed) ? trimmed.slice(0, 2) + "\\" : "/");
+    // 父目录在范围外（例如 /data → /）就不动，别让用户撞 403
+    if (!inScope(parent)) return;
+    setCurrent(parent);
+    setManual(parent);
   };
   const enter = (path: string) => { setCurrent(path); setManual(path); };
-  const confirmPick = () => { const dir = manual.trim().replace(/[\\/]+$/, "") || "/"; onPick(dir); onClose(); };
+  /**
+   * 确认选择。⚠️ 先**就地校验范围**：手动输入的路径可能在范围外，
+   * 以前会直接提交给服务端 → 400 → 用户只看到一条 toast/什么都没发生。
+   * 现在停在弹窗里、把说明块亮出来（还给出可选的根目录），用户能立刻改。
+   */
+  const confirmPick = () => {
+    const dir = manual.trim().replace(/[\\/]+$/, "") || "/";
+    if (!inScope(dir)) { setCurrent(dir); setManual(dir); return; }
+    onPick(dir);
+    onClose();
+  };
 
   return (
     <Overlay open={open} onClose={onClose} size="md" sheetOnMobile centerOnMobile>
@@ -85,11 +135,22 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
               {host.localhost ? tr("—— 服务就跑在这台电脑上，所以看到的是本机路径") : ""}
             </p>
           )}
-          {/* 存储范围（部署级配置）：说清"只能在这些目录里选"，否则用户会以为是坏了 */}
+          {/* 存储范围（部署级配置）：说清"只能在这些目录里选"，否则用户会以为是坏了；
+              并且把范围做成可点的入口 —— 否则从范围里"往上"就出不去了 */}
           {host && host.allowedRoots.length > 0 && (
             <p className="small muted" style={{ marginBottom: 6 }}>
               {tr("允许的存储范围：{roots}（其它路径不可选）").replace("{roots}", host.allowedRoots.join("、"))}
             </p>
+          )}
+          {host && host.allowedRoots.length > 1 && (
+            <div className="dir-quick">
+              {host.allowedRoots.map((r) => (
+                <button key={r} type="button" className="btn sm ghost" title={r} onClick={() => enter(r)}
+                  disabled={samePath(current, r)}>
+                  {r}
+                </button>
+              ))}
+            </div>
           )}
 
           <div className="dir-picker-current">
@@ -99,8 +160,23 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
           <div className="dir-picker-list">
             {loading && <p className="muted small">{tr("加载中…")}</p>}
             {error && <p className="danger small">读取失败：{error}</p>}
-            {!loading && !error && dirs.length === 0 && <p className="muted small">{tr("此目录没有可选的子目录")}</p>}
-            {dirs.map((d) => (
+            {/* 超出范围：给说明 + 回到范围内的入口，而不是一条红字报错 */}
+            {outOfScope && (
+              <div className="dir-out-of-scope">
+                <p className="small">{tr("这个目录不在允许的存储范围里，不能浏览或选用：")}</p>
+                <code className="dir-current-path">{outOfScope}</code>
+                {(host?.allowedRoots ?? []).length > 0 && (
+                  <p className="small muted" style={{ marginTop: 6 }}>
+                    {tr("可选的根目录：")}
+                    {(host?.allowedRoots ?? []).map((r) => (
+                      <button key={r} type="button" className="btn sm ghost" style={{ marginLeft: 6 }} onClick={() => enter(r)}>{r}</button>
+                    ))}
+                  </p>
+                )}
+              </div>
+            )}
+            {!loading && !error && !outOfScope && dirs.length === 0 && <p className="muted small">{tr("此目录没有可选的子目录")}</p>}
+            {!outOfScope && dirs.map((d) => (
               <button key={d.path} type="button" className="dir-row" onClick={() => enter(d.path)}>
                 <svg className="ico" viewBox="0 0 24 24" width={16} height={16}><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z" /></svg>
                 <span>{d.name}</span>
