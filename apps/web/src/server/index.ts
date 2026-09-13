@@ -63,7 +63,17 @@ export function createApp(opts: CreateAppOptions = {}) {
   const app = new Hono();
   const getManager = (): DownloadManager => opts.manager ?? getDefaultManager();
 
-  app.get("/api/health", (c) => c.json({ ok: true }));
+  /**
+   * 健康检查。**带上版本号**：自动化部署（push → CI → watchtower）最需要回答的问题就是
+   * "现在跑的是哪一版"，只看容器状态看不出来（容器可能因别的原因刚重启过）。
+   * 版本由 CI 通过构建参数注入（见 apps/web/Dockerfile 与 .github/workflows/docker-image.yml），
+   * 本地直接跑则是 `dev`。
+   */
+  app.get("/api/health", (c) => c.json({
+    ok: true,
+    version: process.env.APP_VERSION ?? "dev",
+    commit: process.env.APP_COMMIT ?? "dev",
+  }));
   registerApi(app, getManager, {
     mcpStatus: () => mcpStatusProvider?.() ?? { running: false, lastError: "" },
   });

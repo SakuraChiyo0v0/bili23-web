@@ -3,6 +3,9 @@
 #   docker build -f apps/web/Dockerfile -t bili23-web .
 
 ARG NODE_BASE=node:22-alpine
+# 构建版本信息（由 CI 传入；`/api/health` 会回显，便于确认部署到了哪一版）
+ARG APP_VERSION=dev
+ARG APP_COMMIT=dev
 
 FROM ${NODE_BASE} AS base
 RUN corepack enable && apk add --no-cache python3 make g++
@@ -30,6 +33,8 @@ WORKDIR /repo
 ENV NODE_ENV=production
 # 数据根目录固定到 /data（config.json / task.db / downloads），由 compose 挂载宿主 ./data 落盘
 ENV BILI23_DATA_DIR=/data
+ENV APP_VERSION=$APP_VERSION
+ENV APP_COMMIT=$APP_COMMIT
 RUN apk add --no-cache ffmpeg ca-certificates
 COPY --from=prod /repo /repo
 WORKDIR /repo/apps/web

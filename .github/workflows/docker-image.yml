@@ -38,6 +38,9 @@ jobs:
         with:
           context: .
           file: apps/web/Dockerfile
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.VERSION }}
+            APP_COMMIT=${{ github.sha }}
           push: true
           tags: |
             ghcr.io/sakurachiyo0v0/bili23-web:latest
