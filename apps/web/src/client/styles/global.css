@@ -529,6 +529,8 @@ button.card-head:hover{ background:var(--surface-2); }
 .style-editor{ max-width:720px; }
 .style-body{ display:flex; flex-direction:column; gap:14px; }
 .style-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+/* 手机端：样式编辑器 4 列排不开（实测溢出 320px）→ 单列，控件占满 */
+@media (max-width:767px){ .style-grid{ grid-template-columns:1fr; } .style-grid .dl-field{ width:100%; } }
 .style-toggles{ display:flex; gap:14px; flex-wrap:wrap; }
 .style-toggle{ display:flex; align-items:center; gap:6px; font-size:13px; }
 
@@ -1021,4 +1023,25 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
   @media (max-width:767px){
     .modal-body{ scroll-padding-bottom:24px; }
   }
+}
+
+/* ===== 第三批（2026-09-13）：优先级列表 / 样式编辑器在手机上的控件太小 =====
+   实测 390 宽：自定义优先级弹窗内有 24~31 个小于 36px 的控件（上移/下移/删除），
+   拖拽排序在触屏上本来就不灵，所以这几个按钮必须够大好点。 */
+@media (max-width:767px){
+  .prio-list .col-row{ height:auto; min-height:52px; padding:6px 4px; }
+  .prio-list .icon-btn.sm{ width:38px; height:38px; }
+  .prio-list .col-ops{ gap:6px; }
+  .prio-order{ width:24px; font-size:13px; }
+  /* 样式编辑器（弹幕/字幕）：表单密集，行高与控件一起放大 */
+  .style-row, .style-field{ min-height:44px; }
+  .style-editor .text-input, .style-editor select{ min-height:40px; }
+  .style-editor .color-swatch{ width:40px; height:40px; }
+}
+
+/* 手机横屏（高度很矮）时 toast 会盖住顶部工具栏/输入框 —— 实测截图看到它正好压在 URL 输入框上。
+   这类矮屏把 toast 挪到底部（TabBar 之上）。 */
+@media (max-height:520px){
+  .toast-root{ top:auto; bottom:calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .toast.closing{ transform:translateY(6px); }
 }
