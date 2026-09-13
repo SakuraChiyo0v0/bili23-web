@@ -16,7 +16,7 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
   const [error, setError] = useState("");
   const [manual, setManual] = useState(value || "");
   /** 服务器信息：**必须**让用户知道这是哪台机器上的目录（否则会以为选错了） */
-  const [host, setHost] = useState<{ host: string; localhost: boolean } | null>(null);
+  const [host, setHost] = useState<{ host: string; localhost: boolean; allowedRoots: string[] } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -25,8 +25,9 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
     let cancelled = false;
     void getSystemInfo().then((r) => {
       if (cancelled) return;
-      setHost({ host: r.host, localhost: r.localhost });
-      const start = value || r.downloadDir || "/";
+      setHost({ host: r.host, localhost: r.localhost, allowedRoots: r.allowedRoots ?? [] });
+      // 起始目录：优先用当前值，其次下载目录，再其次允许范围内的第一项（避免一进来就 403）
+      const start = value || r.downloadDir || r.allowedRoots?.[0] || "/";
       setCurrent(start);
       setManual(value || "");
       setError("");
@@ -82,6 +83,12 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
             <p className="small muted" style={{ marginBottom: 6 }}>
               {tr("这里浏览的是运行服务的那台机器（{host}）上的目录").replace("{host}", host.host)}
               {host.localhost ? tr("—— 服务就跑在这台电脑上，所以看到的是本机路径") : ""}
+            </p>
+          )}
+          {/* 存储范围（部署级配置）：说清"只能在这些目录里选"，否则用户会以为是坏了 */}
+          {host && host.allowedRoots.length > 0 && (
+            <p className="small muted" style={{ marginBottom: 6 }}>
+              {tr("允许的存储范围：{roots}（其它路径不可选）").replace("{roots}", host.allowedRoots.join("、"))}
             </p>
           )}
 

@@ -219,6 +219,8 @@ export function getSystemInfo(): Promise<{
   /** 请求是不是从本机发的（服务跑在这台电脑上时界面要直说） */
   localhost: boolean;
   downloadDir: string;
+  /** 允许的存储范围（空数组 = 未限制）；目录选择器只允许在这之内选 */
+  allowedRoots: string[];
 }> {
   return request("/system/info");
 }

@@ -6,6 +6,8 @@ import { stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { BiliError } from "@bili23-web/engine";
 import { previewNamingRule } from "./naming-preview.js";
+// 存储范围限制（值导入；上面的 config.js 那行是 import type，不能混用）
+import { allowedRoots, isPathAllowed } from "./config.js";
 import type { ParseResult, ParseHistoryEntry, MediaItem } from "@bili23-web/engine";
 import type {
   AppConfig,
@@ -302,7 +304,14 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
     const hostHeader = c.req.header("host") ?? "";
     const localhost = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(hostHeader);
     const info = manager.fsRoots?.() ?? { dataDir: "", downloadDir: "" };
-    return c.json({ host: hostname(), platform: process.platform, localhost, downloadDir: info.downloadDir });
+    return c.json({
+      host: hostname(),
+      platform: process.platform,
+      localhost,
+      downloadDir: info.downloadDir,
+      // 允许的存储范围（空数组=未限制）；界面用它提示"只能在哪些目录里选"
+      allowedRoots: allowedRoots(),
+    });
   });
   app.get("/api/dirs", async (c) => {
     const manager = getManager();
@@ -315,6 +324,13 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
       return c.json({ dirs: [] });
     }
     if (!st.isDirectory() || !manager.listSubdirs) return c.json({ dirs: [] });
+    // 存储范围限制：范围外不给列（部署级配置，见 config.ts 的 allowedRoots）
+    if (!isPathAllowed(dir)) {
+      return c.json(
+        { error: { code: "PATH_OUT_OF_SCOPE", message: `该目录超出允许的存储范围（${allowedRoots().join("、") || "未限制"}）` } },
+        403,
+      );
+    }
     const dirs: DirEntry[] = await manager.listSubdirs(dir);
     return c.json({ dirs });
   });

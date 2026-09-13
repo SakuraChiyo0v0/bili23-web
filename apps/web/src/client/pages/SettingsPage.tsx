@@ -337,8 +337,8 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
   /** 产物默认落点（NAS / 本机）—— 存的配置键是 `download.deliver` */
   const deliverMode: "server" | "local" = d.deliver === "local" ? "local" : "server";
   /** 服务端信息：目录在**哪台机器**上（用户看到 C:\ 会以为选错了，必须直说） */
-  const [serverInfo, setServerInfo] = useState<{ host: string; localhost: boolean } | null>(null);
-  useEffect(() => { void getSystemInfo().then((r) => setServerInfo({ host: r.host, localhost: r.localhost })).catch(() => undefined); }, []);
+  const [serverInfo, setServerInfo] = useState<{ host: string; localhost: boolean; allowedRoots: string[] } | null>(null);
+  useEffect(() => { void getSystemInfo().then((r) => setServerInfo({ host: r.host, localhost: r.localhost, allowedRoots: r.allowedRoots ?? [] })).catch(() => undefined); }, []);
   /** 已授权的本机文件夹名（浏览器不给绝对路径，只能拿到名字） */
   const [localDir, setLocalDir] = useState<string | null>(null);
   useEffect(() => { void getLocalDirName().then(setLocalDir); }, []);
@@ -377,7 +377,7 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
                   serverInfo.localhost
                     ? tr("—— 服务就跑在这台电脑上，所以显示的是本机路径")
                     : tr("—— 如果服务跑在容器里，这里要填容器内的路径（注意宿主机目录已挂载进去）")
-                }`
+                }${serverInfo.allowedRoots.length > 0 ? " " + tr("允许的存储范围：{roots}").replace("{roots}", serverInfo.allowedRoots.join("、")) : ""}`
               : tr("这是服务器（NAS）上的目录，不是你电脑的")
           } control={
             <span className="dir-picker-row">

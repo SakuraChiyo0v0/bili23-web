@@ -134,6 +134,8 @@ const EXTRA = [
   ["已取回", "Saved", "已取回"],
   ["将保存到本机", "Will save to this device", "將儲存到本機"],
   ["服务器上的目录", "Folder on the server", "伺服器上的目錄"],
+  ["允许的存储范围：{roots}（其它路径不可选）", "Allowed storage scope: {roots} (other paths are not selectable)", "允許的儲存範圍：{roots}（其它路徑不可選）"],
+  ["允许的存储范围：{roots}", "Allowed storage scope: {roots}", "允許的儲存範圍：{roots}"],
   ["正在推送到本机…服务器副本会在推送完成后删除", "Sending to your device… the server copy is removed once it finishes", "正在推送到本機…伺服器副本會在推送完成後刪除"],
   ["已保存到本机；服务器副本已删除", "Saved to this device; the server copy was removed", "已儲存到本機；伺服器副本已刪除"],
   ["已交给浏览器下载；手机浏览器不能选目录，文件在系统「下载」里", "Handed to the browser; mobile browsers can't pick a folder — check the system Downloads", "已交給瀏覽器下載；手機瀏覽器不能選目錄，檔案在系統「下載」裡"],

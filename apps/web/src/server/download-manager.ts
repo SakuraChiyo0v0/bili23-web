@@ -85,7 +85,7 @@ import {
   type NamingQuality,
   type NumberingTypeId,
 } from "@bili23-web/engine";
-import { ConfigStore, deepMerge, resolveCdnHosts, resolveProxyUrl } from "./config.js";
+import { ConfigStore, allowedRoots, deepMerge, isPathAllowed, resolveCdnHosts, resolveProxyUrl } from "./config.js";
 import { logger, logError, logInfo, logWarn } from "./logger.js";
 import { friendlyDownloadError } from "./error-text.js";
 import type { LogEntry } from "./logger.js";
@@ -109,6 +109,15 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 
+/** 任务级下载目录是否在允许的存储范围内（见 config.ts 的 allowedRoots） */
+function assertDirAllowed(dir: string | undefined): void {
+  if (!dir || dir.trim() === "") return;
+  if (isPathAllowed(dir)) return;
+  throw new BiliError(
+    "INVALID_URL",
+    `下载目录超出允许的存储范围（${allowedRoots().join("、")}）：${dir}`,
+  );
+}
 export interface DownloadOptions {
   videoQualityId?: number;
   videoCodecId?: number;
@@ -1313,6 +1322,9 @@ export class DownloadManager {
     if (duplicates.length > 0 && items.length === 0) {
       return { tasks: [], duplicates };
     }
+
+    // 存储范围限制：任务级下载目录（下载选项弹窗里手填的那个）也要校验
+    assertDirAllowed(options.downloadDir);
 
     const created: ManagedTask[] = [];
     const cfg = await this.#configReady.then(() => this.#configStore.get());

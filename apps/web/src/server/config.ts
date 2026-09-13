@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   ConventionType,
@@ -210,6 +210,37 @@ const RENAME_POLICIES = ["auto", "overwrite"] as const;
 const DUPLICATE_POLICIES = ["prompt", "skip", "force"] as const;
 /** 产物落点：server=下载目录（NAS）/ local=投递目录（取回本机后即删） */
 const DELIVER_MODES = ["server", "local"] as const;
+
+/**
+ * **允许的存储范围**（部署级配置，环境变量 `BILI23_ALLOWED_ROOTS`，用 `;` 或 `,` 分隔）。
+ *
+ * 动机：给 NAS 部署时把应用能读写的目录**限死在指定范围内**（例如只允许 `/volume1` 与 `/home`），
+ * 而不是整个文件系统。留空 = 不限制（本地开发就是这种）。
+ *
+ * 同时作用于三处，缺一不可：
+ * 1. `/api/dirs`（目录选择器）—— 范围外直接 403，而不是列出一堆无关目录；
+ * 2. `download.dir`（全局下载目录）—— 写入配置时校验；
+ * 3. 单个任务的 `downloadDir`（下载选项弹窗里那张卡）—— 创建任务时校验。
+ *
+ * ⚠️ 容器部署要注意"填的是容器内路径"：例如宿主 `/volume1/bili23-downloads`
+ * 挂进容器是 `/data/bili23-downloads`，那范围里就得同时写上 `/data`。
+ */
+export function allowedRoots(): string[] {
+  const raw = process.env.BILI23_ALLOWED_ROOTS ?? "";
+  return raw
+    .split(/[;,]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => resolve(s));
+}
+
+/** 路径是否落在允许范围内；未配置范围时一律允许 */
+export function isPathAllowed(target: string): boolean {
+  const roots = allowedRoots();
+  if (roots.length === 0) return true;
+  const abs = resolve(target);
+  return roots.some((root) => abs === root || abs.startsWith(root.endsWith(sep) ? root : root + sep));
+}
 const CONTAINERS = ["mp4", "mkv"] as const;
 const LANGUAGES = ["zh-CN", "zh-TW", "en", "system"] as const;
 const THEMES = ["light", "dark", "system"] as const;
@@ -449,6 +480,9 @@ export function validateConfig(next: AppConfig): string[] {
   intInRange("download.parallel", dl.parallel);
   intInRange("download.threads", dl.threads);
   if (typeof dl.dir !== "string") errors.push("download.dir 需为字符串");
+  else if (dl.dir.trim() !== "" && !isPathAllowed(dl.dir)) {
+    errors.push(`download.dir 超出允许的存储范围（${allowedRoots().join("、")}）`);
+  }
   if (typeof dl.speedLimitKbps !== "number" || !Number.isFinite(dl.speedLimitKbps) || dl.speedLimitKbps < 0) {
     errors.push("download.speedLimitKbps 需为不小于 0 的数字");
   }

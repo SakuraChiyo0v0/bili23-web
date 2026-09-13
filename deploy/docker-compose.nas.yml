@@ -27,9 +27,17 @@ services:
       - DOWNLOAD_DIR=${DOWNLOAD_DIR:-/data/downloads}
       # 数据根目录（config.json / task.db / downloads），须与 volumes 的 /data 对应，通常不要改
       - BILI23_DATA_DIR=${BILI23_DATA_DIR:-/data}
+      # **允许的存储范围**（`;` 分隔，留空=不限制）。目录选择器与下载目录都只能落在这里面。
+      # /data 必须带上：容器里这个路径映射到宿主 /volume1/docker/bili23-web/deploy/data。
+      - BILI23_ALLOWED_ROOTS=${BILI23_ALLOWED_ROOTS:-/data;/volume1;/home}
     volumes:
-      # 容器 /data ↔ 宿主 ./data（工程目录下，即 /volume1/docker/bili23-web/data）
+      # 容器 /data ↔ 宿主 ./data（工程目录下，即 /volume1/docker/bili23-web/deploy/data）
       - ./data:/data
+      # 存储范围：把 /volume1 与 /home 暴露给容器（与上面的 BILI23_ALLOWED_ROOTS 对应）
+      # ⚠️ /volume1 里含 /volume1/docker（本机其它服务的编排与数据），挂进来意味着**应用可写**它们；
+      #    若只想暴露媒体目录，把下面两行换成具体共享路径即可。
+      - /volume1:/volume1
+      - /home:/home
     labels:
       # watchtower 检测到 ghcr latest digest 变化后自动重建（需 watchtower 已运行）
       - com.centurylinklabs.watchtower.enable=true
