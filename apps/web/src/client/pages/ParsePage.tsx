@@ -45,7 +45,7 @@ export function ParsePage() {
   /** 教学气泡的锚点元素（分页器上的「自动解析分页」按钮） */
   const autoParseBtnRef = useRef<HTMLElement | null>(null);
   const [autoTipOpen, setAutoTipOpen] = useState(false);
-  const setTasks = useTasksStore((s) => s.setTasks);
+  const addTasks = useTasksStore((s) => s.addTasks);
   /**
    * 剪贴板监控（Web 改写，见 `lib/clipboardWatch.ts`）：
    * 页面**重新聚焦**时读一次剪贴板；命中 B 站链接且与上次不同 → 填入输入框 + 提示。
@@ -213,13 +213,13 @@ export function ParsePage() {
     if (items.length === 0) return;
     try {
       const { tasks, duplicates } = await createTasks(items.map((i) => i.id), {});
-      if (tasks.length) setTasks(tasks);
+      if (tasks.length) addTasks(tasks);
       const skipped = duplicates.length ? `，跳过重复 ${duplicates.length} 个` : "";
       toast(`已自动加入下载列表：${tasks.length} 个${skipped}`, tasks.length ? "ok" : "warn");
     } catch (e) {
       toastLong(tr("自动加入下载列表失败"), e instanceof Error ? e.message : String(e), "err");
     }
-  }, [toast, setTasks]);
+  }, [toast, addTasks]);
 
   /**
    * 翻到某一页（原版底部 Pager 的行为：点页码 → 重新解析那一页，替换当前结果）。
@@ -305,14 +305,14 @@ export function ParsePage() {
   const downloadParts = useCallback(async (picked: MediaItem[]) => {
     try {
       const { tasks, duplicates } = await createTasks(picked.map((p) => p.id), {});
-      if (tasks.length) setTasks(tasks);
+      if (tasks.length) addTasks(tasks);
       const skipped = duplicates.length ? `，跳过重复 ${duplicates.length} 个` : "";
       toast(`已创建 ${tasks.length} 个下载任务${skipped}`, tasks.length ? "ok" : "warn");
       setPartsItem(null);
     } catch (e) {
       toast("创建任务失败：" + (e instanceof Error ? e.message : String(e)), "err");
     }
-  }, [toast, setTasks]);
+  }, [toast, addTasks]);
 
   /** 跳转到第 i 个命中项（原版 SearchWidget 的 prev/next：`_update_label_and_scroll`） */
   const gotoMatch = useCallback((i: number) => {

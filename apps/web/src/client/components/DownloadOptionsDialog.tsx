@@ -31,7 +31,7 @@ export function DownloadOptionsDialog() {
     close, setMedia, setMediaLoading, setMediaError, patchForm, setQuality, setAudio, setCodec, setContainer,
   } = useDownloadOptions();
   const { toast, toastLong } = useToast();
-  const setTasks = useTasksStore((s) => s.setTasks);
+  const addTasks = useTasksStore((s) => s.addTasks);
   const settingsCfg = useSettingsStore((st) => st.config);
   const settingsLoad = useSettingsStore((st) => st.load);
   const saveConfig = useSettingsStore((st) => st.save);
@@ -180,7 +180,7 @@ export function DownloadOptionsDialog() {
     };
     try {
       const { tasks, duplicates } = await createTasks(ids, resolved);
-      if (tasks.length) setTasks(tasks);
+      if (tasks.length) addTasks(tasks);
       if (tasks.length) toast(`已创建 ${tasks.length} 个下载任务`, "ok");
       if (duplicates.length) { handleDuplicates(duplicates); return; }
       close();
@@ -212,7 +212,7 @@ export function DownloadOptionsDialog() {
     if (step.force.length > 0) {
       try {
         const { tasks } = await createTasks(step.force, resolved, true);
-        if (tasks.length) setTasks([...useTasksStore.getState().tasks, ...tasks]);
+        if (tasks.length) addTasks(tasks);
         toast(step.force.length > 1 ? `已继续下载 ${tasks.length} 个重复项` : `已继续下载：${dupHead?.title ?? ""}`, "ok");
       } catch (e) {
         toast("继续下载失败：" + (e instanceof Error ? e.message : String(e)), "err");
