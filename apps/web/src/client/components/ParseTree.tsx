@@ -45,6 +45,7 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
   const toggle = useParseSession((s) => s.toggle);
   const toggleCollapse = useParseSession((s) => s.toggleCollapse);
   const rangeToggle = useParseSession((s) => s.rangeToggle);
+  const setAll = useParseSession((s) => s.setAll);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
   /**
@@ -217,12 +218,25 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
     );
   };
 
+  /**
+   * 表头全选复选框的三态（与右键菜单同一套语义）：
+   * 全选 = 每个节点都是 `true`（`recompute` 已把子节点汇总到父节点）；
+   * 半选 = 不是全选、但存在已勾选或半选的节点。
+   */
+  const allChecked = tree.length > 0 && tree.every((n) => n.checked === true);
+  const partiallyChecked = !allChecked && tree.some((n) => n.checked === true || n.checked === "partial");
+
   return (
     <div className="tree-wrap">
       {sorted.length === 0 ? (
         <div className="empty-state"><p>{tr("没有可显示的条目")}</p></div>
       ) : (
         <div className={`tree${prefs.zebraRows ? " zebra" : ""}`}>
+          {/*
+            表头「全选」复选框 —— 用户反馈："一键全选/全不选有功能，但没有明显的标识"：
+            原来只能右键菜单（全选/反选）或 Ctrl+A / Ctrl+D，界面上没有任何可见入口。
+            这里照资源管理器的惯例，在首列表头放一个三态复选框（全选 / 半选 / 未选）。
+          */}
           <div className="tree-header" style={{ gridTemplateColumns: gridOf(shown) }}>
             {shown.map((c) => (
               <div
@@ -231,6 +245,19 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
                 onClick={() => clickHeader(c.key)}
                 title={`按「${columnTitle(c.key)}」排序`}
               >
+                {c.key === "number" && (
+                  <button
+                    type="button"
+                    className={`checkbox th-check${allChecked ? " on" : partiallyChecked ? " partial" : ""}`}
+                    role="checkbox"
+                    aria-checked={allChecked ? true : partiallyChecked ? "mixed" : false}
+                    aria-label={allChecked ? tr("取消全选") : tr("全选")}
+                    title={`${allChecked ? tr("取消全选") : tr("全选")}（快捷键 Ctrl+A / Ctrl+D）`}
+                    onClick={(e) => { e.stopPropagation(); setAll(!allChecked); }}
+                  >
+                    {allChecked ? <Icon name="check" size={12} /> : null}
+                  </button>
+                )}
                 <span className="th-label">{columnTitle(c.key)}</span>
                 {sort?.key === c.key && <Icon name={sort.desc ? "chevD" : "chevD"} size={13} {...(sort.desc ? {} : { style: { transform: "rotate(180deg)" } })} />}
                 {c.key !== "title" && (
@@ -314,7 +341,8 @@ function RowMenu({ menu, onClose, onDownloadOne, onParseItem, onUpdateMediaInfo,
   const item = node.item;
   const act = (fn: () => void) => { fn(); onClose(); };
 
-  const allChecked = session.tree.every((n) => n.checked === true);
+  /** 是否已全部勾选（与表头复选框同一套语义） */
+  const allChecked = session.tree.length > 0 && session.tree.every((n) => n.checked === true);
 
   return (
     <div className="ctx-layer" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
