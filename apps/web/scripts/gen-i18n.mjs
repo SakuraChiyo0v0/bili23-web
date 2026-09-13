@@ -130,6 +130,7 @@ const EXTRA = [
   ["本机", "This device", "本機"],
   ["NAS（服务器）", "NAS (server)", "NAS（伺服器）"],
   ["保存到本机", "Save to this device", "儲存到本機"],
+  ["下载到本机", "Download to this device", "下載到本機"],
   ["另存为…", "Save as…", "另存為…"],
   ["已取回", "Saved", "已取回"],
   ["将保存到本机", "Will save to this device", "將儲存到本機"],

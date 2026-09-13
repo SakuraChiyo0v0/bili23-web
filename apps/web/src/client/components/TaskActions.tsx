@@ -61,14 +61,26 @@ export function TaskActions({
         await retryTask(task.id);
         onToast("已重新开始", "ok");
       } else if (meta.action === "open") {
+        /**
+         * 完成态的主操作 = **把产物取到你现在用的设备**（按钮文案「下载到本机」）。
+         * ⚠️ 原来是 `window.open(url, "_blank")` —— 开一个新标签页，
+         * 视频会被浏览器内联播放、其它类型才下载，行为不一致，而且标签页里也"打不开"任何东西。
+         * 现在统一用 `<a download>` 触发下载（服务端已带 Content-Disposition，文件名以它为准）。
+         */
         try {
           const { files } = await listFiles();
           const base = (task.outputPath ? task.outputPath.split(/[\\/]/).pop() : "") ?? "";
           const hit = files.find((f) => f.name === base || f.path.endsWith(base));
-          if (hit) window.open(fileRawUrl(hit.path), "_blank");
-          else onToast("产物文件暂不可用", "warn");
+          if (!hit) { onToast("产物文件暂不可用（可能已被移动或删除）", "warn"); return; }
+          const a = document.createElement("a");
+          a.href = fileRawUrl(hit.path);
+          a.download = hit.name;   // 只是给浏览器的提示，真正的文件名来自服务端响应头
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          onToast(`已开始下载：${hit.name}`, "ok");
         } catch {
-          onToast("无法打开产物文件", "err");
+          onToast("下载失败：请稍后重试，或到「产物」页下载", "err");
         }
       } else if (meta.action === "delete") {
         await deleteTask(task.id);
@@ -119,7 +131,7 @@ export function TaskActions({
 
   // 主按钮图标按原版 `item_delegate.py:getButtonIcon`：
   // 完成 → 文件夹（打开产物）、失败 → 重试、排队/暂停/中断 → 播放、其余 → 暂停
-  const iconName = meta.action === "open" ? "folder"
+  const iconName = meta.action === "open" ? "download"
     : meta.action === "retry" ? "retry"
       : meta.action === "resume" ? "play"
         : meta.action === "delete" ? "x"
@@ -137,7 +149,13 @@ export function TaskActions({
       ) : (
         <button type="button" className="btn sm primary" onClick={act} disabled={meta.action === "none"}>
           <Icon name={iconName} size={15} />
-          {meta.action === "pause" ? tr("暂停") : meta.action === "resume" ? tr("继续") : meta.action === "retry" ? tr("重试") : meta.action === "open" ? tr("打开") : tr("删除")}
+          {/*
+            ⚠️ 完成态原来叫「打开」——**名不副实**（用户反馈）：
+            原版是桌面程序，"打开"指用系统默认程序打开**这台机器上**的文件；
+            而网页部署在 NAS 上，点它实际做的是"把文件取到**你正在用的设备**"，
+            对服务端来说"打开"根本没有意义。所以按实际行为改叫「下载到本机」。
+          */}
+          {meta.action === "pause" ? tr("暂停") : meta.action === "resume" ? tr("继续") : meta.action === "retry" ? tr("重试") : meta.action === "open" ? tr("下载到本机") : tr("删除")}
         </button>
       )}
       <button type="button" className="btn sm ghost" onClick={openLog}>{tr("日志")}</button>
