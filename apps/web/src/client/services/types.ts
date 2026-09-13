@@ -159,6 +159,8 @@ export interface AppConfig {
   download: {
     dir: string; parallel: number; threads: number; speedLimitKbps: number;
     renamePolicy: string; duplicatePolicy: string; defaultContainer: "mp4" | "mkv";
+    /** 产物默认送到哪（设置页「下载路径」卡的 NAS / 本机 模式） */
+    deliver?: "server" | "local";
     /** 仅下载音频流时把 m4a 转成 mp3（默认关） */
     m4aToMp3?: boolean;
     /** 画质/音质/编码优先级（对齐服务端 DownloadConfig；默认值同桌面版 config.py:73-100） */

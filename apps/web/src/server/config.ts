@@ -49,6 +49,12 @@ export interface DownloadConfig {
   /** 默认输出容器 */
   defaultContainer: "mp4" | "mkv";
   /**
+   * 产物默认送到哪里（设置页「下载路径」卡的 NAS / 本机 模式）：
+   * - `server`：下到上面的下载目录（NAS），进产物库
+   * - `local`：下到投递目录，取回本机后即删（下载选项弹窗里的「保存到」默认值就是它）
+   */
+  deliver: "server" | "local";
+  /**
    * 仅下载音频流时把 m4a 转成 mp3（桌面 `config.py:364`，默认关）。
    * 桌面卡片描述：「仅下载音频流时生效。若同时选择了视频则禁用。」
    */
@@ -202,6 +208,8 @@ export interface AppConfigPatch {
 
 const RENAME_POLICIES = ["auto", "overwrite"] as const;
 const DUPLICATE_POLICIES = ["prompt", "skip", "force"] as const;
+/** 产物落点：server=下载目录（NAS）/ local=投递目录（取回本机后即删） */
+const DELIVER_MODES = ["server", "local"] as const;
 const CONTAINERS = ["mp4", "mkv"] as const;
 const LANGUAGES = ["zh-CN", "zh-TW", "en", "system"] as const;
 const THEMES = ["light", "dark", "system"] as const;
@@ -224,6 +232,7 @@ export function defaultAppConfig(): AppConfig {
       renamePolicy: "auto",
       duplicatePolicy: "prompt",
       defaultContainer: "mp4",
+      deliver: "server",
       m4aToMp3: false,
       videoQualityPriority: [...DEFAULT_VIDEO_QUALITY_PRIORITY],
       audioQualityPriority: [...DEFAULT_AUDIO_QUALITY_PRIORITY],
@@ -300,6 +309,7 @@ function sanitizeDownload(raw: unknown): DownloadConfig {
     renamePolicy: isOneOf(o.renamePolicy, RENAME_POLICIES) ? o.renamePolicy : def.renamePolicy,
     duplicatePolicy: isOneOf(o.duplicatePolicy, DUPLICATE_POLICIES) ? o.duplicatePolicy : def.duplicatePolicy,
     defaultContainer: isOneOf(o.defaultContainer, CONTAINERS) ? o.defaultContainer : def.defaultContainer,
+    deliver: isOneOf(o.deliver, DELIVER_MODES) ? o.deliver : def.deliver,
     m4aToMp3: typeof o.m4aToMp3 === "boolean" ? o.m4aToMp3 : def.m4aToMp3,
     videoQualityPriority: priority(o.videoQualityPriority, def.videoQualityPriority),
     audioQualityPriority: priority(o.audioQualityPriority, def.audioQualityPriority),
@@ -443,6 +453,7 @@ export function validateConfig(next: AppConfig): string[] {
     errors.push("download.speedLimitKbps 需为不小于 0 的数字");
   }
   if (!isOneOf(dl.renamePolicy, RENAME_POLICIES)) errors.push("download.renamePolicy 需为 auto 或 overwrite");
+  if (!isOneOf(dl.deliver, DELIVER_MODES)) errors.push("download.deliver 需为 server 或 local");
   if (!isOneOf(dl.duplicatePolicy, DUPLICATE_POLICIES)) {
     errors.push("download.duplicatePolicy 需为 prompt、skip 或 force");
   }

@@ -34,6 +34,8 @@ describe("ConfigStore 设置存储（download/behavior/advanced 组）", () => {
         renamePolicy: "auto",
         duplicatePolicy: "prompt",
         defaultContainer: "mp4",
+        // 产物默认落点（设置页「下载路径」卡的 NAS / 本机 模式）
+        deliver: "server",
         // 仅纯音频流时把 m4a 转 mp3（桌面 config.py:364，默认关）
         m4aToMp3: false,
         // 旧 config.json 没有这三个数组 → 补成桌面版默认值（config.py:73-100）
