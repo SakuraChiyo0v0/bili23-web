@@ -1045,3 +1045,16 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
   .toast-root{ top:auto; bottom:calc(64px + env(safe-area-inset-bottom, 0px)); }
   .toast.closing{ transform:translateY(6px); }
 }
+
+/* ===== 第四批（2026-09-13）：分P视频列表在手机上溢出 71px =====
+   `.mp-row{ grid-template-columns:34px 60px minmax(180px,1fr) 90px }` —— 390 宽下
+   最小总宽 =34+60+180+90+3×8=388，加上面板内边距就溢出。
+   窄屏：收掉「序号」列（有复选框与时长就够了），标题允许换行。 */
+@media (max-width:767px){
+  .mp-row{ grid-template-columns:28px minmax(0,1fr) 56px; column-gap:6px; padding:0 10px; }
+  .mp-row > :nth-child(2){ display:none; }         /* 序号列 */
+  .mp-head > :nth-child(2){ display:none; }
+  .mp-title{ white-space:normal; word-break:break-word; }
+  .mp-row{ min-height:52px; }
+  .mp-row input{ width:20px; height:20px; }        /* 勾选框在触屏上要大一点 */
+}

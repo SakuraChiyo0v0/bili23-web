@@ -88,6 +88,21 @@ export function Overlay({
     return () => { restoreFocusRef.current?.focus?.(); };
   }, [phase]);
 
+  /** 软键盘：跟随可视视口（见下面 overlay 上 style 的说明） */
+  const [vv, setVv] = useState<{ h: number; top: number } | null>(null);
+  useEffect(() => {
+    if (phase !== "open") { setVv(null); return; }
+    const v = window.visualViewport;
+    if (!v) return;
+    const sync = () => setVv({ h: v.height, top: v.offsetTop });
+    sync();
+    v.addEventListener("resize", sync);
+    v.addEventListener("scroll", sync);
+    return () => {
+      v.removeEventListener("resize", sync);
+      v.removeEventListener("scroll", sync);
+    };
+  }, [phase]);
   const onPanelKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
     const panel = panelRef.current;
@@ -108,6 +123,14 @@ export function Overlay({
   return (
     <div
       className={`overlay${sheetOnMobile ? " sheet-on-mobile" : ""}${centerOnMobile ? " center-mobile" : ""}${phase === "closing" ? " closing" : ""}`}
+      /**
+       * 软键盘：把遮罩对齐到**可视视口**。
+       * `dvh` 只对支持的浏览器有效；iOS Safari 15.4 以下、部分安卓 WebView 在键盘弹起时
+       * **布局视口不变**，底部抽屉的下半截（含「确定」按钮）会被键盘盖住。
+       * 跟随 `visualViewport` 的高度与偏移后，抽屉自然浮在键盘上方。
+       * 桌面/无键盘时 `visualViewport` 就等于窗口，不产生任何视觉变化。
+       */
+      style={vv ? { height: vv.h, top: vv.top, bottom: "auto" } : undefined}
       onMouseDown={(e) => { if (dismissable && e.target === e.currentTarget) onClose?.(); }}
     >
       <div
