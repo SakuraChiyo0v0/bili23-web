@@ -171,7 +171,7 @@ export function TabBar({ route, onNavigate, onOpenFavorites }: { route: RouteId;
         >
           <Icon name={t.icon} size={22} />
           <span>{tr(t.label)}</span>
-          {t.id === "downloads" && badge && <span className="nav-badge tab">{badge}</span>}
+          {t.id === "downloads" && badge && <span className="nav-badge">{badge}</span>}
         </button>
       ))}
     </nav>
