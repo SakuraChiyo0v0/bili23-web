@@ -111,6 +111,7 @@ const EXTRA = [
   ["这里浏览的是运行服务的那台机器（{host}）上的目录", "These folders are on the machine running the service ({host})", "這裡瀏覽的是執行服務的那台機器（{host}）上的目錄"],
   ["目录在运行服务的那台机器（{host}）上", "Folders are on the machine running the service ({host})", "目錄在執行服務的那台機器（{host}）上"],
   ["—— 服务就跑在这台电脑上，所以显示的是本机路径", " — the service runs on this computer, so these are local paths", " —— 服務就跑在這台電腦上，所以顯示的是本機路徑"],
+  ["—— 如果服务跑在容器里，这里要填容器内的路径（注意宿主机目录已挂载进去）", " — if the service runs in a container, use the container-internal path (make sure the host folder is mounted)", " —— 如果服務跑在容器裡，這裡要填容器內的路徑（注意宿主機目錄已掛載進去）"],
   ["—— 服务就跑在这台电脑上，所以看到的是本机路径", " — the service runs on this very computer, so these are local paths", " —— 服務就跑在這台電腦上，所以看到的是本機路徑"],
   ["或直接输入路径：NAS 网络共享 \\\\NAS\\media、映射盘 Z:\\\\media、容器内路径…", "Or type a path directly: NAS share \\\\NAS\\media, mapped drive Z:\\\\media, container path…", "或直接輸入路徑：NAS 網路共享 \\\\NAS\\media、對應磁碟 Z:\\\\media、容器內路徑…"],
   ["点击目录进入子目录，路径会同步到底部输入框；也可以直接在下面输入网络路径。", "Tap a folder to enter it (the path syncs to the box below); you can also type a network path directly.", "點目錄進入子目錄，路徑會同步到底部輸入框；也可以直接在下面輸入網路路徑。"],

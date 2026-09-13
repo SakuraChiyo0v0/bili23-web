@@ -373,7 +373,11 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
         {deliverMode === "server" ? (
           <Row label={tr("服务器上的目录")} desc={
             serverInfo
-              ? `${tr("目录在运行服务的那台机器（{host}）上").replace("{host}", serverInfo.host)}${serverInfo.localhost ? tr("—— 服务就跑在这台电脑上，所以显示的是本机路径") : ""}`
+              ? `${tr("目录在运行服务的那台机器（{host}）上").replace("{host}", serverInfo.host)}${
+                  serverInfo.localhost
+                    ? tr("—— 服务就跑在这台电脑上，所以显示的是本机路径")
+                    : tr("—— 如果服务跑在容器里，这里要填容器内的路径（注意宿主机目录已挂载进去）")
+                }`
               : tr("这是服务器（NAS）上的目录，不是你电脑的")
           } control={
             <span className="dir-picker-row">

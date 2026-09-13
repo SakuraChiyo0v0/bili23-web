@@ -12,6 +12,7 @@
 export const ZH_TO_EN: Record<string, string> = {
   "—— 服务就跑在这台电脑上，所以看到的是本机路径": " — the service runs on this very computer, so these are local paths",
   "—— 服务就跑在这台电脑上，所以显示的是本机路径": " — the service runs on this computer, so these are local paths",
+  "—— 如果服务跑在容器里，这里要填容器内的路径（注意宿主机目录已挂载进去）": " — if the service runs in a container, use the container-internal path (make sure the host folder is mounted)",
   "{category_name}（共 {total_count} 项）": "{category_name} ({total_count} total)",
   "{category_name}（已选择 {selected_count} 项，共 {total_count} 项）": "{category_name} ({selected_count} selected, {total_count} total)",
   "{count} 个项目": "{count} items",
@@ -838,6 +839,7 @@ export const ZH_TO_EN: Record<string, string> = {
 export const ZH_TO_TW: Record<string, string> = {
   "—— 服务就跑在这台电脑上，所以看到的是本机路径": " —— 服務就跑在這台電腦上，所以看到的是本機路徑",
   "—— 服务就跑在这台电脑上，所以显示的是本机路径": " —— 服務就跑在這台電腦上，所以顯示的是本機路徑",
+  "—— 如果服务跑在容器里，这里要填容器内的路径（注意宿主机目录已挂载进去）": " —— 如果服務跑在容器裡，這裡要填容器內的路徑（注意宿主機目錄已掛載進去）",
   "{category_name}（共 {total_count} 项）": "{category_name}（共 {total_count} 項）",
   "{category_name}（已选择 {selected_count} 项，共 {total_count} 项）": "{category_name}（已選取 {selected_count} 項，共 {total_count} 項）",
   "{count} 个项目": "{count} 個項目",
