@@ -597,8 +597,23 @@ export class DownloadManager {
     this.#tmpDir = join(this.#rootDir, ".tmp");
     // 同步建目录：TaskStore/ConfigStore 打开 SQLite 前目录必须已存在
     mkdirSync(opts.dataDir, { recursive: true });
-    mkdirSync(this.#rootDir, { recursive: true });
-    mkdirSync(this.#tmpDir, { recursive: true });
+    /**
+     * ⚠️ 下载目录**不可写时不能让服务崩掉**：用户可能填了只读共享、系统保护的目录
+     * （实测：把下载目录设成 `C:\Windows\Web\Wallpaper` → 启动时 mkdir 抛 EPERM → 进程直接退出，
+     * 容器就会崩溃循环，还看不到界面去改回来）。
+     * 这里回退到默认目录并记一条错误日志，用户仍能进界面改设置。
+     */
+    try {
+      mkdirSync(this.#rootDir, { recursive: true });
+      mkdirSync(this.#tmpDir, { recursive: true });
+    } catch (err) {
+      const fallback = join(opts.dataDir, "downloads");
+      logError("download", `下载目录不可用（${this.#rootDir}）：${String(err)}；已回退到 ${fallback}`);
+      this.#rootDir = fallback;
+      this.#tmpDir = join(fallback, ".tmp");
+      mkdirSync(this.#rootDir, { recursive: true });
+      mkdirSync(this.#tmpDir, { recursive: true });
+    }
     this.#store = new TaskStore(join(opts.dataDir, "task.db"));
     this.#history = new HistoryService(this.#store);
     this.#configStore = new ConfigStore(join(opts.dataDir, "config.json"));
@@ -1844,8 +1859,17 @@ export class DownloadManager {
     if (dlDir !== this.#rootDir) {
       this.#rootDir = dlDir;
       this.#tmpDir = join(this.#rootDir, ".tmp");
-      mkdirSync(this.#rootDir, { recursive: true });
-      mkdirSync(this.#tmpDir, { recursive: true });
+      try {
+        mkdirSync(this.#rootDir, { recursive: true });
+        mkdirSync(this.#tmpDir, { recursive: true });
+      } catch (err) {
+        const fallback = join(this.#dataDir, "downloads");
+        logError("download", `切换下载目录失败（${this.#rootDir}）：${String(err)}；已回退到 ${fallback}`);
+        this.#rootDir = fallback;
+        this.#tmpDir = join(fallback, ".tmp");
+        mkdirSync(this.#rootDir, { recursive: true });
+        mkdirSync(this.#tmpDir, { recursive: true });
+      }
     }
     // advanced：代理、CDN、UA、ffmpeg 路径即时生效
     // 三态代理：disabled=直连、system=跟随环境变量、manual=用配置的代理服务器

@@ -27,6 +27,8 @@ import { Overlay } from "../components/Overlay";
 
 export function SettingsPage() {
   const { config, loading, saved, error, load, save } = useSettingsStore();
+  /** ⚠️ hook 必须在任何 return 之前调用（原来放在 `if (!config) return null` 之后 → 条件 hook） */
+  const { toast } = useToast();
 
   useEffect(() => { void load(); /*eslint-disable-next-line*/ }, []);
 
@@ -34,7 +36,15 @@ export function SettingsPage() {
   if (error && !config) return <div className="empty-state"><p className="muted">加载失败：{error}</p></div>;
   if (!config) return null;
 
-  const patch = (p: Parameters<typeof save>[0]) => void save(p);
+  /**
+   * 保存配置。失败**必须提示**：以前 save 把错误吞进 state.error 而界面不显示，
+   * 输入框又是受控于 config 的 → 值会"自己弹回旧值"，用户只会觉得配置被刷掉了。
+   */
+  const patch = (p: Parameters<typeof save>[0]) => {
+    void save(p).catch((e: unknown) => {
+      toast(`${tr("保存失败")}：${e instanceof Error ? e.message : String(e)}`, "err");
+    });
+  };
 
   return (
     <section className="page settings-page">
@@ -57,6 +67,52 @@ export function SettingsPage() {
   );
 }
 
+/**
+ * 「草稿制」输入框：**失焦或回车才提交**，输入过程中不发请求。
+ *
+ * 起因（用户反馈"配置老是被刷掉"）：设置页原来把 9 个输入框直接绑到 config 上，
+ * 每敲一个字就 PUT 一次；一旦某次被服务端拒绝（例如目录超出允许的存储范围、
+ * 数字不合法），值就会**弹回旧值**，而失败又没有任何提示 —— 看起来就是"配置被刷掉了"。
+ * 现在：编辑期间只改本地草稿，提交时若失败则弹提示、且**保留你输入的内容**（不弹回）。
+ */
+function DraftInput({
+  value, onCommit, className, style, placeholder, type = "text", min,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  className?: string;
+  style?: React.CSSProperties;
+  placeholder?: string;
+  type?: "text" | "number";
+  min?: number;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [editing, setEditing] = useState(false);
+  /**
+   * 只在**外部**（服务端返回的配置）真的变了时才同步草稿。
+   * ⚠️ 关键：保存**失败**时服务端配置没变 → 这里不动 → 你输入的内容留在框里（配合错误提示），
+   * 而不是"一失焦就弹回旧值"（那正是用户抱怨的"配置被刷掉"）。
+   */
+  const lastValue = useRef(value);
+  useEffect(() => {
+    if (lastValue.current === value) return;
+    lastValue.current = value;
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+  return (
+    <input
+      className={className} style={style} placeholder={placeholder} type={type} min={min}
+      value={draft}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => { setEditing(false); if (draft !== value) onCommit(draft); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") { setDraft(value); e.currentTarget.blur(); }
+      }}
+    />
+  );
+}
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="settings-group">
@@ -381,7 +437,7 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
               : tr("这是服务器（NAS）上的目录，不是你电脑的")
           } control={
             <span className="dir-picker-row">
-              <input className="text-input" style={{ width: 260 }} value={d.dir} placeholder={tr("默认下载目录")} onChange={(e) => onPatch({ download: { dir: e.target.value } })} />
+              <DraftInput className="text-input" style={{ width: 260 }} value={d.dir} placeholder={tr("默认下载目录")} onCommit={(v) => onPatch({ download: { dir: v } })} />
               <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>{tr("浏览…")}</button>
             </span>
           } />
@@ -414,7 +470,7 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
         }/>
         <Row label={tr("速度限制设置")} desc={tr("配置下载的速度限制设置")} control={
           <>
-            <input type="number" className="text-input" style={{ width: 120 }} value={d.speedLimitKbps} min={0} onChange={(e) => onPatch({ download: { speedLimitKbps: Number(e.target.value) } })} />
+            <DraftInput type="number" className="text-input" style={{ width: 120 }} value={String(d.speedLimitKbps)} min={0} onCommit={(v) => onPatch({ download: { speedLimitKbps: Number(v) } })} />
             <span className="small muted">KB/s</span>
           </>
         }/>
@@ -583,7 +639,7 @@ function NamingGroup({ config, onPatch }: { config: any; onPatch: (p: any) => vo
           <Seg value={String(numbering)} options={[["0", tr("批次从 1")],["1", tr("用解析列表序号")],["2", tr("全局连续")]]} onChange={(v) => onPatch({ fileNaming: { numberingType: Number(v) } })} />
         }/>
         <Row label={tr("全局起始编号")} desc={tr("设置全局顺序的起始编号")} control={
-          <input type="number" className="text-input" style={{ width: 120 }} value={f.startingNumber} min={1} onChange={(e) => onPatch({ fileNaming: { startingNumber: Number(e.target.value) } })} />
+          <DraftInput type="number" className="text-input" style={{ width: 120 }} value={String(f.startingNumber)} min={1} onCommit={(v) => onPatch({ fileNaming: { startingNumber: Number(v) } })} />
         }/>
         <Row label={tr("说明")} desc={tr("查看各「编号模式」的含义")} control={
           <button type="button" className="btn sm ghost" onClick={() => setNumberingGuide(true)}>{tr("有关编号设置的说明")}</button>
@@ -662,7 +718,7 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
       <AreaDialog open={areaOpen} value={(ad.area ?? "cn") as "cn" | "ov"} onClose={() => setAreaOpen(false)}
         onConfirm={(v) => { onPatch({ advanced: { area: v } }); setAreaOpen(false); }} />
       <Card icon="gear" title={tr("FFmpeg 设置")} desc={tr("配置用于合并和转换视频的 FFmpeg")} right={
-        <input className="text-input" style={{ width: 260 }} value={ad.ffmpegPath ?? ""} placeholder={tr("系统 PATH")} onChange={(e) => onPatch({ advanced: { ffmpegPath: e.target.value || undefined } })} />
+        <DraftInput className="text-input" style={{ width: 260 }} value={ad.ffmpegPath ?? ""} placeholder={tr("系统 PATH")} onCommit={(v) => onPatch({ advanced: { ffmpegPath: v || undefined } })} />
       } />
       {/* 原版 ProxySettingCard：代理模式三态 + 「设置代理服务器」。
           三个模式名逐字取原版 `ProxySettingCard`：不使用代理 / 使用系统代理 / 手动设置 */}
@@ -688,13 +744,13 @@ function AdvancedGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
         <UserAgentDialog open={uaOpen} value={ad.userAgent ?? ""} onClose={() => setUaOpen(false)}
           onConfirm={(v) => { onPatch({ advanced: { userAgent: v } }); setUaOpen(false); }} />
         <Row label={tr("默认画质档位")} desc={tr("缺省时不覆盖自动选择")} control={
-          <input type="number" className="text-input" style={{ width: 120 }} value={ad.defaultVideoQualityId ?? ""} placeholder="Auto" onChange={(e) => onPatch({ advanced: { defaultVideoQualityId: e.target.value ? Number(e.target.value) : undefined } })} />
+          <DraftInput type="number" className="text-input" style={{ width: 120 }} value={String(ad.defaultVideoQualityId ?? "")} placeholder="Auto" onCommit={(v) => onPatch({ advanced: { defaultVideoQualityId: v ? Number(v) : undefined } })} />
         }/>
         <Row label={tr("默认音质档位")} desc="" control={
-          <input type="number" className="text-input" style={{ width: 120 }} value={ad.defaultAudioQualityId ?? ""} placeholder="Auto" onChange={(e) => onPatch({ advanced: { defaultAudioQualityId: e.target.value ? Number(e.target.value) : undefined } })} />
+          <DraftInput type="number" className="text-input" style={{ width: 120 }} value={String(ad.defaultAudioQualityId ?? "")} placeholder="Auto" onCommit={(v) => onPatch({ advanced: { defaultAudioQualityId: v ? Number(v) : undefined } })} />
         }/>
         <Row label={tr("默认编码档位")} desc="" control={
-          <input type="number" className="text-input" style={{ width: 120 }} value={ad.defaultCodecId ?? ""} placeholder="Auto" onChange={(e) => onPatch({ advanced: { defaultCodecId: e.target.value ? Number(e.target.value) : undefined } })} />
+          <DraftInput type="number" className="text-input" style={{ width: 120 }} value={String(ad.defaultCodecId ?? "")} placeholder="Auto" onCommit={(v) => onPatch({ advanced: { defaultCodecId: v ? Number(v) : undefined } })} />
         }/>
       </Card>
       {/* 原版日志卡是「查看日志」按钮，Web 端没有日志查看器 */}

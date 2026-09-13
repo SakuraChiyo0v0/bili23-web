@@ -33,7 +33,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       // 3s 后重置 saved 提示
       setTimeout(() => set({ saved: false }), 3000);
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      set({ error: message });
+      // 抛出去：调用方要能提示用户（否则"改完自己弹回旧值"，用户只会觉得配置被刷掉了）
+      throw new Error(message);
     }
   },
 }));
