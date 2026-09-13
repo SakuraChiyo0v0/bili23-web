@@ -137,6 +137,7 @@ const EXTRA = [
   ["允许的存储范围：{roots}（其它路径不可选）", "Allowed storage scope: {roots} (other paths are not selectable)", "允許的儲存範圍：{roots}（其它路徑不可選）"],
   ["这个目录不在允许的存储范围里，不能浏览或选用：", "This folder is outside the allowed storage scope; it cannot be browsed or selected:", "這個目錄不在允許的儲存範圍裡，不能瀏覽或選用："],
   ["可选的根目录：", "Available roots:", "可選的根目錄："],
+  ["这个目录里的图片：", "Images in this folder:", "這個目錄裡的圖片："],
   ["允许的存储范围：{roots}", "Allowed storage scope: {roots}", "允許的儲存範圍：{roots}"],
   ["正在推送到本机…服务器副本会在推送完成后删除", "Sending to your device… the server copy is removed once it finishes", "正在推送到本機…伺服器副本會在推送完成後刪除"],
   ["已保存到本机；服务器副本已删除", "Saved to this device; the server copy was removed", "已儲存到本機；伺服器副本已刪除"],

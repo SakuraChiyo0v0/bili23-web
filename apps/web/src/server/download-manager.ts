@@ -226,6 +226,25 @@ export interface DirEntry {
   name: string;
   /** 完整绝对路径（供配置回填） */
   path: string;
+  /** 该目录里第一张图片的绝对路径（用作列表封面，便于"看图找目录"）；没有则省略 */
+  cover?: string;
+}
+
+/** 目录列表里的图片文件（选择器用来显示缩略图） */
+export interface FileEntryLite {
+  name: string;
+  path: string;
+  size: number;
+  /** 是否适合当缩略图（过大就不请求，避免拖慢列表） */
+  thumb: boolean;
+}
+
+/** 缩略图只服务这个大小以内的图片（封面一般 200KB 左右，4MB 足够宽松） */
+const MAX_THUMB_BYTES = 4 * 1024 * 1024;
+
+/** 是否为可当缩略图的图片扩展名 */
+function isImageName(name: string): boolean {
+  return /\.(jpe?g|png|webp|gif|avif|bmp)$/i.test(name);
 }
 
 export interface TaskSnapshot {
@@ -1718,30 +1737,68 @@ export class DownloadManager {
   }
 
   /**
-   * 浏览给定绝对目录的子目录（下载目录选择器用）。
-   * - 路径不存在 / 不是目录 / 为空 → 返回空列表；
-   * - 只返回可读子目录的 name+path，隐藏项过滤规则与 #walk 一致（跳过 . 开头隐藏目录、node_modules、dist、.tmp）。
+   * 浏览给定绝对目录（下载目录选择器用）。
+   * - 路径不存在 / 不是目录 / 为空 → 返回空；
+   * - 隐藏项过滤规则与 #walk 一致（跳过 . 开头、node_modules、dist、.tmp）；
+   * - **目录带上 cover**：该目录里第一张图片（按名字序）—— 用户的下载产物会把封面
+   *   与视频放在同一目录（`xxx.mp4` + `xxx.jpg`），于是列表里每行都能看到那件作品的封面，
+   *   像资源管理器一样"看图找目录"（用户明确要的效果）；
+   * - **图片文件单独列出**：让用户能看到当前目录里有哪些图。
    */
-  async listSubdirs(absDir: string): Promise<DirEntry[]> {
-    const out: DirEntry[] = [];
+  async listEntries(absDir: string): Promise<{ dirs: DirEntry[]; images: FileEntryLite[] }> {
+    const dirs: DirEntry[] = [];
+    const images: FileEntryLite[] = [];
     let entries;
     try {
       entries = await readdir(absDir, { withFileTypes: true });
     } catch {
-      return out;
+      return { dirs, images };
     }
+    const skipped = (name: string): boolean =>
+      name.startsWith(".") || name === "node_modules" || name === "dist" || name === ".tmp";
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist" || entry.name === ".tmp") continue;
+      if (skipped(entry.name)) continue;
       const full = join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        const cover = await this.#firstImageIn(full);
+        dirs.push({ name: entry.name, path: full, ...(cover ? { cover } : {}) });
+        continue;
+      }
+      if (!entry.isFile() || !isImageName(entry.name)) continue;
       try {
-        if ((await stat(full)).isDirectory()) out.push({ name: entry.name, path: full });
+        const st = await stat(full);
+        // 缩略图接口只服务小图；这里把过大的图片标出来，前端不请求（避免拖慢列表）
+        images.push({ name: entry.name, path: full, size: st.size, thumb: st.size <= MAX_THUMB_BYTES });
       } catch {
         // 并发删除/无权限：跳过
       }
     }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
+    dirs.sort((a, b) => a.name.localeCompare(b.name));
+    images.sort((a, b) => a.name.localeCompare(b.name));
+    return { dirs, images };
+  }
+
+  /** 目录里第一张图片的绝对路径（用作该目录的封面）；没有就返回 undefined */
+  async #firstImageIn(dir: string): Promise<string | undefined> {
+    try {
+      const names = (await readdir(dir)).filter((n) => !n.startsWith(".") && isImageName(n)).sort();
+      for (const n of names) {
+        const full = join(dir, n);
+        const st = await stat(full).catch(() => null);
+        if (st?.isFile() && st.size <= MAX_THUMB_BYTES) return full;
+      }
+    } catch {
+      // 无权限/已删除：当作没有封面
+    }
+    return undefined;
+  }
+
+  /**
+   * 兼容旧调用：只要子目录（保留给既有调用方）。
+   * 新的选择器用 `listEntries`（多带封面与图片）。
+   */
+  async listSubdirs(absDir: string): Promise<DirEntry[]> {
+    return (await this.listEntries(absDir)).dirs;
   }
 
   // ---------- 队列调度 / 重启恢复 ----------

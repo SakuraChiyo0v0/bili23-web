@@ -428,9 +428,17 @@ describe("/api/dirs 目录选择接口", () => {
       const mk = (withImpl: boolean) => {
         const deps = makeDeps();
         if (withImpl) {
-          (deps as unknown as { listSubdirs: unknown }).listSubdirs = async (dir: string) => {
-            if (dir === root) return [{ name: "downloads", path: join(root, "downloads") }, { name: "videos", path: join(root, "videos") }];
-            return [];
+          (deps as unknown as { listEntries: unknown }).listEntries = async (dir: string) => {
+            if (dir === root) {
+              return {
+                dirs: [
+                  { name: "downloads", path: join(root, "downloads") },
+                  { name: "videos", path: join(root, "videos"), cover: join(root, "videos", "cover.jpg") },
+                ],
+                images: [{ name: "cover.jpg", path: join(root, "cover.jpg"), size: 1024, thumb: true }],
+              };
+            }
+            return { dirs: [], images: [] };
           };
         }
         return createApp({ manager: deps as never });
@@ -440,7 +448,7 @@ describe("/api/dirs 目录选择接口", () => {
       const appNo = mk(false);
       let res = await appNo.request("/api/dirs?path=" + enc);
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ dirs: [] });
+      expect(await res.json()).toEqual({ dirs: [], images: [] });
 
       const app = mk(true);
       res = await app.request("/api/dirs?path=" + enc);
@@ -448,12 +456,13 @@ describe("/api/dirs 目录选择接口", () => {
       expect(await res.json()).toEqual({
         dirs: [
           { name: "downloads", path: join(root, "downloads") },
-          { name: "videos", path: join(root, "videos") },
+          { name: "videos", path: join(root, "videos"), cover: join(root, "videos", "cover.jpg") },
         ],
+        images: [{ name: "cover.jpg", path: join(root, "cover.jpg"), size: 1024, thumb: true }],
       });
 
       res = await app.request("/api/dirs");
-      expect(await res.json()).toEqual({ dirs: [] });
+      expect(await res.json()).toEqual({ dirs: [], images: [] });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -139,8 +139,20 @@ export function listFiles(): Promise<{ files: Array<{ name: string; path: string
 }
 
 /** 目录选择器：列出指定绝对目录的子目录（下载目录浏览用） */
-export function listDirs(path: string): Promise<{ dirs: Array<{ name: string; path: string }> }> {
+/**
+ * 浏览服务端目录：返回子目录（带 `cover`，该目录里第一张图，用作列表封面）
+ * 与当前目录里的图片文件（选择器显示成缩略图，便于"看图找目录"）。
+ */
+export function listDirs(path: string): Promise<{
+  dirs: Array<{ name: string; path: string; cover?: string }>;
+  images?: Array<{ name: string; path: string; size: number; thumb: boolean }>;
+}> {
   return request("/dirs?path=" + encodeURIComponent(path));
+}
+
+/** 缩略图地址（服务端会校验是否在允许的存储范围内） */
+export function fileThumbUrl(absPath: string): string {
+  return `${BASE}/fs/thumb?path=${encodeURIComponent(absPath)}`;
 }
 
 /** 产物文件下载地址（用于"打开文件"） */

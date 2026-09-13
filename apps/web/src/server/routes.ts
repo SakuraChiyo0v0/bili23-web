@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { stream, streamSSE } from "hono/streaming";
 import { createReadStream } from "node:fs";
-import { basename } from "node:path";
+import { basename, extname } from "node:path";
 import { stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { BiliError } from "@bili23-web/engine";
@@ -16,6 +16,7 @@ import type {
 import type {
   DownloadOptions,
   DirEntry,
+  FileEntryLite,
   FileEntry,
   HistoryEntryDto,
   LogEntry,
@@ -77,6 +78,8 @@ export interface ApiDeps {
   resolveDownloadFile(relPath: string): string | undefined;
   listFiles(): Promise<FileEntry[]>;
   listSubdirs?(absDir: string): Promise<DirEntry[]>;
+  /** 目录 + 图片文件（选择器要显示缩略图） */
+  listEntries?(absDir: string): Promise<{ dirs: DirEntry[]; images: FileEntryLite[] }>;
   /** 服务器自己的目录信息（目录选择器里要显示"这是哪台机器上的目录"） */
   fsRoots?(): { dataDir: string; downloadDir: string };
   /** 应用日志（桌面「日志」窗口）：读最新在前可搜索 / 清空 */
@@ -313,10 +316,51 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
       allowedRoots: allowedRoots(),
     });
   });
+  /**
+   * 目录选择器的缩略图：把**允许范围内**的图片文件原样发出去（前端用 CSS 缩小显示）。
+   *
+   * 为什么不做服务端缩放：容器里没有图像库（sharp 之类），用 ffmpeg 逐张转太慢；
+   * 而封面图一般只有 200KB 左右，原样发 + `Cache-Control` 最省事。
+   * 仍然设 4MB 上限（`listEntries` 会先标好 `thumb`，前端对超限的不发请求）。
+   */
+  app.get("/api/fs/thumb", async (c) => {
+    const manager = getManager();
+    const file = c.req.query("path") ?? "";
+    if (!file) return c.json({ error: { code: "INVALID_PATH", message: "缺少 path 参数" } }, 400);
+    if (!isPathAllowed(file)) {
+      return c.json(
+        { error: { code: "PATH_OUT_OF_SCOPE", message: `该文件超出允许的存储范围（${allowedRoots().join("、") || "未限制"}）` } },
+        403,
+      );
+    }
+    let st;
+    try {
+      st = await stat(file);
+    } catch {
+      return c.json({ error: { code: "NOT_FOUND", message: "文件不存在" } }, 404);
+    }
+    if (!st.isFile()) return c.json({ error: { code: "INVALID_PATH", message: "不是文件" } }, 400);
+    const ext = extname(file).toLowerCase();
+    const types: Record<string, string> = {
+      ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+      ".gif": "image/gif", ".avif": "image/avif", ".bmp": "image/bmp",
+    };
+    const type = types[ext];
+    if (!type) return c.json({ error: { code: "INVALID_PATH", message: "不是图片" } }, 400);
+    c.header("Content-Type", type);
+    // 缩略图短期缓存即可（文件可能被重新下载覆盖）
+    c.header("Cache-Control", "private, max-age=300");
+    return stream(c, async (s) => {
+      const rs = createReadStream(file);
+      for await (const chunk of rs) await s.write(chunk as Uint8Array);
+      rs.destroy();
+    });
+  });
   app.get("/api/dirs", async (c) => {
     const manager = getManager();
     const dir = c.req.query("path") ?? "";
-    if (!dir || dir.length === 0) return c.json({ dirs: [] });
+    // 响应结构保持一致：始终 { dirs, images }（前端按同一形状解析）
+    if (!dir || dir.length === 0) return c.json({ dirs: [], images: [] });
     /**
      * 存储范围限制（部署级配置，见 config.ts 的 allowedRoots）。
      * ⚠️ 必须放在 `stat` **之前**：否则"不存在的越界路径"会先被 stat 拦掉、
@@ -332,11 +376,15 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
     try {
       st = await stat(dir);
     } catch {
-      return c.json({ dirs: [] });
+      return c.json({ dirs: [], images: [] });
     }
-    if (!st.isDirectory() || !manager.listSubdirs) return c.json({ dirs: [] });
-    const dirs: DirEntry[] = await manager.listSubdirs(dir);
-    return c.json({ dirs });
+    if (!st.isDirectory() || !manager.listEntries) return c.json({ dirs: [], images: [] });
+    /**
+     * 目录里除了子目录，还返回**图片文件**：选择器要把它们显示成缩略图，
+     * 让用户能"看图找目录"（像资源管理器）。`dirs[].cover` 是该目录第一张图，用作行封面。
+     */
+    const { dirs, images } = await manager.listEntries(dir);
+    return c.json({ dirs, images });
   });
 
   app.post("/api/tasks/:id/pause", (c) => {

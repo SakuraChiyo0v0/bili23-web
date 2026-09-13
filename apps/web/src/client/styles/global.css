@@ -1106,3 +1106,26 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
 /* 当前目录超出允许范围时的说明块（替代一条红字报错） */
 .dir-out-of-scope{ padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface-2); }
 .dir-out-of-scope p{ margin:0; }
+
+/* ===== 目录选择器：缩略图（像资源管理器那样"看图找目录"）=====
+   左侧是每行的封面（取该目录里第一张图），下方是当前目录里的图片墙。 */
+.dir-thumb{
+  width:44px; height:30px; flex:none; border-radius:5px; object-fit:cover;
+  background:var(--surface-3); border:1px solid var(--line);
+}
+.dir-thumb.placeholder{ display:inline-flex; align-items:center; justify-content:center; color:var(--muted); }
+.dir-row-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dir-images{ border-top:1px solid var(--line); margin-top:8px; }
+.dir-image-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px; }
+.dir-image{ margin:0; display:flex; flex-direction:column; gap:4px; min-width:0; }
+.dir-image img{
+  width:100%; height:64px; object-fit:cover; border-radius:6px;
+  border:1px solid var(--line); background:var(--surface-3);
+}
+.dir-image-big{
+  width:100%; height:64px; display:flex; align-items:center; justify-content:center;
+  border-radius:6px; border:1px dashed var(--line); color:var(--muted);
+}
+.dir-image figcaption{
+  font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}

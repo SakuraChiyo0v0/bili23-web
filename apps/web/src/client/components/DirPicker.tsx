@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSystemInfo, listDirs } from "../services/client";
+import { fileThumbUrl, getSystemInfo, listDirs } from "../services/client";
 import { t as tr } from "../lib/i18n";
 import { Overlay } from "./Overlay";
 
@@ -24,7 +24,9 @@ function inScopeOf(roots: string[], p: string): boolean {
 
 export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onClose: () => void; value: string; onPick: (dir: string) => void }) {
   const [current, setCurrent] = useState<string>(value || "/");
-  const [dirs, setDirs] = useState<Array<{ name: string; path: string }>>([]);
+  const [dirs, setDirs] = useState<Array<{ name: string; path: string; cover?: string }>>([]);
+  /** 当前目录里的图片文件（显示成缩略图，便于"看图找目录"） */
+  const [images, setImages] = useState<Array<{ name: string; path: string; size: number; thumb: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [manual, setManual] = useState(value || "");
@@ -69,6 +71,7 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
      */
     if (!inScope(current)) {
       setDirs([]);
+      setImages([]);
       setError("");
       setOutOfScope(current);
       setLoading(false);
@@ -78,7 +81,7 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
     setLoading(true);
     setError("");
     listDirs(current)
-      .then((r) => setDirs(r.dirs))
+      .then((r) => { setDirs(r.dirs); setImages(r.images ?? []); })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, [open, current]);
@@ -178,10 +181,32 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
             {!loading && !error && !outOfScope && dirs.length === 0 && <p className="muted small">{tr("此目录没有可选的子目录")}</p>}
             {!outOfScope && dirs.map((d) => (
               <button key={d.path} type="button" className="dir-row" onClick={() => enter(d.path)}>
-                <svg className="ico" viewBox="0 0 24 24" width={16} height={16}><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z" /></svg>
-                <span>{d.name}</span>
+                {/* 该目录里第一张图当封面 —— 下载产物会把封面与视频放同一目录，
+                    于是"看图找目录"就成立了（用户要的资源管理器效果） */}
+                {d.cover
+                  ? <img className="dir-thumb" src={fileThumbUrl(d.cover)} alt="" loading="lazy" decoding="async"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  : <span className="dir-thumb placeholder"><svg className="ico" viewBox="0 0 24 24" width={16} height={16}><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z" /></svg></span>}
+                <span className="dir-row-name">{d.name}</span>
               </button>
             ))}
+            {/* 当前目录里的图片：缩略图墙 */}
+            {!outOfScope && images.length > 0 && (
+              <div className="dir-images">
+                <div className="small muted" style={{ margin: "10px 0 6px" }}>{tr("这个目录里的图片：")}</div>
+                <div className="dir-image-grid">
+                  {images.map((img) => (
+                    <figure key={img.path} className="dir-image" title={`${img.name}（${Math.round(img.size / 1024)} KB）`}>
+                      {img.thumb
+                        ? <img src={fileThumbUrl(img.path)} alt={img.name} loading="lazy" decoding="async"
+                            onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+                        : <span className="dir-image-big"><svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M4 5h16v14H4z" /><path d="M4 15l4-4 4 4 3-3 5 5" /></svg></span>}
+                      <figcaption>{img.name}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="dir-picker-tip"><span className="small muted">{tr("点击目录进入子目录，路径会同步到底部输入框；也可以直接在下面输入网络路径。")}</span></div>
         </div>
