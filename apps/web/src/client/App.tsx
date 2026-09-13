@@ -18,9 +18,9 @@ import { TasksPage } from "./pages/TasksPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { FilesPage } from "./pages/FilesPage";
 import { t as tr, resolveLang, setCurrentLang, type Lang } from "./lib/i18n";
-import { applyMotion } from "./lib/theme";
+import { applyMotion, applyTheme, type ThemePreference } from "./lib/theme";
 import { saveJSON } from "./lib/storage";
-import { MOTION_KEY } from "./lib/useUiSettings";
+import { MOTION_KEY, THEME_KEY } from "./lib/useUiSettings";
 
 export function App() {
   return (
@@ -48,6 +48,7 @@ function Shell() {
   const loadConfig = useSettingsStore((s) => s.load);
   const cfgLang = useSettingsStore((s) => s.config?.behavior?.language);
   const cfgMotion = useSettingsStore((s) => s.config?.behavior?.motion);
+  const cfgTheme = useSettingsStore((s) => s.config?.behavior?.theme);
   /**
    * 语言（i18n）。两个要点：
    * 1. **在渲染期**调用 `setCurrentLang` —— 它是模块级状态，`t()` 在子组件渲染时读它；
@@ -65,6 +66,20 @@ function Shell() {
     applyMotion(cfgMotion);
     saveJSON(MOTION_KEY, cfgMotion);
   }, [cfgMotion]);
+
+  /**
+   * 主题同理，也必须以**配置**为准。
+   *
+   * 踩到的真 bug（自己截图看出来的）：配置里写的是 dark，页面却是浅色 ——
+   * 因为 `applyTheme` 只跟着 `useUiSettings` 的 effect 跑（设置页/主题开关），
+   * 启动时只读了 **localStorage 镜像**（见 main.tsx）。桌面端进过一次设置页就会写上镜像，
+   * 所以看不出来；**换一台设备（手机）镜像为空** → 电脑上设的深色，手机打开还是浅色。
+   */
+  useEffect(() => {
+    if (!cfgTheme) return;
+    applyTheme(cfgTheme as ThemePreference);
+    saveJSON(THEME_KEY, cfgTheme);
+  }, [cfgTheme]);
 
   const lang: Lang = resolveLang(cfgLang, typeof navigator !== "undefined" ? navigator.language : undefined);
   setCurrentLang(lang);

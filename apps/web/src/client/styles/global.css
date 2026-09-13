@@ -980,3 +980,45 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
   .modal{ max-width:100vw; }
   .modal-body{ overflow-x:auto; }
 }
+
+/* ===== 手机端第二批（2026-09-13 自查：设置页子弹窗实测）=====
+   实测 390 宽：日志查看器内 `.log-msg` 溢出 1490px（长行不换行）、
+   命名规则编辑器 `.naming-name` 溢出 62px（min-width:170 撑破）、
+   目录选择器每行只有 ~28px 高（28 个小目标）→ 全部修掉。 */
+@media (max-width:767px){
+  /* 日志：长行必须换行，否则一条日志就能把面板撑爆 */
+  .log-msg{ white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; overflow-wrap:anywhere; }
+  .log-name{ min-width:0; }
+  .log-row-head{ flex-wrap:wrap; }
+  .log-body pre{ white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
+
+  /* 命名规则：手机上重排成"两行卡片" ——
+     第一行：规则名（占满左侧）+ 操作按钮；第二行：分类 + 模板（模板可换行）。
+     ⚠️ 上一版把名字撑成整行、把模板挤到只剩一点点宽，反而溢出 283px —— 排版要一起给宽度。 */
+  .naming-list-head{ display:none; }                       /* 手机上不是表格了，表头没意义 */
+  .naming-row, .naming-rule-row{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; padding:10px 2px; }
+  .naming-name, .naming-rule-row .naming-name{ grid-column:1; grid-row:1; min-width:0; word-break:break-word; }
+  .naming-ops{ grid-column:2; grid-row:1; flex-wrap:wrap; justify-content:flex-end; }
+  .naming-type{ grid-column:1; grid-row:2; min-width:0; }
+  .naming-rule, .naming-rule-row .naming-rule{ grid-column:1 / -1; grid-row:3; min-width:0; white-space:normal; word-break:break-all; overflow:visible; text-overflow:clip; background:var(--surface-2); border-radius:6px; padding:6px 8px; }
+
+  /* 目录选择：整行可点、高度够 */
+  .dir-row{ min-height:44px; padding:10px 10px; }
+  .dir-current-path{ word-break:break-all; }
+}
+
+/* ===== 软键盘：视口高度必须用 dvh（2026-09-13）=====
+   `.modal{max-height:92vh}` 里的 `vh` 在软键盘弹起时**不会变小**（Chrome Android / iOS 15.4+ 会改
+   动态视口），于是底部抽屉的下半截（含确定按钮）被键盘盖住、够不到。
+   同时给 `visualViewport` 兜底：App 容器也用 dvh。 */
+@supports (height: 100dvh){
+  .app{ height:100dvh; }
+  .modal{ max-height:92dvh; }
+  @media (max-width:767px){
+    .modal, .overlay.sheet-on-mobile .modal{ max-height:94dvh; }
+  }
+  /* 键盘弹起时给底部留一点余量，输入框不至于贴住键盘 */
+  @media (max-width:767px){
+    .modal-body{ scroll-padding-bottom:24px; }
+  }
+}

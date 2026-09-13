@@ -4,6 +4,7 @@ import { Icon, type IconName } from "../lib/icons";
 import { pagerRange } from "../lib/pagerRange";
 import { useToast } from "../lib/toast";
 import { t as tr } from "../lib/i18n";
+import { cancelLongPress, longPressStart } from "../lib/longPress";
 
 /**
  * 收藏夹浮层（1:1 原版 `gui/component/widget/flyout.py:FavoriteFlyoutWidget`）。
@@ -218,7 +219,9 @@ export function FavoritesPage({
                       {follow.map((b, i) => (
                         <div key={b.seasonId} className="fav-cell" style={{ ["--i"]: Math.min(i, 12) } as React.CSSProperties}>
                           <button type="button" className="fav-item fav-poster" onClick={() => onParse(b.url)}
-                            onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, url: b.url }); }}>
+                            onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, url: b.url }); }}
+                            onTouchStart={(e) => longPressStart(e, (x, y) => setMenu({ x, y, url: b.url }))}
+                            onTouchEnd={cancelLongPress} onTouchMove={cancelLongPress} onTouchCancel={cancelLongPress}>
                             {b.cover
                               ? <img className="fav-poster-cover" src={b.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={coverLoaded} ref={coverRef} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                               : <div className="fav-poster-cover placeholder"><Icon name="play" size={22} /></div>}
@@ -279,7 +282,9 @@ export function FavoritesPage({
                 {folders.map((f, i) => (
                   <div key={f.id} className="fav-cell" style={{ ["--i"]: Math.min(i, 12) } as React.CSSProperties}>
                     <button type="button" className="fav-item" onClick={() => onParse(f.url)}
-                      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, url: f.url }); }}>
+                      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, url: f.url }); }}
+                            onTouchStart={(e) => longPressStart(e, (x, y) => setMenu({ x, y, url: f.url }))}
+                            onTouchEnd={cancelLongPress} onTouchMove={cancelLongPress} onTouchCancel={cancelLongPress}>
                       {f.cover
                         ? <img className="fav-thumb" src={f.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={coverLoaded} ref={coverRef} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                         : <div className="fav-thumb placeholder"><Icon name="folder" size={22} /></div>}

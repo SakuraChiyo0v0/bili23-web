@@ -18,7 +18,7 @@
  *     "document.querySelectorAll('.teaching-tip').length" \
  *     "JSON.stringify([...document.querySelectorAll('.teaching-tip')].map(e=>e.innerText))"
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -119,6 +119,22 @@ try {
   await send("Page.navigate", { url });
   await sleep(waitMs);
 
+  /**
+   * 条款闸门：不设这个键，应用会停在「用户协议」页，什么选择器都查不到。
+   *
+   * 以前靠一个 `dist/client/__seed.html` 种子页，但 **`vite build` 会把 dist/client 整个重建**，
+   * 种子页随之消失 → 探针访问 404 → 页面根本不加载 → 表现成"功能全坏了"（踩过好几次）。
+   * 现在直接在页面里设 localStorage 再 reload，不再依赖任何额外文件。
+   */
+  if (process.env.PROBE_ACCEPT_TERMS !== "0") {
+    await send("Runtime.evaluate", {
+      expression: `(() => { localStorage.setItem("bili23.web.accepted_terms", "true"); return localStorage.getItem("bili23.web.accepted_terms"); })()`,
+      returnByValue: true,
+    });
+    await send("Page.reload", { ignoreCache: false });
+    await sleep(waitMs);
+  }
+
   let n = 0;
   for (const expr of exprs) {
     n += 1;
@@ -149,7 +165,12 @@ try {
   process.exitCode = 1;
 } finally {
   try { ws?.close(); } catch { /* ignore */ }
-  chrome.kill();
+  // 只 kill 启动器会留下子进程（实测会攒到十几个），Windows 上用 taskkill /T 连树一起收
+  if (process.platform === "win32" && chrome.pid) {
+    spawnSync("taskkill", ["/pid", String(chrome.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    chrome.kill();
+  }
   await sleep(300);
   await rm(profile, { recursive: true, force: true }).catch(() => undefined);
 }

@@ -11,6 +11,7 @@ import { useParseSession } from "../store/useParseSession";
 import type { TaskSummary } from "../services/types";
 import { TaskActions } from "../components/TaskActions";
 import { t as tr } from "../lib/i18n";
+import { cancelLongPress, longPressStart } from "../lib/longPress";
 
 export function TasksPage() {
   const { tasks, activeTab, loading, error, setTab, refresh, upsert, remove } = useTasksStore();
@@ -245,7 +246,9 @@ function TaskCard({ task, onRemove, index = 0 }: { task: TaskSummary; onRemove: 
   return (
     <div className={`task-card${isDone ? " done" : ""}`}
       style={{ ["--i"]: Math.min(index, 12) } as React.CSSProperties}
-      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
+      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
+      onTouchStart={(e) => longPressStart(e, (x, y) => setMenu({ x, y }))}
+      onTouchEnd={cancelLongPress} onTouchMove={cancelLongPress} onTouchCancel={cancelLongPress}>
       {task.cover ? (
         <img className="cover cover-img" src={task.cover} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={(e) => e.currentTarget.classList.add("loaded")} onError={(e)=>{ (e.currentTarget as HTMLImageElement).style.display="none"; }} />
       ) : (

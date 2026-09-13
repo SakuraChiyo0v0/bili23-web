@@ -7,6 +7,7 @@ import { dynTimeKey, dynTimeLabel, sortTree, type SortKey } from "../lib/parseTr
 import { Icon } from "../lib/icons";
 import { Overlay } from "./Overlay";
 import { t as tr } from "../lib/i18n";
+import { cancelLongPress, longPressStart, shouldSwallowClick } from "../lib/longPress";
 
 function fmtDur(sec: number): string {
   if (!sec) return "—";
@@ -183,6 +184,7 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
           className={`tree-row${isLeaf ? "" : " group"}${depth > 0 ? " child" : ""}${collapsed ? " collapsed" : ""}${zebraOn ? " zebra" : ""}${isMatch ? " search-hit" : ""}${activeMatchId === n.id ? " search-hit-active" : ""}`}
           style={{ gridTemplateColumns: gridTemplate, ["--i"]: myRowIndex } as React.CSSProperties}
           onClick={(e) => {
+            if (shouldSwallowClick()) return; // 长按刚开过菜单，别顺手把它勾选/展开了
             if (e.shiftKey && isLeaf && anchor) { rangeToggle(anchor, n.id); return; }
             toggle(n.id);
             if (isLeaf) setAnchor(n.id);
@@ -191,6 +193,11 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
             e.preventDefault();
             setMenu({ x: e.clientX, y: e.clientY, node: n });
           }}
+          /* 触屏：长按 = 右键（第二入口，主要入口是行右侧常驻的 ⋯） */
+          onTouchStart={(e) => longPressStart(e, (x, y) => setMenu({ x, y, node: n }))}
+          onTouchEnd={cancelLongPress}
+          onTouchMove={cancelLongPress}
+          onTouchCancel={cancelLongPress}
         >
           {shown.map((c) => cell(c.key))}
           {/* 行上「⋯」= 触屏替代右键（设计稿：桌面 hover 浮现、触屏常驻，共用同一份菜单项）。
