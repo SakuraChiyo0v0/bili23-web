@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { BiliError } from "@bili23-web/engine";
 import type { MediaItem, ParseResult } from "@bili23-web/engine";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
+import { tmpDir, tmpDirSync } from "./helpers/tmp.js";
 import { createApp } from "../src/server/index.js";
 import type { ApiDeps } from "../src/server/routes.js";
 import { defaultAppConfig } from "../src/server/config.js";
@@ -71,7 +72,7 @@ function makeDeps(): ApiDeps & {
   const deleted: string[] = [];
   const historyDeleted: string[] = [];
   /** `/api/deliver/raw` 用的临时文件与"已删除"记录 */
-  const deliverDir = mkdtempSync(join(tmpdir(), "bili23-deliver-"));
+  const deliverDir = tmpDirSync("bili23-deliver-");
   const deliverFile = join(deliverDir, "投递视频.mp4");
   writeFileSync(deliverFile, Buffer.from("DELIVER-BYTES"));
   const deliveredRemoved: string[] = [];
@@ -349,7 +350,7 @@ describe("Web API 路由", () => {
   });
 
   it("GET /api/files/raw：防目录穿越、目录/缺失处理、流式返回文件", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-raw-"));
+    const dir = await tmpDir("bili23-raw-");
     try {
       await writeFile(join(dir, "ok.mp4"), "hello-bytes");
       await mkdir(join(dir, "subdir"));
@@ -422,7 +423,7 @@ describe("resolveDownloadPath 防目录穿越", () => {
 
 describe("/api/dirs 目录选择接口", () => {
   it("manager.listSubdirs 缺省时返回空列表；存在时透传子目录", async () => {
-    const root = await mkdtemp(join(tmpdir(), "bili23-dirs-api-"));
+    const root = await tmpDir("bili23-dirs-api-");
     try {
       const mk = (withImpl: boolean) => {
         const deps = makeDeps();

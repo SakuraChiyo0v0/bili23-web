@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
+import { onCleanup, tmpDir } from "./helpers/tmp.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpService, bearerToken, tokenMatches } from "../src/server/mcp.js";
@@ -33,8 +34,10 @@ function rpc(method: string, params?: unknown, id = 1): Request {
 }
 
 async function makeService(): Promise<{ service: McpService; dir: string; manager: DownloadManager }> {
-  const dir = await mkdtemp(join(tmpdir(), "bili23-mcp-"));
+  const dir = await tmpDir("bili23-mcp-");
   const manager = new DownloadManager({ dataDir: dir });
+  // 用完必须关：它开着 SQLite（task.db），Windows 上不关就删不掉这个临时目录
+  onCleanup(() => manager.close());
   await manager.getConfig();   // 触发配置加载
   return { service: new McpService(manager), dir, manager };
 }
@@ -79,7 +82,7 @@ describe("配置校验：MCP 相关", () => {
   });
 
   it("默认关闭、端口 23330、回环地址（与原版一致）", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-mcp-cfg-"));
+    const dir = await tmpDir("bili23-mcp-cfg-");
     try {
       const store = new ConfigStore(join(dir, "config.json"));
       await store.load();

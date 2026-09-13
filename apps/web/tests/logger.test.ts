@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { FileLogger, parseLogText } from "../src/server/logger.js";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { tmpDir } from "./helpers/tmp.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -48,7 +49,7 @@ describe("日志解析（桌面 dialog/log.py 的同一条正则）", () => {
 
 describe("FileLogger 写入与读取", () => {
   it("写入的行能被自己解析回来（格式自洽）；message 里的换行按物理行写、解析时拼回", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-log-"));
+    const dir = await tmpDir("bili23-log-");
     try {
       const logger = new FileLogger(dir);
       logger.info("unit", "第一行\n第二行");
@@ -76,7 +77,7 @@ describe("FileLogger 写入与读取", () => {
   });
 
   it("search 对整条文本做包含匹配（时间/名字/级别/调用点/正文都算）", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-log-"));
+    const dir = await tmpDir("bili23-log-");
     try {
       const logger = new FileLogger(dir);
       logger.info("parse", "解析完成 alpha");
@@ -90,7 +91,7 @@ describe("FileLogger 写入与读取", () => {
   });
 
   it("limit 取最新的 N 条", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-log-"));
+    const dir = await tmpDir("bili23-log-");
     try {
       const logger = new FileLogger(dir);
       for (let i = 1; i <= 5; i += 1) logger.info("unit", `第 ${i} 条`);
@@ -101,7 +102,7 @@ describe("FileLogger 写入与读取", () => {
   });
 
   it("clear 后读回空", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-log-"));
+    const dir = await tmpDir("bili23-log-");
     try {
       const logger = new FileLogger(dir);
       logger.info("unit", "x");
@@ -113,7 +114,7 @@ describe("FileLogger 写入与读取", () => {
   });
 
   it("跨天时切割：当前文件改名成 app.log.<前一天>，且只留最近 15 份", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bili23-log-"));
+    const dir = await tmpDir("bili23-log-");
     vi.useFakeTimers();
     try {
       // 造 16 个历史备份

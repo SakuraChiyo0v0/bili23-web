@@ -36,6 +36,26 @@ const waitMs = Number(waitMsRaw ?? 2000);
 const port = 9000 + Math.floor(Math.random() * 900);
 const profile = await mkdtemp(join(tmpdir(), "cdp-probe-"));
 
+/**
+ * 自愈：清掉**本工具自己**以前留下的 Chrome 配置目录（正常路径会在 finally 里删掉，
+ * 但被 Ctrl-C / 超时杀掉时来不及删）。只删 `cdp-probe-` 前缀、且位于系统临时目录下的目录。
+ *
+ * ⚠️ 绝对不要用 `Get-Process chrome | Stop-Process` 这类**按进程名批量杀**的方式清残留 ——
+ * 那会把用户自己开着的浏览器一起关掉（2026-09-13 踩过，用户明确抗议）。
+ * 要清就按 PID 清，而且只清本工具 spawn 出来的那个（下面 taskkill /T 已经这么做）。
+ */
+try {
+  const { readdir, rm, stat } = await import("node:fs/promises");
+  const mine = (await readdir(tmpdir())).filter((n) => n.startsWith("cdp-probe-"));
+  const now = Date.now();
+  for (const name of mine) {
+    const full = join(tmpdir(), name);
+    if (full === profile) continue;
+    const age = now - (await stat(full)).mtimeMs;
+    if (age > 60 * 60 * 1000) await rm(full, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
+  }
+} catch { /* 自愈失败不影响探测 */ }
+
 const chrome = spawn(CHROME, [
   "--headless=new",
   "--disable-gpu",

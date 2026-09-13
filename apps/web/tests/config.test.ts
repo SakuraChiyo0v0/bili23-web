@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { tmpDir } from "./helpers/tmp.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigStore, defaultAppConfig, resolveCdnHosts, resolveProxyUrl, validateConfig } from "../src/server/config.js";
 
 async function makeStore(initial?: string): Promise<{ dir: string; file: string; store: ConfigStore }> {
-  const dir = await mkdtemp(join(tmpdir(), "bili23-cfg-"));
+  const dir = await tmpDir("bili23-cfg-");
   const file = join(dir, "config.json");
   if (initial !== undefined) await writeFile(file, initial, "utf8");
   const store = new ConfigStore(file);
