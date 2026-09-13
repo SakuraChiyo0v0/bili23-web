@@ -946,6 +946,7 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
    这里统一抬到 40px（44 会挤坏工具栏，40 已是明显可点）。 */
 @media (max-width:767px){
   .icon-btn{ width:40px; height:40px; }
+  .icon-btn.sm{ width:36px; height:36px; }   /* 列排序 ↑↓ 这类小图标按钮也要能点准 */
   .btn{ height:40px; }
   .btn.sm{ height:36px; padding:0 12px; }
   .seg-btn{ height:34px; padding:0 13px; }
