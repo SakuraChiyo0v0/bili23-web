@@ -193,3 +193,30 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
 ## 安全建议
 
 - 仅走内网 / 门户访问，不要把 8788 直接暴露到公网。
+
+### 实测：push → 自动上线要多久（2026-09-13 在 UGREEN DXP4800GT 上量的）
+
+```
+16:48:29  push（改动在 apps/web/**）→ GitHub Actions 开始构建
+16:49:38  镜像推送 ghcr.io（CI 约 1 分钟）
+16:53:40  容器自动重建中（watchtower 发现新 digest 并 SIGTERM 旧容器）
+16:59:41  /api/health 返回新版本 → 上线完成
+总耗时约 11 分钟，全程无需人工操作。
+```
+
+耗时构成：**轮询间隔（≤5 分钟）+ registry 检查（实测约 4 分钟）+ 重建（十几秒）**。
+那个"约 4 分钟"是 watchtower 自己拉 manifest/list 的耗时（日志里 `Running a one time update`
+到 `Found new … image` 之间），网络慢时更久 —— **看不到更新时先等够这个时间，别急着当成坏了**。
+
+### ⚠️ 不要在 daemon watchtower 运行时手动 `--run-once`
+
+会变成两个 session 抢同一个容器，报：
+
+```
+Error response from daemon: removal of container <id> is already in progress
+Session done Failed=1 Scanned=4 Updated=0
+```
+
+（实测踩到：daemon 的那次 session 成功了，我手动那次失败 —— 结果虽然没坏，但别这么干。）
+想强制立刻部署，最省事的办法是**临时把 `WATCHTOWER_POLL_INTERVAL` 调小、跑一次 `up -d`、
+再调回来**；或者干脆等下一次轮询。
