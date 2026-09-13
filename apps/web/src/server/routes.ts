@@ -317,6 +317,17 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
     const manager = getManager();
     const dir = c.req.query("path") ?? "";
     if (!dir || dir.length === 0) return c.json({ dirs: [] });
+    /**
+     * 存储范围限制（部署级配置，见 config.ts 的 allowedRoots）。
+     * ⚠️ 必须放在 `stat` **之前**：否则"不存在的越界路径"会先被 stat 拦掉、
+     * 返回 200 + 空列表，而不是 403 —— 同一个越界路径出现两种响应（实测踩到 /volume1x）。
+     */
+    if (!isPathAllowed(dir)) {
+      return c.json(
+        { error: { code: "PATH_OUT_OF_SCOPE", message: `该目录超出允许的存储范围（${allowedRoots().join("、") || "未限制"}）` } },
+        403,
+      );
+    }
     let st;
     try {
       st = await stat(dir);
@@ -324,13 +335,6 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
       return c.json({ dirs: [] });
     }
     if (!st.isDirectory() || !manager.listSubdirs) return c.json({ dirs: [] });
-    // 存储范围限制：范围外不给列（部署级配置，见 config.ts 的 allowedRoots）
-    if (!isPathAllowed(dir)) {
-      return c.json(
-        { error: { code: "PATH_OUT_OF_SCOPE", message: `该目录超出允许的存储范围（${allowedRoots().join("、") || "未限制"}）` } },
-        403,
-      );
-    }
     const dirs: DirEntry[] = await manager.listSubdirs(dir);
     return c.json({ dirs });
   });

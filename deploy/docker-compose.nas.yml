@@ -38,6 +38,10 @@ services:
       #    若只想暴露媒体目录，把下面两行换成具体共享路径即可。
       - /volume1:/volume1
       - /home:/home
+      # 下载产物目录：宿主"共享文件夹"↔ 容器内 DOWNLOAD_DIR。
+      # ⚠️ 必须显式写出来 —— 否则 `up -d` 重建容器时这条挂载会消失，
+      #    产物列表会突然变空（实测踩到：从 9 条变 0 条；文件本身在宿主上没丢）。
+      - ${DOWNLOAD_HOST_DIR:-/volume1/bili23-downloads}:/data/bili23-downloads
     labels:
       # watchtower 检测到 ghcr latest digest 变化后自动重建（需 watchtower 已运行）
       - com.centurylinklabs.watchtower.enable=true

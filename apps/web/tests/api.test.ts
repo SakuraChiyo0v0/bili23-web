@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -480,5 +480,31 @@ describe("「保存到本机」投递接口", () => {
     expect((await app.request("/api/deliver/raw")).status).toBe(400);
     expect((await app.request("/api/deliver/raw?taskId=别的任务")).status).toBe(404);
     expect(stub.deliveredRemoved).toEqual([]);
+  });
+});
+
+describe("存储范围限制（/api/dirs）", () => {
+  const original = process.env.BILI23_ALLOWED_ROOTS;
+  afterEach(() => {
+    if (original === undefined) delete process.env.BILI23_ALLOWED_ROOTS;
+    else process.env.BILI23_ALLOWED_ROOTS = original;
+  });
+
+  it("范围外的路径一律 403（包括不存在的越界路径）", async () => {
+    process.env.BILI23_ALLOWED_ROOTS = process.cwd();
+    const app = createApp({ manager: makeDeps() as never });
+    for (const p of ["/etc", "/tmp", "/definitely-not-allowed"]) {
+      const res = await app.request(`/api/dirs?path=${encodeURIComponent(p)}`);
+      expect(res.status, `path=${p}`).toBe(403);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("PATH_OUT_OF_SCOPE");
+    }
+  });
+
+  it("范围内的路径正常处理（不存在的目录返回空列表，不是 403）", async () => {
+    process.env.BILI23_ALLOWED_ROOTS = process.cwd();
+    const app = createApp({ manager: makeDeps() as never });
+    const res = await app.request(`/api/dirs?path=${encodeURIComponent(process.cwd() + "/no-such-dir-xyz")}`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dirs: unknown[] }).dirs).toEqual([]);
   });
 });
