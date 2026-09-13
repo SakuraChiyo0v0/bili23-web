@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listDirs, listRoots } from "../services/client";
+import { getSystemInfo, listDirs } from "../services/client";
 import { t as tr } from "../lib/i18n";
 import { Overlay } from "./Overlay";
 
@@ -16,17 +16,17 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
   const [error, setError] = useState("");
   const [manual, setManual] = useState(value || "");
   /** 服务器信息：**必须**让用户知道这是哪台机器上的目录（否则会以为选错了） */
-  const [host, setHost] = useState<{ host: string; localhost: boolean; roots: Array<{ name: string; path: string }> } | null>(null);
+  const [host, setHost] = useState<{ host: string; localhost: boolean } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     // 没给起始目录时别用 "/"：Windows 下那不是根，列出来一堆空。
     // 先问服务端要"下载目录 / 数据目录 / 盘符"，用它作为起点。
     let cancelled = false;
-    void listRoots().then((r) => {
+    void getSystemInfo().then((r) => {
       if (cancelled) return;
-      setHost({ host: r.host, localhost: r.localhost, roots: r.roots });
-      const start = value || r.downloadDir || r.home || r.roots[0]?.path || "/";
+      setHost({ host: r.host, localhost: r.localhost });
+      const start = value || r.downloadDir || "/";
       setCurrent(start);
       setManual(value || "");
       setError("");
@@ -84,15 +84,7 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
               {host.localhost ? tr("—— 服务就跑在这台电脑上，所以看到的是本机路径") : ""}
             </p>
           )}
-          {host && host.roots.length > 0 && (
-            <div className="dir-quick">
-              {host.roots.slice(0, 6).map((r) => (
-                <button key={r.path} type="button" className="btn sm ghost" title={r.path} onClick={() => enter(r.path)}>
-                  {r.name === r.path ? r.path : r.name.split(/[\\/]/).filter(Boolean).pop() ?? r.path}
-                </button>
-              ))}
-            </div>
-          )}
+
           <div className="dir-picker-current">
             <button type="button" className="btn sm ghost" onClick={up} disabled={atRoot(current)}>↑ 上级</button>
             <code className="dir-current-path">{current}</code>

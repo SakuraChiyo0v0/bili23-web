@@ -14,7 +14,7 @@ import { DEFAULT_ACCENT, DEFAULT_ACCENT_ALPHA, loadAccentPrefs, setAccent, type 
 import type { PriorityKind } from "../lib/priorityMaps";
 import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
-import { exportConfig, importConfig, resetConfig, listRoots } from "../services/client";
+import { exportConfig, getSystemInfo, importConfig, resetConfig } from "../services/client";
 import { DirPicker } from "../components/DirPicker";
 import { clearLocalDir, getLocalDirName, pickLocalDir, supportsLocalDir } from "../lib/localDir";
 import { GuideDialog } from "../components/GuideDialog";
@@ -338,7 +338,7 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
   const deliverMode: "server" | "local" = d.deliver === "local" ? "local" : "server";
   /** 服务端信息：目录在**哪台机器**上（用户看到 C:\ 会以为选错了，必须直说） */
   const [serverInfo, setServerInfo] = useState<{ host: string; localhost: boolean } | null>(null);
-  useEffect(() => { void listRoots().then((r) => setServerInfo({ host: r.host, localhost: r.localhost })).catch(() => undefined); }, []);
+  useEffect(() => { void getSystemInfo().then((r) => setServerInfo({ host: r.host, localhost: r.localhost })).catch(() => undefined); }, []);
   /** 已授权的本机文件夹名（浏览器不给绝对路径，只能拿到名字） */
   const [localDir, setLocalDir] = useState<string | null>(null);
   useEffect(() => { void getLocalDirName().then(setLocalDir); }, []);

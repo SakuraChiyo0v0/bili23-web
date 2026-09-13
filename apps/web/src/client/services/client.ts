@@ -209,16 +209,16 @@ export function listFavFolderCovers(ids: number[]): Promise<{ covers: Record<str
   if (ids.length === 0) return Promise.resolve({ covers: {} });
   return request("/favorites/covers?ids=" + ids.join(","));
 }
-/** 「选择目录」的辅助信息：服务在哪台机器、有哪些根位置（见服务端 /api/fs/roots 注释） */
-export function listRoots(): Promise<{
+/**
+ * 「选择目录」的辅助信息：这个目录**在哪台机器**上（见服务端 /api/system/info 注释）。
+ * 刻意不含盘符/家目录 —— 那是用户个人电脑的信息，与应用无关。
+ */
+export function getSystemInfo(): Promise<{
   host: string;
   platform: string;
   /** 请求是不是从本机发的（服务跑在这台电脑上时界面要直说） */
   localhost: boolean;
-  home: string;
-  dataDir: string;
   downloadDir: string;
-  roots: Array<{ name: string; path: string }>;
 }> {
-  return request("/fs/roots");
+  return request("/system/info");
 }
