@@ -5,6 +5,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { Overlay } from "./Overlay";
 import { validateDownloadForm } from "../lib/downloadValidation";
 import { loadJSON, saveJSON } from "../lib/storage";
+import { supportsSaveAs } from "../lib/deliverFile";
 import { CODEC_NOTE, audioCodecName, estimateSize, fmtBitrate, fmtFrameRate, noAudioReason } from "../lib/mediaText";
 import { getCurrentLang } from "../lib/i18n";
 import { stepDuplicates } from "../lib/duplicateQueue";
@@ -641,16 +642,25 @@ function DownloadPane({
           </div>
         </div>
         <div className="muted small" style={{ marginTop: 6 }}>
-          {deliver === "local"
-            ? tr("下载完成后在任务上点「保存到本机」：文件会推送到你的浏览器，服务器不留副本。")
-            : tr("产物存到下载目录，可在「产物」页浏览/下载；适合长期留在 NAS 上。")}
+          {deliver === "local" ? (
+            <>
+              <div>
+                {supportsSaveAs()
+                  ? tr("下载完成后点任务上的「另存为…」自己选文件夹与文件名；服务器不留副本。")
+                  : tr("下载完成后点任务上的「保存到本机」：文件进浏览器下载文件夹（手机浏览器不允许网页选目录）。")}
+              </div>
+              <div>{tr("本机模式只推主文件，不生成弹幕/封面等附加内容；需要这些请选「NAS（服务器）」。")}</div>
+            </>
+          ) : (
+            <div>{tr("产物存到服务器（NAS）的下载目录，可在「产物」页浏览/下载；适合长期留存。")}</div>
+          )}
         </div>
       </div>
       {/* 下载路径卡（原版 DownloadPathSettingCard）：只改「确定」时才写回的全局下载目录 */}
       <div className="dl-card">
         <div className="dl-card-title">{tr("下载路径")}</div>
         <div className="dl-field">
-          <span>{tr("下载目录")}</span>
+          <span>{tr("服务器上的目录")}</span>
           <input className="text-input" style={{ flex: 1 }} value={dirDraft} placeholder={tr("默认下载目录")}
             onChange={(e) => setDirDraft(e.target.value)} disabled={deliver === "local"} />
           <button type="button" className="btn sm" onClick={() => setPickerOpen(true)} disabled={deliver === "local"}>{tr("选择文件夹")}</button>
@@ -658,7 +668,7 @@ function DownloadPane({
         <div className="muted small" style={{ marginTop: 6 }}>
           {deliver === "local"
             ? tr("选了「本机」时这个目录不参与：产物先落在服务器的临时投递目录，推给你之后就删掉。")
-            : tr("点击「确定」后才会保存该目录；取消不影响当前设置。")}
+            : tr("这是服务器（NAS）上的目录，不是你电脑的；你电脑的保存位置由浏览器决定。点击「确定」后才保存。")}
         </div>
         <DirPicker open={pickerOpen} onClose={() => setPickerOpen(false)} value={dirDraft} onPick={setDirDraft} />
       </div>

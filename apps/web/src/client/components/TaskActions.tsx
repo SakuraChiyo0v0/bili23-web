@@ -3,15 +3,14 @@ import {
 } from "../services/client";
 import { useTasksStore, TASK_STATUS_META } from "../store/useTasksStore";
 import type { TaskSummary } from "../services/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../lib/icons";
 import { t as tr } from "../lib/i18n";
 import { Overlay } from "./Overlay";
+import { deliverRawUrl, saveDeliverToDevice, supportsSaveAs } from "../lib/deliverFile";
 
-/** 「保存到本机」的下载地址（服务端推完即删副本）；抽成函数免得各处手拼 URL */
-export function deliverRawUrl(taskId: string): string {
-  return `/api/deliver/raw?taskId=${encodeURIComponent(taskId)}`;
-}
+/** 兼容旧引用（产物页/别处若还用到）；真正的取回逻辑在 `lib/deliverFile.ts` */
+export { deliverRawUrl };
 
 export function TaskActions({
   task,
@@ -27,15 +26,27 @@ export function TaskActions({
   const meta = TASK_STATUS_META[task.status];
   /** 这个任务选了「保存到：本机」 */
   const isLocalDeliver = task.deliver === "local";
-  /** 自动推送试过一次没（按钮文案随之变成「再次保存到本机」） */
-  const [deliverTried, setDeliverTried] = useState(false);
+  /**
+   * 「已经取回过了」——取回之后服务端副本就删了，按钮改成不可点 + 文案「已取回」，
+   * 而不是让用户点了再吃一个 404（之前就是这样，静默失败）。
+   */
+  const [deliverTaken, setDeliverTaken] = useState(false);
+  /**
+   * 完成后**自动试推一次**，但只在"本会话里亲眼看到它从进行中变成完成"时触发。
+   *
+   * ⚠️ 不能按 `status === "completed"` 就推：那样每次打开「下载完成」页签，
+   * 每个本机任务都会自动下载一遍（多个文件会被浏览器拦，用户也不知道发生了什么）。
+   */
+  const prevStatusRef = useRef<TaskSummary["status"] | null>(null);
   useEffect(() => {
-    if (!isLocalDeliver || task.status !== "completed" || deliverTried) return;
-    // 完成的那一帧就试着推一次；被浏览器拦了也没关系，按钮一直在
-    setDeliverTried(true);
-    const timer = window.setTimeout(() => { window.location.href = deliverRawUrl(task.id); }, 300);
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = task.status;
+    if (!isLocalDeliver || task.status !== "completed" || deliverTaken) return;
+    if (prev === null || prev === "completed") return; // 打开页面时已是完成态 → 不自动推，等用户点
+    setDeliverTaken(true);
+    const timer = window.setTimeout(() => { window.location.href = deliverRawUrl(task.id); }, 400);
     return () => window.clearTimeout(timer);
-  }, [isLocalDeliver, task.status, deliverTried, task.id]);
+  }, [isLocalDeliver, task.status, deliverTaken, task.id]);
 
   // 主按钮动作定义，映射到各操作
   const act = async () => {
@@ -84,6 +95,26 @@ export function TaskActions({
     }
   };
 
+  /**
+   * 「保存到本机」—— 本机模式的**主操作**。
+   *
+   * ⚠️ 不能用产物库那条路找文件：本机模式的产物在**投递目录**里，`listFiles()`（只列下载目录）
+   * 永远找不到 —— 之前主按钮还是「打开」+ 产物库查找，于是本机任务必然报「产物文件暂不可用」。
+   *
+   * 三种结局都给明确反馈：支持 File System Access 的浏览器弹「另存为」让用户选目录；
+   * 不支持的（手机浏览器）退化成普通下载；副本已被取走则提示去浏览器下载文件夹看。
+   */
+  const saveToDevice = async () => {
+    const name = task.outputPath ? task.outputPath.split(/[\\/]/).pop() ?? task.title : task.title;
+    const r = await saveDeliverToDevice(task.id, name);
+    if (r === "saved") { setDeliverTaken(true); onToast(tr("已保存到本机；服务器副本已删除"), "ok"); return; }
+    if (r === "unsupported") { setDeliverTaken(true); onToast(tr("已交给浏览器下载；手机浏览器不能选目录，文件在系统「下载」里"), "ok"); return; }
+    if (r === "cancelled") return;
+    if (r === "gone") { setDeliverTaken(true); onToast(tr("服务器副本已被取走：请看浏览器的下载文件夹（或重新下载该任务）"), "warn"); return; }
+    onToast(tr("保存失败：请重试，或改用「产物」页下载"), "err");
+  };
+
+
   const openLog = async () => { setLogOpen(true); try { const { lines } = await taskLog(task.id); setLogLines(lines); } catch { setLogLines([]); } };
 
   // 主按钮图标按原版 `item_delegate.py:getButtonIcon`：
@@ -93,13 +124,22 @@ export function TaskActions({
       : meta.action === "resume" ? "play"
         : meta.action === "delete" ? "x"
           : "pause";
+  /** 本机模式：完成后的主按钮是「保存到本机」而不是「打开」 */
+  const primaryIsDeliver = isLocalDeliver && meta.action === "open";
 
   return (
     <div className="task-actions">
-      <button type="button" className="btn sm primary" onClick={act} disabled={meta.action === "none"}>
-        <Icon name={iconName} size={15} />
-        {meta.action === "pause" ? tr("暂停") : meta.action === "resume" ? tr("继续") : meta.action === "retry" ? tr("重试") : meta.action === "open" ? tr("打开") : tr("删除")}
-      </button>
+      {primaryIsDeliver ? (
+        <button type="button" className="btn sm primary" onClick={() => void saveToDevice()}>
+          <Icon name="download" size={15} />
+          {deliverTaken ? tr("已取回") : supportsSaveAs() ? tr("另存为…") : tr("保存到本机")}
+        </button>
+      ) : (
+        <button type="button" className="btn sm primary" onClick={act} disabled={meta.action === "none"}>
+          <Icon name={iconName} size={15} />
+          {meta.action === "pause" ? tr("暂停") : meta.action === "resume" ? tr("继续") : meta.action === "retry" ? tr("重试") : meta.action === "open" ? tr("打开") : tr("删除")}
+        </button>
+      )}
       <button type="button" className="btn sm ghost" onClick={openLog}>{tr("日志")}</button>
       {meta.action === "pause" && (
         <button type="button" className="btn sm ghost" onClick={() => secondary("cancel")}>{tr("取消")}</button>
@@ -107,19 +147,8 @@ export function TaskActions({
       {meta.action === "open" && (
         <button type="button" className="btn sm ghost" onClick={() => secondary("delete")}>{tr("删除")}</button>
       )}
-      {/**
-       * 「保存到本机」：只有选了「保存到：本机」的任务才有。
-       * 完成的瞬间自动试一次（浏览器对"非用户手势"的下载可能拦截，所以按钮始终在），
-       * 用 `<a download>` 触发 —— 点击本身就是用户手势，最稳。
-       */}
-      {isLocalDeliver && task.status === "completed" && (
-        <a className="btn sm primary" href={deliverRawUrl(task.id)} download
-          onClick={() => onToast(tr("正在推送到本机…服务器副本会在推送完成后删除"), "info")}>
-          <Icon name="download" size={15} />{deliverTried ? tr("再次保存到本机") : tr("保存到本机")}
-        </a>
-      )}
       {isLocalDeliver && task.status !== "completed" && (
-        <span className="small muted" title={tr("服务器不留副本：推送到你的浏览器后会删除")}>{tr("保存到本机")}</span>
+        <span className="small muted" title={tr("服务器不留副本：推送到你的浏览器后会删除")}>{tr("将保存到本机")}</span>
       )}
       <Overlay open={logOpen} onClose={() => setLogOpen(false)} size="md" sheetOnMobile>
             <div className="modal-head"><div className="modal-title">{tr("任务日志")}</div><button type="button" className="icon-btn" onClick={() => setLogOpen(false)} aria-label={tr("关闭")}><svg className="ico" viewBox="0 0 24 24" width={18} height={18}><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>

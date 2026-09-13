@@ -1928,7 +1928,15 @@ export class DownloadManager {
       const tempOut = join(taskDir, "output_" + task.id + "." + outExt);
       const labels = this.#qualityLabels(task, resolved);
       const target = this.#outputTarget(task, labels);
-      const extrasOpt = normalizeExtrasStyles(task.options.extras ?? DEFAULT_EXTRAS_OPTIONS);
+      /**
+       * 「保存到本机」的任务**不生成附加内容**（弹幕/字幕/封面/元数据/章节这些独立小文件）：
+       * 浏览器一次只方便拿一个文件（`/api/deliver/raw` 推的就是主文件），
+       * 其余小文件留在服务器的投递目录里就会变成**孤儿**（用户拿不到、还得等 24h 清理）。
+       * 需要这些附加内容时选「NAS」——UI 上已经写明。
+       */
+      const extrasOpt = task.options.deliver === "local"
+        ? normalizeExtrasStyles(DEFAULT_EXTRAS_OPTIONS)
+        : normalizeExtrasStyles(task.options.extras ?? DEFAULT_EXTRAS_OPTIONS);
       const gathered = await this.#gatherExtraInputs(task, taskDir, info, extrasOpt, container);
 
       // 合并/转封装（附加内容随 ffmpeg 一并内嵌）
