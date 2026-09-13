@@ -100,6 +100,8 @@ export function ParseHistoryDialog({ open, onClose, onNavigate }: {
                   <span className="history-title-cell" title={item.url}>{item.title || item.url}</span>
                   <span className="muted">{tr(CATEGORY_LABEL[item.type] ?? item.type)}</span>
                   <span className="muted">{new Date(item.createdAt * 1000).toLocaleString()}</span>
+                  {/* 手机上没有「类型/解析时间」列了（放不下），改成标题下面一行副标题 */}
+                  <span className="history-sub">{tr(CATEGORY_LABEL[item.type] ?? item.type)} · {new Date(item.createdAt * 1000).toLocaleString()}</span>
                   <span className="history-ops">
                     <button type="button" className="btn sm ghost" disabled={busyId === item.id} onClick={() => void openItem(item)}>{busyId === item.id ? tr("解析中…") : tr("解析")}</button>
                     <button type="button" className="btn sm ghost dangerous" onClick={() => void remove(item.id)}>{tr("删除")}</button>

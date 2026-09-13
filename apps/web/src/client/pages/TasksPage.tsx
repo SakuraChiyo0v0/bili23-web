@@ -262,6 +262,9 @@ function TaskCard({ task, onRemove, index = 0 }: { task: TaskSummary; onRemove: 
         </div>
         {task.error && <div className="task-error">{task.error}</div>}
       </div>
+      {/* 触屏上的右键替代：桌面 hover 浮现、触屏常驻（与解析树/收藏夹同一套做法） */}
+      <button type="button" className="row-more task-more" title={tr("更多")} aria-label={tr("更多")}
+        onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 8, y: r.bottom + 2 }); }}>⋯</button>
       <div className="task-right">
         <div className="progress-track"><div className="progress-bar" style={{ width: `${pct}%` }} /></div>
         <div className="task-status-row">

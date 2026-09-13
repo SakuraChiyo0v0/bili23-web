@@ -55,7 +55,13 @@ export function ParseTree({ onDownloadOne, onParseItem, onUpdateMediaInfo, onVie
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [prefs, setPrefs] = useParseListPrefs();
   const { toast } = useToast();
-  const floatingBar = prefs.floatingBar;
+  /**
+   * 悬浮命令栏开关（原版 `parse_list_show_floating_command_bar`）。
+   * ⚠️ 触屏设备上必须无视这个开关：手机没有右键，⋮ 是**唯一**入口，
+   * 关掉它等于把 12 项菜单（全选/解析此项/查看分P/复制链接…）全锁死。
+   */
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia?.("(hover:none)").matches === true;
+  const floatingBar = prefs.floatingBar || coarsePointer;
   /** 排序状态（原版 `setSortingEnabled(True)`：点表头排序，再点切换升降序） */
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean } | null>(null);
   const dragRef = useRef<{ key: ColumnKey; startX: number; startW: number } | null>(null);

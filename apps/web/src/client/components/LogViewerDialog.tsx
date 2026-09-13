@@ -85,6 +85,7 @@ export function LogViewerDialog({ open, onClose }: { open: boolean; onClose: () 
               <div className="log-list">
                 {entries.map((e, i) => (
                   <div key={`${e.timestamp}-${i}`} className="log-row"
+                    /* 手机上点一下就是「查看详情」——触屏没有右键可点 */
                     onClick={() => setDetail(e)}
                     onContextMenu={(ev) => { ev.preventDefault(); setMenu({ x: ev.clientX, y: ev.clientY, entry: e }); }}>
                     <div className="log-row-head">
