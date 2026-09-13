@@ -58,7 +58,16 @@ export function taskSizeText(task: TaskSummary): string {
  */
 export function taskStatusText(task: TaskSummary): string {
   const label = tr(TASK_STATUS_LABEL[task.status] ?? task.status);
-  if (task.status === "downloading") return fmtSpeed(task.speedBps);
+  /**
+   * 下载中：显示「状态 + 速度」，例如「下载中 5.7 MB/s」。
+   * ⚠️ 原来**只返回速度**，而速度采样有取不到值的时候（`fmtSpeed` 对空值返回空串）
+   * → 状态那一格就整个空着（用户截图里第一张正在下载的卡片就是这样）；
+   * 而且速度文字稍长就会被挤到截断。现在速度和标签都在，任一取不到也不会空白。
+   */
+  if (task.status === "downloading") {
+    const speed = fmtSpeed(task.speedBps);
+    return speed ? `${label} ${speed}` : label;
+  }
   if (task.status === "merging") return task.progress > 0 ? `${label} ${Math.min(100, Math.max(0, task.progress))}%` : label;
   return label;
 }

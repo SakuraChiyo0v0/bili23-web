@@ -34,12 +34,18 @@ describe("taskSizeText（原版 getSizeText）", () => {
 });
 
 describe("taskStatusText（原版 getStatusText）", () => {
-  it("下载中显示的是**速度**，不是「下载中」三个字", () => {
-    expect(taskStatusText(mkTask({ status: "downloading", speedBps: 2 * 1024 * 1024 }))).toBe("2.0 MB/s");
+  /**
+   * ⚠️ 这两条原先断言的是「下载中**只显示速度**、没有速度样本时返回**空串**」——
+   * 那个"空串"就是用户截图里状态格整个空着的原因（速度采样取不到值时）。
+   * 现在改为「状态 + 速度」，任一部分取不到也不会空白。
+   */
+  it("下载中显示「状态 + 速度」", () => {
+    expect(taskStatusText(mkTask({ status: "downloading", speedBps: 2 * 1024 * 1024 }))).toBe("下载中 2.0 MB/s");
   });
 
-  it("下载中但还没有速度样本 → 空串", () => {
-    expect(taskStatusText(mkTask({ status: "downloading", speedBps: 0 }))).toBe("");
+  it("下载中但还没有速度样本 → 退化成「下载中」，**不能是空串**", () => {
+    expect(taskStatusText(mkTask({ status: "downloading", speedBps: 0 }))).toBe("下载中");
+    expect(taskStatusText(mkTask({ status: "downloading" }))).toBe("下载中");
   });
 
   it("合并中带百分比；进度为 0 时不带（原版：免得挂着一个始终停在 0% 的数字）", () => {
