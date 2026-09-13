@@ -1059,3 +1059,43 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
   .mp-row{ min-height:52px; }
   .mp-row input{ width:20px; height:20px; }        /* 勾选框在触屏上要大一点 */
 }
+
+/* ===== 安全区补齐（2026-09-13 收尾）=====
+   底部（TabBar / content / toast）早就用 `env(safe-area-inset-bottom)` 了，且 viewport-fit=cover ✓。
+   这里补**顶部与左右**：横屏刘海机会把左/右内容压进圆角与刘海，PWA 全屏时顶部状态栏同理。
+   普通浏览器标签页下这些 inset 都是 0，不影响现有观感。 */
+.app{ padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+.topbar{ height:calc(var(--topbar-h) + env(safe-area-inset-top)); padding-top:env(safe-area-inset-top); }
+.overlay{ padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+@media (max-width:767px){
+  .tabbar{ padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+}
+
+/* ===== 手机上 ⋮ 压住标题（截图看出来的）=====
+   `.row-more` 是绝对定位（right:8px，触屏 36px），而行是 grid 布局：
+   标题列一直排到行尾 → 文字钻到 ⋮ 底下被盖住（实测「小番外—邓…」「番外2—品…」都被压）。
+   做法：窄屏给行留出 ⋮ 的位置（padding-right），标题该截断就截断。 */
+@media (max-width:767px){
+  .tree-header, .tree-row{ padding-right:46px; }
+  .task-card{ padding-right:44px; }          /* 任务卡的 ⋮ 同理 */
+  /* 状态行：文案单行省略，别把右侧图标挤到第二行 */
+  .parse-status .toolbar-label{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+}
+
+/* ===== 手机上解析列表的列排不下（截图看出来的真问题）=====
+   列宽是**行内** style 给的（列配置：number160 + title350 + badge90 + duration90 + dyn_time130 = 820px），
+   390 宽的屏根本放不下 → `.tree` 内部横向滚动、标题钻进 ⋮ 下面被盖住。
+   手机端只留前两列（序号 + 标题），其余列收掉 —— 那些信息仍可从行的 ⋮ 菜单里看（查看元数据等）。
+   ⚠️ 必须 `!important`：行内 grid-template-columns 的优先级高于样式表。 */
+@media (max-width:767px){
+  .tree-header, .tree-row{
+    /* 第一列用 auto：叶行是「勾选框+序号」（约 44px），分组行是层级标签（「投稿视频」等）；
+       写死 44px 会让层级标签溢出、压到标题上（截图看到过）。 */
+    grid-template-columns:auto minmax(0,1fr) !important;
+    column-gap:10px;
+    padding-right:46px;
+  }
+  /* ⚠️ 必须排除行内的 ⋮（`.row-more` 是绝对定位、不占格子）：叶行里它就是第 3 个子元素，
+     一起藏掉的话 ⋮ 会消失（实测 moreRight=0）。 */
+  .tree-header > :nth-child(n+3):not(.row-more), .tree-row > :nth-child(n+3):not(.row-more){ display:none; }
+}
