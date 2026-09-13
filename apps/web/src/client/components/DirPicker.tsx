@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listDirs } from "../services/client";
+import { listDirs, listRoots } from "../services/client";
 import { t as tr } from "../lib/i18n";
 import { Overlay } from "./Overlay";
 
@@ -15,12 +15,26 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [manual, setManual] = useState(value || "");
+  /** 服务器信息：**必须**让用户知道这是哪台机器上的目录（否则会以为选错了） */
+  const [host, setHost] = useState<{ host: string; localhost: boolean; roots: Array<{ name: string; path: string }> } | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setCurrent(value || "/");
-    setManual(value || "");
-    setError("");
+    // 没给起始目录时别用 "/"：Windows 下那不是根，列出来一堆空。
+    // 先问服务端要"下载目录 / 数据目录 / 盘符"，用它作为起点。
+    let cancelled = false;
+    void listRoots().then((r) => {
+      if (cancelled) return;
+      setHost({ host: r.host, localhost: r.localhost, roots: r.roots });
+      const start = value || r.downloadDir || r.home || r.roots[0]?.path || "/";
+      setCurrent(start);
+      setManual(value || "");
+      setError("");
+    }).catch(() => {
+      setCurrent(value || "/");
+      setManual(value || "");
+    });
+    return () => { cancelled = true; };
   }, [open, value]);
 
   useEffect(() => {
@@ -33,11 +47,23 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
       .finally(() => setLoading(false));
   }, [open, current]);
 
+  /**
+   * 上级目录。⚠️ 原来只用 "/" 找分隔符 —— Windows 路径全是反斜杠，
+   * 于是一路"往上"其实直接跳回盘根（`C:\`），看着像不能往上走。
+   * 另外盘根（`C:\`）与 UNC 根（`\\server\share`）都不该再往上。
+   */
+  /** 已经在根上（盘根 C:\ / POSIX 根 / UNC 根）就没法再往上了 */
+  const atRoot = (p: string): boolean => {
+    const t = p.replace(/[\\/]+$/, "");
+    return /^[A-Za-z]:$/.test(t) || t === "" || t === "/" || /^\\\\[^\\]+\\[^\\]+$/.test(t);
+  };
   const up = () => {
     const trimmed = current.replace(/[\\/]+$/, "");
-    const idx = trimmed.lastIndexOf("/");
-    if (idx > 0) setCurrent(trimmed.slice(0, idx));
-    else if (trimmed.length > 0) setCurrent("/");
+    if (/^[A-Za-z]:$/.test(trimmed)) return;                       // C: → 已到盘根
+    const idx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+    if (idx > 2) { const parent = trimmed.slice(0, idx); setCurrent(parent); setManual(parent); return; }
+    if (/^[A-Za-z]:/.test(trimmed)) { setCurrent(trimmed.slice(0, 2) + "\\"); return; }
+    setCurrent("/");
   };
   const enter = (path: string) => { setCurrent(path); setManual(path); };
   const confirmPick = () => { const dir = manual.trim().replace(/[\\/]+$/, "") || "/"; onPick(dir); onClose(); };
@@ -51,8 +77,24 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
           </button>
         </div>
         <div className="modal-body">
+          {/* 这是哪台机器上的目录 —— 用户选「NAS 模式」却看到 C:\ 会以为选错了，必须直说 */}
+          {host && (
+            <p className="small muted" style={{ marginBottom: 6 }}>
+              {tr("这里浏览的是运行服务的那台机器（{host}）上的目录").replace("{host}", host.host)}
+              {host.localhost ? tr("—— 服务就跑在这台电脑上，所以看到的是本机路径") : ""}
+            </p>
+          )}
+          {host && host.roots.length > 0 && (
+            <div className="dir-quick">
+              {host.roots.slice(0, 6).map((r) => (
+                <button key={r.path} type="button" className="btn sm ghost" title={r.path} onClick={() => enter(r.path)}>
+                  {r.name === r.path ? r.path : r.name.split(/[\\/]/).filter(Boolean).pop() ?? r.path}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="dir-picker-current">
-            <button type="button" className="btn sm ghost" onClick={up} disabled={current === "/"}>↑ 上级</button>
+            <button type="button" className="btn sm ghost" onClick={up} disabled={atRoot(current)}>↑ 上级</button>
             <code className="dir-current-path">{current}</code>
           </div>
           <div className="dir-picker-list">
@@ -66,11 +108,11 @@ export function DirPicker({ open, onClose, value, onPick }: { open: boolean; onC
               </button>
             ))}
           </div>
-          <div className="dir-picker-tip"><span className="small muted">{tr("点击目录进入子目录，路径会同步到底部输入框。")}</span></div>
+          <div className="dir-picker-tip"><span className="small muted">{tr("点击目录进入子目录，路径会同步到底部输入框；也可以直接在下面输入网络路径。")}</span></div>
         </div>
         <div className="modal-foot">
           <div className="dir-picker-manual">
-            <input className="text-input" style={{ flex: 1 }} value={manual} onChange={(e) => setManual(e.target.value)} placeholder={tr("或直接输入 NAS 容器内路径")} />
+            <input className="text-input" style={{ flex: 1 }} value={manual} onChange={(e) => setManual(e.target.value)} placeholder={tr("或直接输入路径：NAS 网络共享 \\\\NAS\\media、映射盘 Z:\\\\media、容器内路径…")} />
           </div>
           <div className="right">
             <button type="button" className="btn" onClick={onClose}>{tr("取消")}</button>

@@ -1563,6 +1563,14 @@ export class DownloadManager {
     return this.#rootDir;
   }
 
+  /**
+   * 给「选择目录」用的**服务器自身**信息：数据目录 / 下载目录 / 家目录。
+   * 用途：界面上必须能说清"这个目录在**哪台机器**上" —— 用户看到 `C:\...` 会以为是本机目录，
+   * 其实那是"运行服务的那台机器"的目录（服务跑在本机时两者恰好相同）。
+   */
+  fsRoots(): { dataDir: string; downloadDir: string } {
+    return { dataDir: this.#dataDir, downloadDir: this.#rootDir };
+  }
   /** 规范化下载根内相对路径并防目录穿越；越界/非法返回 undefined */
   resolveDownloadFile(relPath: string): string | undefined {
     return resolveDownloadPath(this.#rootDir, relPath);

@@ -14,7 +14,7 @@ import { DEFAULT_ACCENT, DEFAULT_ACCENT_ALPHA, loadAccentPrefs, setAccent, type 
 import type { PriorityKind } from "../lib/priorityMaps";
 import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
-import { exportConfig, importConfig, resetConfig } from "../services/client";
+import { exportConfig, importConfig, resetConfig, listRoots } from "../services/client";
 import { DirPicker } from "../components/DirPicker";
 import { clearLocalDir, getLocalDirName, pickLocalDir, supportsLocalDir } from "../lib/localDir";
 import { GuideDialog } from "../components/GuideDialog";
@@ -336,6 +336,9 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
   const { toast } = useToast();
   /** 产物默认落点（NAS / 本机）—— 存的配置键是 `download.deliver` */
   const deliverMode: "server" | "local" = d.deliver === "local" ? "local" : "server";
+  /** 服务端信息：目录在**哪台机器**上（用户看到 C:\ 会以为选错了，必须直说） */
+  const [serverInfo, setServerInfo] = useState<{ host: string; localhost: boolean } | null>(null);
+  useEffect(() => { void listRoots().then((r) => setServerInfo({ host: r.host, localhost: r.localhost })).catch(() => undefined); }, []);
   /** 已授权的本机文件夹名（浏览器不给绝对路径，只能拿到名字） */
   const [localDir, setLocalDir] = useState<string | null>(null);
   useEffect(() => { void getLocalDirName().then(setLocalDir); }, []);
@@ -368,7 +371,11 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
           </div>
         } />
         {deliverMode === "server" ? (
-          <Row label={tr("服务器上的目录")} desc={tr("这是服务器（NAS）上的目录，不是你电脑的")} control={
+          <Row label={tr("服务器上的目录")} desc={
+            serverInfo
+              ? `${tr("目录在运行服务的那台机器（{host}）上").replace("{host}", serverInfo.host)}${serverInfo.localhost ? tr("—— 服务就跑在这台电脑上，所以显示的是本机路径") : ""}`
+              : tr("这是服务器（NAS）上的目录，不是你电脑的")
+          } control={
             <span className="dir-picker-row">
               <input className="text-input" style={{ width: 260 }} value={d.dir} placeholder={tr("默认下载目录")} onChange={(e) => onPatch({ download: { dir: e.target.value } })} />
               <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>{tr("浏览…")}</button>

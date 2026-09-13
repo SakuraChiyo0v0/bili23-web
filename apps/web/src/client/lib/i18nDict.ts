@@ -10,6 +10,8 @@
 
 /** 简中 → 英文（原版 Qt 的 <source>，即原版"英文界面"用的就是这些） */
 export const ZH_TO_EN: Record<string, string> = {
+  "—— 服务就跑在这台电脑上，所以看到的是本机路径": " — the service runs on this very computer, so these are local paths",
+  "—— 服务就跑在这台电脑上，所以显示的是本机路径": " — the service runs on this computer, so these are local paths",
   "{category_name}（共 {total_count} 项）": "{category_name} ({total_count} total)",
   "{category_name}（已选择 {selected_count} 项，共 {total_count} 项）": "{category_name} ({selected_count} selected, {total_count} total)",
   "{count} 个项目": "{count} items",
@@ -148,6 +150,7 @@ export const ZH_TO_EN: Record<string, string> = {
   "底部左对齐": "Bottom Left",
   "第 {index} 个，共 {count} 个": "{index} of {count}",
   "点击此处可进行自动解析分页操作": "Click here to automatically parse all pages.",
+  "点击目录进入子目录，路径会同步到底部输入框；也可以直接在下面输入网络路径。": "Tap a folder to enter it (the path syncs to the box below); you can also type a network path directly.",
   "点击头像登录哔哩哔哩账号，未登录状态下下载功能将受限": "Click the avatar to log in to your Bilibili account. \r\nDownload functionality will be limited if you're not logged in.",
   "电视剧": "TV Dramas",
   "电影": "Movies",
@@ -248,6 +251,7 @@ export const ZH_TO_EN: Record<string, string> = {
   "会员购课程lesson ID": "Mall lesson id",
   "会员购课时ID": "Mall section id",
   "会员购商品ID": "Mall item id",
+  "或直接输入路径：NAS 网络共享 \\\\NAS\\media、映射盘 Z:\\\\media、容器内路径…": "Or type a path directly: NAS share \\\\NAS\\media, mapped drive Z:\\\\media, container path…",
   "获取媒体信息失败": "Failed to retrieve media information",
   "获取验证码": "Get Code",
   "获取用户头像失败": "Failed to retrieve user avatar",
@@ -367,6 +371,7 @@ export const ZH_TO_EN: Record<string, string> = {
   "命名规则不能以 '/' 或 '.' 开头或结尾": "Rule must not start or end with '/' or '.'",
   "命名规则无效": "Invalid naming rule",
   "默认": "Default",
+  "目录在运行服务的那台机器（{host}）上": "Folders are on the machine running the service ({host})",
   "目前仅支持 av 号或 BV 号链接": "Currently only av or BV links are supported.",
   "排序": "Sort",
   "排序方式": "Sort By",
@@ -713,6 +718,7 @@ export const ZH_TO_EN: Record<string, string> = {
   "账号": "Account",
   "找不到用于转换的 m4a 音频文件": "M4A audio file not found for conversion",
   "这个浏览器不支持选择本机文件夹（手机浏览器都不支持）": "This browser can't choose a local folder (mobile browsers can't either)",
+  "这里浏览的是运行服务的那台机器（{host}）上的目录": "These folders are on the machine running the service ({host})",
   "这是服务器（NAS）上的目录，不是你电脑的": "This is a folder on the server (NAS), not on your computer",
   "正常": "Normal",
   "正在获取...": "Fetching...",
@@ -830,6 +836,8 @@ export const ZH_TO_EN: Record<string, string> = {
 
 /** 简中 → 繁中（原版 zh_TW 的 <translation>） */
 export const ZH_TO_TW: Record<string, string> = {
+  "—— 服务就跑在这台电脑上，所以看到的是本机路径": " —— 服務就跑在這台電腦上，所以看到的是本機路徑",
+  "—— 服务就跑在这台电脑上，所以显示的是本机路径": " —— 服務就跑在這台電腦上，所以顯示的是本機路徑",
   "{category_name}（共 {total_count} 项）": "{category_name}（共 {total_count} 項）",
   "{category_name}（已选择 {selected_count} 项，共 {total_count} 项）": "{category_name}（已選取 {selected_count} 項，共 {total_count} 項）",
   "{count} 个项目": "{count} 個項目",
@@ -968,6 +976,7 @@ export const ZH_TO_TW: Record<string, string> = {
   "底部左对齐": "底部左對齊",
   "第 {index} 个，共 {count} 个": "第 {index} 個，共 {count} 個",
   "点击此处可进行自动解析分页操作": "點擊此處可進行自動解析分頁操作",
+  "点击目录进入子目录，路径会同步到底部输入框；也可以直接在下面输入网络路径。": "點目錄進入子目錄，路徑會同步到底部輸入框；也可以直接在下面輸入網路路徑。",
   "点击头像登录哔哩哔哩账号，未登录状态下下载功能将受限": "點擊頭像登入嘅 Bilibili 帳號，未登入狀態下下載功能將受到限制。",
   "电视剧": "電視劇",
   "电影": "電影",
@@ -1068,6 +1077,7 @@ export const ZH_TO_TW: Record<string, string> = {
   "会员购课程lesson ID": "會員購課程lesson ID",
   "会员购课时ID": "會員購課時ID",
   "会员购商品ID": "會員購商品ID",
+  "或直接输入路径：NAS 网络共享 \\\\NAS\\media、映射盘 Z:\\\\media、容器内路径…": "或直接輸入路徑：NAS 網路共享 \\\\NAS\\media、對應磁碟 Z:\\\\media、容器內路徑…",
   "获取媒体信息失败": "取得媒體資訊失敗",
   "获取验证码": "取得驗證碼",
   "获取用户头像失败": "取得使用者頭像失敗",
@@ -1187,6 +1197,7 @@ export const ZH_TO_TW: Record<string, string> = {
   "命名规则不能以 '/' 或 '.' 开头或结尾": "命名规则不能以 '/' 或 '.' 开头或结尾",
   "命名规则无效": "命名規則無效",
   "默认": "預設",
+  "目录在运行服务的那台机器（{host}）上": "目錄在執行服務的那台機器（{host}）上",
   "目前仅支持 av 号或 BV 号链接": "目前僅支援 av 號或 BV 號連結",
   "排序": "排序",
   "排序方式": "排序方式",
@@ -1533,6 +1544,7 @@ export const ZH_TO_TW: Record<string, string> = {
   "账号": "帳號",
   "找不到用于转换的 m4a 音频文件": "找不到用於轉換的 m4a 音訊檔案。",
   "这个浏览器不支持选择本机文件夹（手机浏览器都不支持）": "這個瀏覽器不支援選擇本機資料夾（手機瀏覽器都不支援）",
+  "这里浏览的是运行服务的那台机器（{host}）上的目录": "這裡瀏覽的是執行服務的那台機器（{host}）上的目錄",
   "这是服务器（NAS）上的目录，不是你电脑的": "這是伺服器（NAS）上的目錄，不是你電腦的",
   "正常": "正常",
   "正在获取...": "取得中...",

@@ -3,6 +3,8 @@ import { stream, streamSSE } from "hono/streaming";
 import { createReadStream } from "node:fs";
 import { basename } from "node:path";
 import { stat } from "node:fs/promises";
+import { statSync } from "node:fs";
+import { homedir, hostname } from "node:os";
 import { BiliError } from "@bili23-web/engine";
 import { previewNamingRule } from "./naming-preview.js";
 import type { ParseResult, ParseHistoryEntry, MediaItem } from "@bili23-web/engine";
@@ -74,6 +76,8 @@ export interface ApiDeps {
   resolveDownloadFile(relPath: string): string | undefined;
   listFiles(): Promise<FileEntry[]>;
   listSubdirs?(absDir: string): Promise<DirEntry[]>;
+  /** 服务器自己的目录信息（目录选择器里要显示"这是哪台机器上的目录"） */
+  fsRoots?(): { dataDir: string; downloadDir: string };
   /** 应用日志（桌面「日志」窗口）：读最新在前可搜索 / 清空 */
   readLogs?(opts: { search?: string; limit?: number }): LogEntry[];
   clearLogs?(): void;
@@ -284,6 +288,40 @@ export function registerApi(app: Hono, getManager: () => ApiDeps, extra?: {
     return c.json({ ok: true });
   });
   /** 目录选择器：列出指定绝对目录的子目录（下载目录浏览用；路径越界/不存在返回空列表） */
+  /**
+   * 「选择目录」的辅助信息：**这是哪台机器**、有哪些根位置可以跳。
+   *
+   * 起因：用户选「NAS 模式」却看到 `C:\...`，以为是我们搞错了 —— 其实「浏览…」列的一直是
+   * **运行服务的那台机器**的文件系统；服务跑在他自己电脑上，所以看起来像"本机目录"。
+   * 这个接口把 host / 是否本机 / 家目录 / 数据与下载目录 / 各盘符都给出来，界面上就能直说。
+   */
+  app.get("/api/fs/roots", async (c) => {
+    const manager = getManager();
+    const hostHeader = c.req.header("host") ?? "";
+    const localhost = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(hostHeader);
+    const info = manager.fsRoots?.() ?? { dataDir: "", downloadDir: "" };
+    const roots: Array<{ name: string; path: string }> = [];
+    if (process.platform === "win32") {
+      // Windows 下 "/" 不是根，得逐个盘符探
+      for (const letter of "CDEFGHIJKLMNOPQRSTUVWXYZAB") {
+        const root = `${letter}:\\`;
+        try {
+          if (statSync(root).isDirectory()) roots.push({ name: root, path: root });
+        } catch { /* 不存在的盘符跳过 */ }
+      }
+    } else {
+      roots.push({ name: "/", path: "/" });
+    }
+    if (info.downloadDir) roots.unshift({ name: info.downloadDir, path: info.downloadDir });
+    return c.json({
+      host: hostname(),
+      platform: process.platform,
+      localhost,
+      home: homedir(),
+      ...info,
+      roots,
+    });
+  });
   app.get("/api/dirs", async (c) => {
     const manager = getManager();
     const dir = c.req.query("path") ?? "";

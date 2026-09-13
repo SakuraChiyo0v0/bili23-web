@@ -1099,3 +1099,7 @@ img.cover.cover-img.loaded,.fav-thumb.loaded,.fav-poster-cover.loaded{ opacity:1
      一起藏掉的话 ⋮ 会消失（实测 moreRight=0）。 */
   .tree-header > :nth-child(n+3):not(.row-more), .tree-row > :nth-child(n+3):not(.row-more){ display:none; }
 }
+
+/* 「选择目录」弹窗里的快捷位置（下载目录 / 数据目录 / 各盘符） */
+.dir-quick{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.dir-quick .btn.sm{ max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
