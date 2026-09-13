@@ -1,3 +1,4 @@
+import { hasLocalDir, writeResponseToLocalDir } from "./localDir";
 /**
  * 「保存到本机」的客户端逻辑。
  *
@@ -43,6 +44,16 @@ export async function saveDeliverToDevice(taskId: string, suggestedName: string)
   const url = deliverRawUrl(taskId);
   // 先探一下有没有（副本可能已经被上一次取走）
   if (!(await deliverAvailable(taskId))) return "gone";
+
+  /**
+   * 首选：设置里**授权过本机文件夹** → 直接流式写进去（不弹对话框、大文件不进内存）。
+   * 这正是"本机模式能显示本机目录"的实际用途 —— 不只是显示，而是真的落到那个文件夹。
+   */
+  if (await hasLocalDir()) {
+    const res = await fetch(url);
+    if (!res.ok) return "gone";
+    if (await writeResponseToLocalDir(suggestedName, res)) return "saved";
+  }
 
   type PickerWindow = Window & {
     showSaveFilePicker?: (opts: {

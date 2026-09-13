@@ -41,7 +41,20 @@ export function DownloadOptionsDialog() {
    * 用 localStorage 记住上次的选择（`bili23.web.deliver`）—— 用户要是固定"下到本机"，
    * 不必每次都点一遍；不进服务端配置，免得为一个纯前端口味改 schema。
    */
+  const cfgDeliver = useSettingsStore((s) => s.config?.download?.deliver);
   const [deliver, setDeliverState] = useState<"server" | "local">(() => loadJSON<"server" | "local">("deliver", "server"));
+  /**
+   * 默认值以**设置页的选择**为准（`download.deliver`）；
+   * 弹窗里改了只影响这一次任务（不写回配置）—— 与「下载路径卡」的语义一致。
+   * 只在配置首次到达时套用一次，免得把用户刚在弹窗里改的选择冲掉。
+   */
+  const deliverDefaultApplied = useRef(false);
+  useEffect(() => {
+    if (deliverDefaultApplied.current) return;
+    if (cfgDeliver !== "server" && cfgDeliver !== "local") return;
+    deliverDefaultApplied.current = true;
+    setDeliverState(cfgDeliver);
+  }, [cfgDeliver]);
   const setDeliver = (v: "server" | "local") => { setDeliverState(v); saveJSON("deliver", v); };
   const dupHead = dupQueue[0] ?? null;
   /**

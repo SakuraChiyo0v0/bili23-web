@@ -16,6 +16,7 @@ import { StyleEditor } from "../components/StyleEditor";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { exportConfig, importConfig, resetConfig } from "../services/client";
 import { DirPicker } from "../components/DirPicker";
+import { clearLocalDir, getLocalDirName, pickLocalDir, supportsLocalDir } from "../lib/localDir";
 import { GuideDialog } from "../components/GuideDialog";
 import { DUPLICATE_DOWNLOAD_GUIDE, NUMBERING_GUIDE, PREALLOCATE_GUIDE, PRIORITY_GUIDE } from "../lib/guides";
 import { Icon, type IconName } from "../lib/icons";
@@ -332,14 +333,61 @@ function DownloadGroup({ config, onPatch }: { config: any; onPatch: (p: any) => 
   const [prioOpen, setPrioOpen] = useState<{ kind: PriorityKind; value: number[]; write: (v: number[]) => void } | null>(null);
   /** 「有关优先级的说明」（原版 PrioritySettingCard 的超链接，`card.py:235`） */
   const [prioGuide, setPrioGuide] = useState(false);
+  const { toast } = useToast();
+  /** 产物默认落点（NAS / 本机）—— 存的配置键是 `download.deliver` */
+  const deliverMode: "server" | "local" = d.deliver === "local" ? "local" : "server";
+  /** 已授权的本机文件夹名（浏览器不给绝对路径，只能拿到名字） */
+  const [localDir, setLocalDir] = useState<string | null>(null);
+  useEffect(() => { void getLocalDirName().then(setLocalDir); }, []);
+  const chooseLocalDir = async () => {
+    const name = await pickLocalDir();
+    if (name) { setLocalDir(name); toast(tr("已授权本机文件夹"), "ok"); }
+    else if (!supportsLocalDir()) toast(tr("这个浏览器不支持选择本机文件夹（手机浏览器都不支持）"), "warn");
+  };
+  const clearLocalDirAndRefresh = async () => { await clearLocalDir(); setLocalDir(null); toast(tr("已清除本机文件夹授权"), "info"); };
+  /** 本机模式的说明：按浏览器支持情况给不同文案 */
+  const localDirNote = !supportsLocalDir()
+    ? tr("当前浏览器不支持选择本机文件夹（手机浏览器都不支持）：产物会进浏览器默认的下载文件夹")
+    : localDir
+      ? tr("「保存到本机」的产物会直接写进这个文件夹；浏览器不暴露完整路径，只显示文件夹名")
+      : tr("还没选：点右边的按钮授权一个本机文件夹（只显示文件夹名，浏览器不给完整路径）");
   return (
     <Group title={tr("下载")}>
-      <Card icon="folder" title={tr("下载路径")} right={
-        <span className="dir-picker-row">
-          <input className="text-input" style={{ width: 260 }} value={d.dir} placeholder={tr("默认下载目录")} onChange={(e) => onPatch({ download: { dir: e.target.value } })} />
-          <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>{tr("浏览…")}</button>
-        </span>
-      } />
+      {/* 「下载路径」卡：先选**模式**（NAS / 本机），再显示对应那一侧的目录 */}
+      <Card icon="folder" title={tr("下载路径")} desc={
+        deliverMode === "local"
+          ? tr("本机模式：产物先落服务器的临时投递目录，取回本机后即删（服务器不留副本）")
+          : tr("NAS 模式：产物存到服务器（NAS）的下载目录，可在「产物」页浏览/下载")
+      }>
+        <Row label={tr("保存到")} desc={tr("选择产物默认存到 NAS 还是本机")} control={
+          <div className="seg">
+            <button type="button" className={`seg-btn${deliverMode === "server" ? " active" : ""}`}
+              onClick={() => onPatch({ download: { deliver: "server" } })}>{tr("NAS（服务器）")}</button>
+            <button type="button" className={`seg-btn${deliverMode === "local" ? " active" : ""}`}
+              onClick={() => onPatch({ download: { deliver: "local" } })}>{tr("本机")}</button>
+          </div>
+        } />
+        {deliverMode === "server" ? (
+          <Row label={tr("服务器上的目录")} desc={tr("这是服务器（NAS）上的目录，不是你电脑的")} control={
+            <span className="dir-picker-row">
+              <input className="text-input" style={{ width: 260 }} value={d.dir} placeholder={tr("默认下载目录")} onChange={(e) => onPatch({ download: { dir: e.target.value } })} />
+              <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>{tr("浏览…")}</button>
+            </span>
+          } />
+        ) : (
+          <Row label={tr("本机文件夹")} desc={
+            localDirNote
+          } control={
+            <span className="dir-picker-row">
+              <span className="text-input" style={{ width: 200, display: "inline-flex", alignItems: "center", color: localDir ? undefined : "var(--muted)" }}>
+                {localDir ?? tr("未选择")}
+              </span>
+              <button type="button" className="btn sm" onClick={() => void chooseLocalDir()} disabled={!supportsLocalDir()}>{tr("选择本机文件夹")}</button>
+              {localDir && <button type="button" className="btn sm ghost" onClick={() => void clearLocalDirAndRefresh()}>{tr("清除")}</button>}
+            </span>
+          } />
+        )}
+      </Card>
       <DirPicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
