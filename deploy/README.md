@@ -71,22 +71,84 @@ sudo docker logs -f bili23-web
 浏览器打开 `http://<NAS_IP>:8788`（宿主端口 8788 → 容器 8787）。
 如 8788 被占用，只改 compose 中 `ports` 左侧的宿主端口即可，`PORT` 保持 8787。
 
-## 五、自动更新（watchtower）
+## 五、自动更新（watchtower）—— **实测已生效，push 即自动部署**
 
-容器已带 `com.centurylinklabs.watchtower.enable=true` 标签：
+本项目的部署链路（2026-09-13 在 UGREEN DXP4800GT 上实测确认）：
 
-- 如果 NAS 已运行 watchtower，它会周期检查 `ghcr.io/sakurachiyo0v0/bili23-web:latest`，
-  发现新镜像后自动重建容器；
-- 数据因为挂载在宿主 `./data`，重建不会丢失；
-- 如果没跑 watchtower，手动更新镜像：
+```
+push 到 main（改动落在 apps/web/** 或 packages/engine/** 或 lockfile 或本工作流）
+   ↓  GitHub Actions「Build bili23-web image」构建并推送 ghcr.io/…:latest（约 1 分钟）
+   ↓  NAS 上的 watchtower 每 5 分钟轮询一次
+   ↓  发现新镜像 → SIGTERM 旧容器 → 用同一份 compose 配置重建容器
+   ↓  数据在宿主 ./data（容器外），重建不丢
+最坏情况 5 分钟内自动上线，不需要任何手动操作。
+```
+
+NAS 上 watchtower 的实际运行参数（2026-09-13 实测）：
+
+| 环境变量 | 值 | 含义 |
+| --- | --- | --- |
+| `WATCHTOWER_POLL_INTERVAL` | `300` | 每 5 分钟轮询一次 |
+| `WATCHTOWER_LABEL_ENABLE` | `true` | **只更新带 `com.centurylinklabs.watchtower.enable=true` 的容器**（本服务有这个标签）——同机其它服务（Authelia/Postgres 等）不受影响 |
+| `WATCHTOWER_CLEANUP` | `true` | 更新后清理旧镜像 |
+
+从 watchtower 日志能直接确认它干了活：
 
 ```bash
+sudo docker logs watchtower --tail 200 | grep bili23
+# 例：Found new ghcr.io/sakurachiyo0v0/bili23-web:latest image (…) → Stopping → Creating
+```
+
+### 怎么确认"新版本真的上线了"
+
+不要只看容器状态（容器可能因为别的原因刚重启过，看起来像更新了）。按这个顺序验：
+
+```bash
+# 1) 前端构建 hash 变了没（和本地 dist/client/index.html 引用的 /assets/index-*.js 对比）
+curl -s http://<NAS_IP>:8788/ | grep -o '/assets/index-[A-Za-z0-9_-]*\.js'
+# 2) 新加的接口在不在、删掉的接口是否 404（例：/api/system/info 200、/api/fs/roots 404）
+# 3) 容器创建时间
+sudo docker inspect bili23-web --format '{{.Created}}'
+```
+
+### 手动更新 / 回滚（需要时）
+
+```bash
+# 手动更新（一般用不到）
 cd /volume1/docker/bili23-web
 sudo docker compose --project-directory /volume1/docker/bili23-web \
   -f deploy/docker-compose.nas.yml pull
 sudo docker compose --project-directory /volume1/docker/bili23-web \
   -f deploy/docker-compose.nas.yml up -d
+
+# 回滚：更新前把当前镜像另打一个 tag，出问题直接用它重建
+sudo docker tag $(sudo docker inspect bili23-web --format '{{.Image}}') bili23-web:rollback
+sudo docker tag bili23-web:rollback ghcr.io/sakurachiyo0v0/bili23-web:latest
+sudo docker compose -f deploy/docker-compose.nas.yml up -d
 ```
+
+> 注意：`bili23-web:rollback` 这个标签**只有手动脚本会刷新**；watchtower 自动更新时不会。
+> 所以它一般指向"上一次手动更新前"的版本，别当成"上一个版本"用。
+
+### 想让"push 完立刻部署"（不等那 5 分钟）
+
+给 watchtower 开 HTTP API，CI 构建完直接触发一次：
+
+```yaml
+# docker-compose（watchtower）里加
+environment:
+  - WATCHTOWER_HTTP_API_UPDATE=true
+  - WATCHTOWER_HTTP_API_TOKEN=<自定义 token>
+ports:
+  - "8080:8080"        # 仅内网
+```
+```yaml
+# .github/workflows/docker-image.yml 末尾加一步
+- name: Trigger watchtower
+  run: curl -fsS -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}" http://<NAS_IP>:8080/v1/update
+```
+
+**目前没配**（当前 5 分钟轮询已经够用，也少一个需要保管的 token）。
 
 ### 如果你在 NAS 上 pull 很慢（网络受限）
 
@@ -113,13 +175,18 @@ sudo docker compose --project-directory /volume1/docker/bili23-web \
 
 ## 六、数据与备份
 
-容器内数据根目录是 `/data`，挂载到宿主 `./data`（即 `/volume1/docker/bili23-web/data`）：
+> ⚠️ 路径以**实测**为准（2026-09-13 在 UGREEN DXP4800GT 上 `docker inspect` 得到）：
+> compose 用 `--project-directory /volume1/docker/bili23-web -f deploy/docker-compose.nas.yml` 启动时，
+> `./data` 解析成 **`/volume1/docker/bili23-web/deploy/data`**（注意在 `deploy/` 下面）；
+> 下载目录在该部署里是**另一个独立共享** `/volume1/bili23-downloads`（挂到容器的 `/data/bili23-downloads`）。
+> 换机器/换目录前先 `sudo docker inspect bili23-web --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'` 看清真实挂载。
 
-| 路径 | 内容 |
-| --- | --- |
-| `./data/config.json` | 设置（下载 / 界面等） |
-| `./data/task.db` | SQLite 任务库（进行中任务 + 历史） |
-| `./data/downloads/` | 下载产物 |
+| 路径（容器内） | 宿主（本部署实测） | 内容 |
+| --- | --- | --- |
+| `/data/config.json` | `/volume1/docker/bili23-web/deploy/data/config.json` | 设置（下载 / 界面等） |
+| `/data/task.db` | `/volume1/docker/bili23-web/deploy/data/task.db` | SQLite 任务库（进行中任务 + 历史） |
+| `/data/auth.json` | `/volume1/docker/bili23-web/deploy/data/auth.json` | B 站登录凭据（SESSDATA 等） |
+| `/data/bili23-downloads/` | `/volume1/bili23-downloads/` | 下载产物（本部署的 `DOWNLOAD_DIR`） |
 
 升级、迁移或备份只需保留这个 `data/` 目录；删除容器不影响数据。
 
