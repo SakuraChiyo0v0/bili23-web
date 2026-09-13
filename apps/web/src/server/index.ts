@@ -71,8 +71,9 @@ export function createApp(opts: CreateAppOptions = {}) {
    */
   app.get("/api/health", (c) => c.json({
     ok: true,
-    version: process.env.APP_VERSION ?? "dev",
-    commit: process.env.APP_COMMIT ?? "dev",
+    // 用 `||` 不用 `??`：构建参数缺失时 ENV 会是**空串**，`??` 拦不住（踩过）
+    version: process.env.APP_VERSION || "dev",
+    commit: process.env.APP_COMMIT || "dev",
   }));
   registerApi(app, getManager, {
     mcpStatus: () => mcpStatusProvider?.() ?? { running: false, lastError: "" },

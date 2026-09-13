@@ -29,6 +29,10 @@ COPY --from=build /repo/apps/web/dist /repo/apps/web/dist
 RUN rm -rf /repo/packages/*/src /repo/packages/*/tests /repo/apps/web/src /repo/apps/web/tests
 
 FROM ${NODE_BASE} AS runtime
+# ⚠️ FROM 之前声明的 ARG 是**全局**的，stage 内必须重新声明一次才能拿到值 ——
+#    否则 ENV APP_VERSION=$APP_VERSION 会得到空串（踩过：health 里 version 是 ""）
+ARG APP_VERSION=dev
+ARG APP_COMMIT=dev
 WORKDIR /repo
 ENV NODE_ENV=production
 # 数据根目录固定到 /data（config.json / task.db / downloads），由 compose 挂载宿主 ./data 落盘
