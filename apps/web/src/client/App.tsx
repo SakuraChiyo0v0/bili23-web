@@ -103,15 +103,16 @@ function Shell() {
     return () => clearTimeout(timer);
   }, [auth.checked, auth.loggedIn]);
 
-  if (!accepted) {
-    return (
-      <div className="terms-gate">
-        <TermsGateCard onAccept={accept} />
-      </div>
-    );
-  }
-
-  /** 收藏夹页点条目 → 去解析页**并直接开始解析**（原版浮层点条目就是直接解析，不该再让用户点一下） */
+  /**
+   * 收藏夹页点条目 → 去解析页**并直接开始解析**（原版浮层点条目就是直接解析，不该再让用户点一下）
+   *
+   * ⚠️ 这个 useCallback **必须放在下面的"条款门"提前 return 之前** ——
+   * 之前它写在 `if (!accepted) return <TermsGate/>` 之后，于是：
+   * 未接受条款时 App 提前返回（少一次 useCallback），点「接受」后重渲染 → **hook 数量变多**
+   * → React 抛 error #310（"Rendered more hooks than during the previous render"）✗。
+   * 探针一直看不到这个问题，是因为测试脚本预先写入了 `accepted_terms`，
+   * 从第一次渲染就是"已接受"，永远不会发生这个翻转 —— 实测才发现（用户报的 #310）。
+   */
   const gotoParse = useCallback((url: string) => {
     // 收藏夹页给的都是自描述链接（收藏夹 / 合集 / 追番 / bili23:// 伪协议），一律走自动识别，
     // 不要在进解析页后还沿用用户上次选的类型
@@ -121,6 +122,14 @@ function Shell() {
     parseSession.requestAutoRun();
     navigate("parse");
   }, [parseSession, navigate]);
+
+  if (!accepted) {
+    return (
+      <div className="terms-gate">
+        <TermsGateCard onAccept={accept} />
+      </div>
+    );
+  }
 
   const renderPage = () => {
     if (route.id === "parse") return <ParsePage />;
