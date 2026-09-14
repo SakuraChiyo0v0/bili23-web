@@ -42,6 +42,11 @@ services:
       # ⚠️ 必须显式写出来 —— 否则 `up -d` 重建容器时这条挂载会消失，
       #    产物列表会突然变空（实测踩到：从 9 条变 0 条；文件本身在宿主上没丢）。
       - ${DOWNLOAD_HOST_DIR:-/volume1/bili23-downloads}:/data/bili23-downloads
+    # 统一网关（sso-gateway）要访问本容器：必须在**本文件**里声明式接入 sso-net。
+    # 手工 docker network connect 加的网络，容器一重建（watchtower 每次更新都会重建）就丢了。
+    networks:
+      - sso-net
+
     labels:
       # watchtower 检测到 ghcr latest digest 变化后自动重建（需 watchtower 已运行）
       - com.centurylinklabs.watchtower.enable=true
@@ -52,3 +57,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+networks:
+  sso-net:
+    external: true
